@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: frenqency_circle_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: frenqency
+      POSTGRES_PASSWORD: frenqency
+      POSTGRES_DB: frenqency_circle
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U frenqency -d frenqency_circle"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

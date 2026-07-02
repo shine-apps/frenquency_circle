@@ -1,0 +1,64 @@
+@use '@/styles/variables.scss' as *;
+
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  height: 100rpx;
+  // 兼容 iPhone X 等底部安全区
+  padding-bottom: env(safe-area-inset-bottom);
+  background-color: $color-bg-card;
+  border-top: 1rpx solid $color-divider;
+  box-shadow: $shadow-float;
+}
+
+.item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4rpx;
+  padding: 8rpx 0;
+  // 微信小程序 button 默认 border 去除
+  &::after {
+    border: none;
+  }
+}
+
+.item-hover {
+  // 微信小程序 hover-class 默认会有半透明遮罩
+  opacity: 0.7;
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44rpx;
+  height: 44rpx;
+  // 默认未选中色
+  color: $color-text-tertiary;
+}
+
+.text {
+  font-size: $font-size-xs;
+  line-height: $line-height-tight;
+  color: $color-text-tertiary;
+}
+
+.active {
+  .icon {
+    color: $color-primary;
+  }
+
+  .text {
+    color: $color-primary;
+    font-weight: $font-weight-medium;
+  }
+}

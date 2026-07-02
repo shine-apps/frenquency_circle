@@ -1,0 +1,40 @@
+packages:
+  - admin
+  - frontend
+
+# 允许执行构建脚本的依赖（pnpm 10+ 默认阻止所有 postinstall）
+onlyBuiltDependencies:
+  - esbuild
+  - '@swc/core'
+  - core-js
+  - protobufjs
+  - vue-demi
+  - '@uni-helper/unocss-preset-uni'
+  - es5-ext
+  - less
+  - msw
+
+# 明确忽略的构建依赖
+ignoredBuiltDependencies:
+  - sharp
+  - unrs-resolver
+
+allowBuilds:
+  '@alicloud/openapi-core': set this to true or false
+  '@nutui/nutui-react-taro': true
+  '@swc/core': true
+  '@tarojs/binding': true
+  '@tarojs/cli': true
+  '@uni-helper/unocss-preset-uni': true
+  bufferutil: false
+  core-js: true
+  core-js-pure: true
+  es5-ext: true
+  esbuild: true
+  less: true
+  minidev: false
+  msw: true
+  protobufjs: true
+  sharp: true
+  unrs-resolver: true
+  vue-demi: true

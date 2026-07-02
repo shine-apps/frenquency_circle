@@ -1,0 +1,44 @@
+# dependencies
+node_modules/
+
+# build outputs
+.next/
+out/
+build/
+dist/
+
+# env
+.env
+.env.local
+.env.*.local
+
+# keep env examples
+!.env.example
+
+# test
+coverage/
+test-results/
+playwright-report/
+
+# misc
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store
+*.log
+*.pem
+
+# Taro / 小程序
+.swc/
+.taro/
+
+# IDE / 工具本地状态
+.trae/
+.pai/
+.idea/
+.vscode/
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*

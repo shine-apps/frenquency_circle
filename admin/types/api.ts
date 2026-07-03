@@ -24,3 +24,21 @@ export type UserDTO = {
   createdAt: string
   updatedAt: string
 }
+
+/**
+ * JWT 中携带的用户字段(无时间戳),用于登录响应与 Bearer 鉴权。
+ */
+export type AuthUser = {
+  id: string
+  email: string
+  name: string
+  role: string
+}
+
+/**
+ * Token 模式登录响应:返回 JWT 与用户信息,前端持久化后以 Bearer 携带。
+ */
+export type AuthLoginResponse = {
+  token: string
+  user: AuthUser
+}

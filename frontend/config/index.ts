@@ -2,7 +2,6 @@ import { defineConfig, type UserConfigExport } from '@tarojs/cli';
 import TsconfigPathsPlugin from 'tsconfig-paths-webpack-plugin';
 import devConfig from './dev';
 import prodConfig from './prod';
-import vitePluginImp from 'vite-plugin-imp';
 // https://taro-docs.jd.com/docs/next/config#defineconfig-辅助函数
 export default defineConfig<'webpack5'>(async (merge, { command, mode }) => {
   const baseConfig: UserConfigExport<'webpack5'> = {
@@ -19,11 +18,9 @@ export default defineConfig<'webpack5'>(async (merge, { command, mode }) => {
     outputRoot: process.env.TARO_OUTPUT_DIR || 'dist',
     plugins: ['@tarojs/plugin-html'],
     defineConstants: {},
-    sass: {
-      resource: [
-        'node_modules/@nutui/nutui-react-taro/dist/styles/variables.scss',
-      ],
-    },
+    // 注:不再使用 sass.resource 自动注入 NutUI 变量,
+    // 因为各组件 scss 已显式 @use '@/styles/variables.scss',
+    // 自动注入会与本地 $color-primary 等同名变量产生 "both define" 冲突。
     copy: {
       patterns: [],
       options: {},

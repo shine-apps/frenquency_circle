@@ -1,12 +1,13 @@
 import React from 'react';
 import { View, Text } from '@tarojs/components';
 import { Cell, Avatar, Button } from '@nutui/nutui-react-taro';
+import Taro from '@tarojs/taro';
 import { useUserStore } from '@/store/user';
 import CustomTabBar from '@/components/CustomTabBar';
 import styles from './index.module.scss';
 
 const MinePage: React.FC = () => {
-  const { user, isLoggedIn, login, logout } = useUserStore();
+  const { user, isLoggedIn, logout } = useUserStore();
 
   /**
    * 设置项点击处理
@@ -17,8 +18,13 @@ const MinePage: React.FC = () => {
     console.log('[Mine] click setting:', key);
   };
 
+  /** 跳转登录页 */
+  const handleLoginClick = (): void => {
+    Taro.navigateTo({ url: '/pages/login/index' });
+  };
+
   // 头像 fallback 显示文字:已登录显示昵称首字,未登录显示 "游"
-  const avatarFallback = isLoggedIn && user.name ? user.name[0] : '游';
+  const avatarFallback = isLoggedIn && user?.name ? user.name[0] : '游';
 
   return (
     <View className={styles.page}>
@@ -28,17 +34,17 @@ const MinePage: React.FC = () => {
           size="large"
           shape="round"
           // 优先用用户头像 URL,否则 fallback 显示首字
-          src={user.avatar}
+          src={user?.avatar}
         >
           {avatarFallback}
         </Avatar>
         <View className={styles['profile-info']}>
           <Text className={styles.name}>
-            {isLoggedIn ? user.name : '未登录用户'}
+            {isLoggedIn ? user?.name : '未登录用户'}
           </Text>
           <Text className={styles.subtitle}>
             {isLoggedIn
-              ? user.phone ?? '已绑定手机号'
+              ? user?.phone ?? '未绑定手机号'
               : '点击下方按钮登录体验'}
           </Text>
         </View>
@@ -47,7 +53,7 @@ const MinePage: React.FC = () => {
             type="primary"
             size="small"
             shape="round"
-            onClick={login}
+            onClick={handleLoginClick}
             className={styles['login-btn']}
           >
             登录

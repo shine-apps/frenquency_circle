@@ -25,3 +25,9 @@ declare namespace NodeJS {
     TARO_APP_ID: string
   }
 }
+
+/**
+ * 后端 API 基址,由 config/{dev,prod}.ts 的 defineConstants 注入。
+ * 用于 services/request.ts 拼接请求 URL。
+ */
+declare const API_BASE_URL: string

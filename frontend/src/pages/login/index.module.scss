@@ -1,0 +1,96 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  padding: $spacing-lg;
+  // 预留底部安全区
+  padding-bottom: calc(env(safe-area-inset-bottom) + #{$spacing-lg});
+  background: linear-gradient(180deg, #f0f5ff 0%, $color-bg-page 100%);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: $spacing-xl $spacing-lg;
+  margin-bottom: $spacing-lg;
+}
+
+.logo {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: $radius-round;
+  background: linear-gradient(135deg, $color-primary 0%, $color-primary-light 100%);
+  color: $color-text-white;
+  font-size: 56rpx;
+  font-weight: $font-weight-bold;
+  @include flex-center;
+  margin-bottom: $spacing-md;
+}
+
+.title {
+  font-size: $font-size-xxl;
+  font-weight: $font-weight-bold;
+  color: $color-text-primary;
+  margin-bottom: $spacing-xs;
+}
+
+.subtitle {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+}
+
+.wechatSection {
+  margin-bottom: $spacing-xl;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  margin: $spacing-lg 0;
+}
+
+.dividerLine {
+  flex: 1;
+  height: 1rpx;
+  background-color: $color-divider;
+}
+
+.dividerText {
+  padding: 0 $spacing-md;
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+  padding: $spacing-md 0;
+}
+
+.formItem {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  background-color: $color-bg-card;
+  border-radius: $radius-md;
+  padding: 0 $spacing-md;
+}
+
+.agreement {
+  display: flex;
+  align-items: center;
+  gap: $spacing-xs;
+  margin-top: $spacing-xl;
+  padding: 0 $spacing-sm;
+}
+
+.agreementText {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.link {
+  color: $color-primary;
+}

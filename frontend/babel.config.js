@@ -16,9 +16,10 @@ module.exports = {
       'import',
       {
         libraryName: '@nutui/nutui-react-taro',
-        libraryDirectory: 'dist/esm',
+        libraryDirectory: 'dist/es/packages',
         style: 'css',
-        camel2DashComponentName: false,
+        // 默认 camel2DashComponentName: true,把 Button 转为 button,
+        // 与 NutUI 3.x 的 dist/es/packages/<lowercase>/ 目录结构匹配
       },
       '@nutui/nutui-react-taro',
     ],

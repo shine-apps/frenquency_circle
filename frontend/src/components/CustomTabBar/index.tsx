@@ -53,13 +53,16 @@ const TABS: TabItem[] = [
  */
 const CustomTabBar: React.FC<Props> = ({ activeKey }) => {
   const router = useRouter();
-  // 兜底:useRouter 在某些场景(如 SSR 降级)可能没有 path
-  const currentPath = activeKey ?? router?.path ?? '';
+  // 规范化路径:去除前导 / 后再比较。
+  // Taro useRouter().path 形如 '/pages/index/index',而 pagePath 存储为 'pages/index/index',
+  // 不归一化会导致严格相等永远不成立,active 态始终回退到首个 tab。
+  const normalize = (p: string): string => p.replace(/^\/+/, '');
+  const currentPath = normalize(activeKey ?? router?.path ?? '');
   const currentKey =
-    TABS.find((t) => t.pagePath === currentPath)?.key ?? TABS[0].key;
+    TABS.find((t) => normalize(t.pagePath) === currentPath)?.key ?? TABS[0].key;
 
   const handleClick = (tab: TabItem): void => {
-    if (tab.pagePath === currentPath) return;
+    if (normalize(tab.pagePath) === currentPath) return;
     // reLaunch 重置栈:tab 切换不应该累积历史
     reLaunch({ url: `/${tab.pagePath}` });
   };

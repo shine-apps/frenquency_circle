@@ -1,46 +1,94 @@
-import { create } from 'zustand';
+import { create } from 'zustand'
+import Taro from '@tarojs/taro'
+
+const TOKEN_KEY = 'auth_token'
+const USER_KEY = 'user_info'
 
 export interface UserInfo {
-  /** 用户昵称 */
-  name: string;
-  /** 绑定手机号(脱敏或完整) */
-  phone?: string;
+  id: string
+  /** 昵称(手机号登录用户为手机号) */
+  name: string
+  email: string
+  role: string
+  /** 绑定手机号(从 email 提取,可能为空) */
+  phone?: string
   /** 头像 URL(可选) */
-  avatar?: string;
+  avatar?: string
 }
 
 interface UserState {
-  /** 当前用户信息(未登录时也保留 mock 数据,用于占位展示) */
-  user: UserInfo;
-  /** 是否已登录 */
-  isLoggedIn: boolean;
-  /** 模拟登录:实际项目应替换为真实登录 API */
-  login: () => void;
-  /** 模拟登出 */
-  logout: () => void;
+  /** 当前用户信息(未登录为 null) */
+  user: UserInfo | null
+  /** JWT token(未登录为 null) */
+  token: string | null
+  /** 是否已登录(派生自 token) */
+  isLoggedIn: boolean
+  /** 登录:持久化 token + user 到存储并更新 store */
+  login: (payload: { token: string; user: UserInfo }) => void
+  /** 登出:清除存储并重置 store */
+  logout: () => void
   /** 部分更新用户信息 */
-  updateUser: (patch: Partial<UserInfo>) => void;
+  updateUser: (patch: Partial<UserInfo>) => void
+  /** 从存储恢复登录态(App 启动调用) */
+  hydrate: () => void
+}
+
+/** 同步读取本地存储的登录态 */
+function readStoredAuth(): {
+  token: string | null
+  user: UserInfo | null
+} {
+  try {
+    const token = Taro.getStorageSync(TOKEN_KEY) || null
+    const user = Taro.getStorageSync(USER_KEY) || null
+    return { token, user }
+  } catch {
+    return { token: null, user: null }
+  }
 }
 
 /**
- * Mock 用户数据,用于未登录态的占位展示
- * 后续接入真实登录 API 时,仅需替换 login / logout 内部实现
+ * 全局用户态 Store。
+ * 初始状态从 Taro 同步存储恢复,避免首屏闪烁。
  */
-const MOCK_USER: UserInfo = {
-  name: '示例用户',
-  phone: '138****8888',
-  avatar: undefined,
-};
+export const useUserStore = create<UserState>((set) => {
+  const stored = readStoredAuth()
+  return {
+    user: stored.user,
+    token: stored.token,
+    isLoggedIn: !!stored.token,
 
-/**
- * 全局用户态 Store
- * 使用 zustand,避免引入 Redux 等重型状态库
- */
-export const useUserStore = create<UserState>((set) => ({
-  user: MOCK_USER,
-  isLoggedIn: false,
-  login: () => set({ isLoggedIn: true }),
-  logout: () => set({ isLoggedIn: false, user: MOCK_USER }),
-  updateUser: (patch) =>
-    set((state) => ({ user: { ...state.user, ...patch } })),
-}));
+    login: (payload) => {
+      Taro.setStorageSync(TOKEN_KEY, payload.token)
+      Taro.setStorageSync(USER_KEY, payload.user)
+      set({
+        token: payload.token,
+        user: payload.user,
+        isLoggedIn: true,
+      })
+    },
+
+    logout: () => {
+      Taro.removeStorageSync(TOKEN_KEY)
+      Taro.removeStorageSync(USER_KEY)
+      set({ token: null, user: null, isLoggedIn: false })
+    },
+
+    updateUser: (patch) =>
+      set((state) => {
+        if (!state.user) return {}
+        const next = { ...state.user, ...patch }
+        Taro.setStorageSync(USER_KEY, next)
+        return { user: next }
+      }),
+
+    hydrate: () => {
+      const s = readStoredAuth()
+      set({
+        token: s.token,
+        user: s.user,
+        isLoggedIn: !!s.token,
+      })
+    },
+  }
+})

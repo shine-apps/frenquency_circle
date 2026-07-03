@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
-import { fail } from "@/lib/api"
+import { corsOptions, fail, withCors } from "@/lib/api"
 import type { IResponse } from "@/types/api"
 import { isValidPhone, normalizePhone } from "@/lib/sms/phone"
 import { issueCode } from "@/lib/sms/phone-code-service"
@@ -24,13 +24,20 @@ function getClientIp(req: Request): string {
   return req.headers.get("x-real-ip") ?? "unknown"
 }
 
+export async function OPTIONS(req: Request) {
+  return corsOptions(req)
+}
+
 export async function POST(req: Request) {
   // 1. 解析请求体
   const body = await req.json().catch(() => null)
   const parsed = sendCodeSchema.safeParse(body)
   if (!parsed.success) {
     logger.warn(LOG_PREFIX.SMS, "Send rejected: invalid body")
-    return fail(400, "无效的请求参数", parsed.error.flatten())
+    return withCors(
+      fail(400, "无效的请求参数", parsed.error.flatten()),
+      req
+    )
   }
 
   // 2. 校验手机号格式（在限流消费之前，避免用畸形请求耗尽 IP 配额）
@@ -38,7 +45,7 @@ export async function POST(req: Request) {
     logger.warn(LOG_PREFIX.SMS, "Send rejected: invalid phone format", {
       phone: parsed.data.phone,
     })
-    return fail(400, "手机号格式不正确")
+    return withCors(fail(400, "手机号格式不正确"), req)
   }
   const phone = normalizePhone(parsed.data.phone)
 
@@ -47,7 +54,7 @@ export async function POST(req: Request) {
   const ipResult = rateLimiter.checkAndConsumeIp(ip)
   if (!ipResult.ok) {
     logger.warn(LOG_PREFIX.SMS, "Send rejected: ip rate limited", { ip })
-    return fail(429, "请求过于频繁，请稍后再试")
+    return withCors(fail(429, "请求过于频繁，请稍后再试"), req)
   }
 
   // 4. 手机号限流
@@ -58,9 +65,9 @@ export async function POST(req: Request) {
       reason: phoneResult.reason,
     })
     if (phoneResult.reason === "cooldown") {
-      return fail(429, "验证码已发送，请60秒后重试")
+      return withCors(fail(429, "验证码已发送，请60秒后重试"), req)
     }
-    return fail(429, "发送次数过多，请稍后再试")
+    return withCors(fail(429, "发送次数过多，请稍后再试"), req)
   }
 
   // 5. 生成并持久化验证码
@@ -72,7 +79,7 @@ export async function POST(req: Request) {
       phone,
       error: err instanceof Error ? err.message : String(err),
     })
-    return fail(500, "验证码生成失败，请稍后再试")
+    return withCors(fail(500, "验证码生成失败，请稍后再试"), req)
   }
 
   // 6. 发送短信
@@ -85,7 +92,7 @@ export async function POST(req: Request) {
       phone,
       error: result.error,
     })
-    return fail(502, "短信发送失败，请稍后再试")
+    return withCors(fail(502, "短信发送失败，请稍后再试"), req)
   }
 
   logger.info(LOG_PREFIX.SMS, "Code sent", { phone, ip })
@@ -96,5 +103,8 @@ export async function POST(req: Request) {
     data: null,
     message: "验证码已发送",
   }
-  return NextResponse.json(responseBody, { status: 201 })
+  return withCors(
+    NextResponse.json(responseBody, { status: 201 }),
+    req
+  )
 }

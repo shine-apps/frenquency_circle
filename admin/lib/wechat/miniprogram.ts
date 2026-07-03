@@ -45,6 +45,7 @@ function readConfig() {
 async function wechatFetch(
   url: string,
   init: RequestInit,
+  stage: Stage,
   timeoutMs = DEFAULT_TIMEOUT_MS
 ): Promise<unknown> {
   const controller = new AbortController()
@@ -53,15 +54,15 @@ async function wechatFetch(
     const res = await fetch(url, { ...init, signal: controller.signal })
     if (!res.ok) {
       // WeChat 通常在 200 中返回 errcode; 非 200 多为网关层错误
-      throw new WechatMpError(res.status, res.statusText, "code2session")
+      throw new WechatMpError(res.status, res.statusText, stage)
     }
     return (await res.json()) as unknown
   } catch (err) {
     if (err instanceof WechatMpError) throw err
     if (err instanceof Error && err.name === "AbortError") {
-      throw new WechatMpError(-1, "request timeout", "code2session")
+      throw new WechatMpError(-1, "request timeout", stage)
     }
-    throw new WechatMpError(-1, err instanceof Error ? err.message : String(err), "code2session")
+    throw new WechatMpError(-1, err instanceof Error ? err.message : String(err), stage)
   } finally {
     clearTimeout(timer)
   }
@@ -97,16 +98,18 @@ export async function code2Session(params: {
   appId: string
   appSecret: string
   code: string
+  apiBase?: string
 }): Promise<Code2SessionResult> {
-  const { appId, appSecret, code } = params
+  const { appId, appSecret, code, apiBase } = params
+  const base = apiBase || DEFAULT_API_BASE
   const url =
-    `https://api.weixin.qq.com/sns/jscode2session` +
+    `${base}/sns/jscode2session` +
     `?appid=${encodeURIComponent(appId)}` +
     `&secret=${encodeURIComponent(appSecret)}` +
     `&js_code=${encodeURIComponent(code)}` +
     `&grant_type=authorization_code`
 
-  const payload = (await wechatFetch(url, { method: "GET" })) as Record<
+  const payload = (await wechatFetch(url, { method: "GET" }, "code2session")) as Record<
     string,
     unknown
   >
@@ -132,15 +135,17 @@ export async function code2Session(params: {
 export async function getAccessToken(params: {
   appId: string
   appSecret: string
+  apiBase?: string
 }): Promise<string> {
-  const { appId, appSecret } = params
+  const { appId, appSecret, apiBase } = params
+  const base = apiBase || DEFAULT_API_BASE
   const cached = tokenCache.get(appId)
   const now = Date.now()
   if (cached && cached.expiresAt > now) {
     return cached.token
   }
 
-  const url = `${DEFAULT_API_BASE}/cgi-bin/stable_token`
+  const url = `${base}/cgi-bin/stable_token`
   const payload = (await wechatFetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -149,7 +154,7 @@ export async function getAccessToken(params: {
       appid: appId,
       secret: appSecret,
     }),
-  })) as Record<string, unknown>
+  }, "token")) as Record<string, unknown>
   requireErrcodeZero(payload, "token")
 
   const accessToken = String(payload.access_token ?? "")
@@ -189,7 +194,7 @@ export async function getPhoneNumber(params: {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ code: phoneCode }),
-  })) as Record<string, unknown>
+  }, "phone")) as Record<string, unknown>
   requireErrcodeZero(payload, "phone")
 
   const phoneInfo = (payload.phone_info ?? {}) as Record<string, unknown>

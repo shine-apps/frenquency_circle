@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { signIn } from "next-auth/react"
 import { toast } from "sonner"
@@ -22,6 +22,37 @@ export function PhoneLoginForm() {
   const [isPending, startTransition] = useTransition()
   const [sending, setSending] = useState(false)
   const [countdown, setCountdown] = useState(0)
+  // 倒计时 timer 句柄存入 ref，组件卸载时清理，避免对已卸载组件 setState 造成内存泄漏 / React 警告
+  const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (countdownTimerRef.current) {
+        clearInterval(countdownTimerRef.current)
+        countdownTimerRef.current = null
+      }
+    }
+  }, [])
+
+  const startCountdown = () => {
+    // 清理上一个未结束的 timer，避免多 timer 并行倒计时跳动
+    if (countdownTimerRef.current) {
+      clearInterval(countdownTimerRef.current)
+    }
+    setCountdown(COUNTDOWN_SECONDS)
+    countdownTimerRef.current = setInterval(() => {
+      setCountdown((n) => {
+        if (n <= 1) {
+          if (countdownTimerRef.current) {
+            clearInterval(countdownTimerRef.current)
+            countdownTimerRef.current = null
+          }
+          return 0
+        }
+        return n - 1
+      })
+    }, 1000)
+  }
 
   const handleSendCode = () => {
     if (!phone.trim()) {
@@ -43,17 +74,7 @@ export function PhoneLoginForm() {
           return
         }
         toast.success("验证码已发送")
-        // 启动 60s 倒计时
-        setCountdown(COUNTDOWN_SECONDS)
-        const timer = setInterval(() => {
-          setCountdown((n) => {
-            if (n <= 1) {
-              clearInterval(timer)
-              return 0
-            }
-            return n - 1
-          })
-        }, 1000)
+        startCountdown()
       })
       .catch(() => {
         toast.error("发送失败", { description: "网络异常，请稍后重试。" })

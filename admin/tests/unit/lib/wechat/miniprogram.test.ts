@@ -159,6 +159,40 @@ describe("lib/wechat/miniprogram", () => {
         })
       ).rejects.toBeInstanceOf(WechatMpError)
     })
+
+    it("honors apiBase override instead of hardcoded host", async () => {
+      const fetchMock = makeFetchMock(async (url) => {
+        expect(url).toContain("https://mock.example.test/sns/jscode2session")
+        return makeJsonResponse({
+          errcode: 0,
+          openid: "oXyz",
+          session_key: "sess",
+        })
+      })
+      vi.stubGlobal("fetch", fetchMock)
+
+      await code2Session({
+        appId: "wx-test-app-id",
+        appSecret: "wx-test-app-secret",
+        code: "js-test",
+        apiBase: "https://mock.example.test",
+      })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+
+    it("labels HTTP errors with stage='code2session'", async () => {
+      vi.stubGlobal(
+        "fetch",
+        makeFetchMock(async () => makeJsonResponse({}, 500, "Internal"))
+      )
+      await expect(
+        code2Session({
+          appId: "wx-test-app-id",
+          appSecret: "wx-test-app-secret",
+          code: "x",
+        })
+      ).rejects.toMatchObject({ stage: "code2session" })
+    })
   })
 
   describe("getAccessToken", () => {
@@ -255,6 +289,40 @@ describe("lib/wechat/miniprogram", () => {
         })
       ).rejects.toBeInstanceOf(WechatMpError)
     })
+
+    it("honors apiBase override instead of hardcoded host", async () => {
+      __resetWechatMpForTest()
+      const fetchMock = makeFetchMock(async (url) => {
+        expect(url).toContain("https://mock.example.test/cgi-bin/stable_token")
+        return makeJsonResponse({
+          errcode: 0,
+          access_token: "tok-mock",
+          expires_in: 7200,
+        })
+      })
+      vi.stubGlobal("fetch", fetchMock)
+
+      const t = await getAccessToken({
+        appId: "wx-test-app-id",
+        appSecret: "wx-test-app-secret",
+        apiBase: "https://mock.example.test",
+      })
+      expect(t).toBe("tok-mock")
+    })
+
+    it("labels HTTP errors with stage='token' (not code2session)", async () => {
+      __resetWechatMpForTest()
+      vi.stubGlobal(
+        "fetch",
+        makeFetchMock(async () => makeJsonResponse({}, 502, "Bad Gateway"))
+      )
+      await expect(
+        getAccessToken({
+          appId: "wx-test-app-id",
+          appSecret: "wx-test-app-secret",
+        })
+      ).rejects.toMatchObject({ stage: "token" })
+    })
   })
 
   describe("getPhoneNumber", () => {
@@ -310,6 +378,16 @@ describe("lib/wechat/miniprogram", () => {
       await expect(
         getPhoneNumber({ accessToken: "tok-x", phoneCode: "x" })
       ).rejects.toBeInstanceOf(WechatMpError)
+    })
+
+    it("labels HTTP errors with stage='phone' (not code2session)", async () => {
+      vi.stubGlobal(
+        "fetch",
+        makeFetchMock(async () => makeJsonResponse({}, 503, "Service Unavailable"))
+      )
+      await expect(
+        getPhoneNumber({ accessToken: "tok-x", phoneCode: "x" })
+      ).rejects.toMatchObject({ stage: "phone" })
     })
   })
 })

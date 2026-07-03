@@ -3,5 +3,24 @@ import { auth } from "@/auth"
 
 export default async function Home() {
   const session = await auth()
-  redirect(session ? "/admin" : "/login")
+
+  // 未登录 → 跳登录页
+  if (!session?.user) redirect("/login")
+
+  // 仅管理员可进入后台；已登录非管理员展示无权限提示，
+  // 避免与 admin/layout.tsx 的 role 守卫形成 / ↔ /admin 重定向死循环
+  if (session.user.role !== "ADMIN") {
+    return (
+      <main className="flex min-h-svh items-center justify-center p-4">
+        <div className="space-y-2 text-center">
+          <h1 className="text-xl font-semibold">无访问权限</h1>
+          <p className="text-sm text-muted-foreground">
+            当前账号没有后台访问权限，请使用管理员账号登录。
+          </p>
+        </div>
+      </main>
+    )
+  }
+
+  redirect("/admin")
 }

@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs"
-import { and, desc, eq, isNull } from "drizzle-orm"
+import { and, desc, eq, isNull, sql } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { smsVerificationCodes } from "@/db/schema"
 import { generateCode } from "./phone"
@@ -88,9 +88,12 @@ export async function verifyCode(
 
   const match = await bcrypt.compare(code, row.codeHash)
   if (!match) {
+    // 原子自增：避免并发验证时基于过期读的「丢失更新」。
+    // 旧实现 `set({ attempts: row.attempts + 1 })` 在并发请求下都读到同一
+    // 旧值并写回，导致 attempts 计数被覆盖，攻击者可借此绕过爆破上限。
     await db
       .update(smsVerificationCodes)
-      .set({ attempts: row.attempts + 1 })
+      .set({ attempts: sql`${smsVerificationCodes.attempts} + 1` })
       .where(eq(smsVerificationCodes.id, row.id))
     return { ok: false, reason: "mismatch" }
   }

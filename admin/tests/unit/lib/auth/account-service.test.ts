@@ -19,16 +19,23 @@ const { mockDb, chainSelect, chainUpdate, chainInsert } = vi.hoisted(() => {
     update: vi.fn(function (this: unknown) {
       return chainUpdate
     }),
-    // insert 链路: insert().values().returning()
+    // insert 链路: insert().values().onConflictDoUpdate()/onConflictDoNothing().returning()
     _insertResult: [] as Row[],
     insert: vi.fn(function (this: unknown) {
       return chainInsert
     }),
     // query.users.findFirst({ where })
+    // 支持多次调用返回不同结果：用 _userByEmailQueue 队列
     _userByEmail: null as Row | null,
+    _userByEmailQueue: [] as (Row | null)[],
     query: {
       users: {
-        findFirst: vi.fn(async () => mockDb._userByEmail),
+        findFirst: vi.fn(async () => {
+          if (mockDb._userByEmailQueue.length > 0) {
+            return mockDb._userByEmailQueue.shift() ?? null
+          }
+          return mockDb._userByEmail
+        }),
       },
     },
   }
@@ -47,6 +54,8 @@ const { mockDb, chainSelect, chainUpdate, chainInsert } = vi.hoisted(() => {
 
   const chainInsert = {
     values: vi.fn(() => chainInsert),
+    onConflictDoUpdate: vi.fn(() => chainInsert),
+    onConflictDoNothing: vi.fn(() => chainInsert),
     returning: vi.fn(async () => mockDb._insertResult),
   }
 
@@ -76,6 +85,7 @@ function resetMock() {
   mockDb._selectResult = []
   mockDb._insertResult = []
   mockDb._userByEmail = null
+  mockDb._userByEmailQueue = []
   mockDb.select.mockClear()
   mockDb.update.mockClear()
   mockDb.insert.mockClear()
@@ -87,6 +97,8 @@ function resetMock() {
   chainUpdate.set.mockClear()
   chainUpdate.where.mockClear()
   chainInsert.values.mockClear()
+  chainInsert.onConflictDoUpdate.mockClear()
+  chainInsert.onConflictDoNothing.mockClear()
   chainInsert.returning.mockClear()
 }
 
@@ -119,31 +131,33 @@ describe("lib/auth/account-service", () => {
   })
 
   describe("linkAccount", () => {
-    it("inserts when account does not exist", async () => {
-      // existing 查询返回空
-      mockDb._selectResult = []
+    it("uses atomic upsert (insert + onConflictDoUpdate) — no pre SELECT, no update", async () => {
       await linkAccount({
         userId: "u1",
         provider: "credentials",
         providerAccountId: "a@b.com",
       })
+      // 单条 upsert，不应再走 select / update 路径
       expect(mockDb.insert).toHaveBeenCalledTimes(1)
       expect(chainInsert.values).toHaveBeenCalledTimes(1)
+      expect(chainInsert.onConflictDoUpdate).toHaveBeenCalledTimes(1)
       expect(mockDb.update).not.toHaveBeenCalled()
+      expect(mockDb.select).not.toHaveBeenCalled()
     })
 
-    it("only updates updatedAt when account already exists", async () => {
-      // existing 查询命中
-      mockDb._selectResult = [{ id: "acc-1" }]
+    it("is idempotent: a second call re-issues the same upsert", async () => {
       await linkAccount({
         userId: "u1",
         provider: "phone",
         providerAccountId: "13800138000",
       })
-      expect(mockDb.update).toHaveBeenCalledTimes(1)
-      expect(chainUpdate.set).toHaveBeenCalledTimes(1)
-      expect(chainUpdate.where).toHaveBeenCalledTimes(1)
-      expect(mockDb.insert).not.toHaveBeenCalled()
+      await linkAccount({
+        userId: "u1",
+        provider: "phone",
+        providerAccountId: "13800138000",
+      })
+      expect(mockDb.insert).toHaveBeenCalledTimes(2)
+      expect(chainInsert.onConflictDoUpdate).toHaveBeenCalledTimes(2)
     })
   })
 
@@ -155,8 +169,8 @@ describe("lib/auth/account-service", () => {
         name: "13800138000",
         role: "USER",
       }
-      // linkAccount 内部 select 返回空 → 触发 insert account
-      mockDb._selectResult = []
+      // linkAccount 内部 insert account（upsert）
+      mockDb._insertResult = []
 
       const user = await findOrCreateUserAndLinkAccount({
         email: "13800138000@phonedomain.com",
@@ -180,8 +194,6 @@ describe("lib/auth/account-service", () => {
           role: "USER",
         },
       ]
-      // linkAccount 内部 select 返回空 → insert
-      mockDb._selectResult = []
 
       const user = await findOrCreateUserAndLinkAccount({
         email: "13800138000@phonedomain.com",
@@ -191,7 +203,36 @@ describe("lib/auth/account-service", () => {
       })
 
       expect(user?.id).toBe("u-new")
+      // onConflictDoNothing 必须被调用以避免并发插入竞态
+      expect(chainInsert.onConflictDoNothing).toHaveBeenCalledTimes(1)
       expect(mockDb.insert).toHaveBeenCalledTimes(2) // users + accounts
+    })
+
+    it("re-fetches user when concurrent insert collides (returning empty)", async () => {
+      // 首次 findFirst 返回 null；并发冲突后 returning 返回空；第二次 findFirst 返回已存在用户
+      mockDb._userByEmailQueue = [
+        null,
+        {
+          id: "u-won",
+          email: "13800138000@phonedomain.com",
+          name: "13800138000",
+          role: "USER",
+        },
+      ]
+      // users insert returning 空（被 onConflictDoNothing 吞掉）
+      mockDb._insertResult = []
+
+      const user = await findOrCreateUserAndLinkAccount({
+        email: "13800138000@phonedomain.com",
+        name: "13800138000",
+        provider: "phone",
+        providerAccountId: "13800138000",
+      })
+
+      expect(user?.id).toBe("u-won")
+      // findFirst 被调用两次：首次查询 + 冲突后回退查询
+      expect(mockDb.query.users.findFirst).toHaveBeenCalledTimes(2)
+      expect(chainInsert.onConflictDoNothing).toHaveBeenCalledTimes(1)
     })
   })
 })

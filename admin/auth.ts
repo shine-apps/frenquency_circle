@@ -179,10 +179,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         let appId: string
         let appSecret: string
+        let apiBase: string
         try {
           const cfg = readWechatMpConfig()
           appId = cfg.appId
           appSecret = cfg.appSecret
+          apiBase = cfg.apiBase
         } catch (err) {
           logger.error(LOG_PREFIX.WECHAT, "Login: missing app config", {
             error: errMessage(err),
@@ -196,6 +198,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             appId,
             appSecret,
             code: parsed.data.code,
+            apiBase,
           })
         } catch (err) {
           if (err instanceof WechatMpError) {
@@ -216,7 +219,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         let accessToken: string
         try {
-          accessToken = await getAccessToken({ appId, appSecret })
+          accessToken = await getAccessToken({ appId, appSecret, apiBase })
         } catch (err) {
           logger.warn(LOG_PREFIX.WECHAT, "getAccessToken failed", {
             error: errMessage(err),

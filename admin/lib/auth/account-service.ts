@@ -30,8 +30,12 @@ export async function findUserByAccount(
 }
 
 /**
- * Link account: 若已存在则更新 updatedAt，否则 INSERT。
- * 幂等，可重复调用。
+ * Link account: 原子 upsert（INSERT ... ON CONFLICT DO UPDATE）。
+ *
+ * 使用单条 upsert 取代「先 SELECT 再 INSERT/UPDATE」，避免并发登录
+ * （同一 provider+providerAccountId 双开请求）下的 TOCTOU 竞态：
+ * 旧实现中两个请求都可能读到「不存在」分支并同时 INSERT，命中唯一索引
+ * 时其中一个会抛错并冒泡为 500。upsert 在数据库层原子完成，幂等可重复调用。
  */
 export async function linkAccount(params: {
   userId: string
@@ -39,35 +43,18 @@ export async function linkAccount(params: {
   providerAccountId: string
   type?: ProviderType
 }) {
-  const existing = await db
-    .select({ id: accounts.id })
-    .from(accounts)
-    .where(
-      and(
-        eq(accounts.provider, params.provider),
-        eq(accounts.providerAccountId, params.providerAccountId)
-      )
-    )
-    .limit(1)
-
-  if (existing[0]) {
-    await db
-      .update(accounts)
-      .set({ updatedAt: new Date() })
-      .where(eq(accounts.id, existing[0].id))
-    logger.info(LOG_PREFIX.ACCOUNT, "Account link refreshed", {
+  await db
+    .insert(accounts)
+    .values({
       userId: params.userId,
       provider: params.provider,
+      providerAccountId: params.providerAccountId,
+      type: params.type ?? "credentials",
     })
-    return
-  }
-
-  await db.insert(accounts).values({
-    userId: params.userId,
-    provider: params.provider,
-    providerAccountId: params.providerAccountId,
-    type: params.type ?? "credentials",
-  })
+    .onConflictDoUpdate({
+      target: [accounts.provider, accounts.providerAccountId],
+      set: { updatedAt: new Date() },
+    })
   logger.info(LOG_PREFIX.ACCOUNT, "Account linked", {
     userId: params.userId,
     provider: params.provider,
@@ -99,6 +86,8 @@ export async function findOrCreateUserAndLinkAccount(params: {
 
   let user = existing
   if (!user) {
+    // ON CONFLICT DO NOTHING：并发首次登录（同一 email）时，只有一个请求能 INSERT
+    // 成功并拿到 returning 行；另一个拿到空 returning 后回退到重新查询。
     const [created] = await db
       .insert(users)
       .values({
@@ -109,13 +98,27 @@ export async function findOrCreateUserAndLinkAccount(params: {
           params.unusablePasswordHash ??
           (await bcrypt.hash(randomUUID() + randomUUID(), 10)),
       })
+      .onConflictDoNothing({ target: users.email })
       .returning()
-    user = created
-    logger.info(LOG_PREFIX.AUTH, "User auto-created", {
-      userId: user.id,
-      provider: params.provider,
-      email: params.email,
-    })
+
+    if (created) {
+      user = created
+      logger.info(LOG_PREFIX.AUTH, "User auto-created", {
+        userId: user.id,
+        provider: params.provider,
+        email: params.email,
+      })
+    } else {
+      // 并发冲突：另一请求已插入，重新读取已存在的用户
+      user = await db.query.users.findFirst({
+        where: eq(users.email, params.email),
+      })
+    }
+  }
+
+  if (!user) {
+    // 理论不可达（onConflictDoNothing 后必能查到）；防御性抛错避免后续空指针
+    throw new Error("findOrCreateUserAndLinkAccount: failed to resolve user")
   }
 
   await linkAccount({

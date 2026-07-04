@@ -162,6 +162,18 @@ function getPublicBaseUrl(): string {
 }
 
 /**
+ * 解析落盘根目录(env 可覆盖,便于生产挂载独立磁盘 / 容器外挂卷)。
+ * - `UPLOAD_ROOT_DIR` 未设置或为空:回退到 `<cwd>/public/uploads`
+ * - 绝对路径(如 `/var/data/uploads`):原样使用
+ * - 相对路径(如 `data/uploads`):以 `process.cwd()` 为基准 `path.resolve`
+ */
+export function resolveUploadRootDir(): string {
+  const raw = process.env.UPLOAD_ROOT_DIR?.trim()
+  if (raw) return path.resolve(raw)
+  return path.join(process.cwd(), "public", "uploads")
+}
+
+/**
  * 推断落盘扩展名:优先用 MIME(权威,保证静态服务回正确的 Content-Type),
  * 兜底用 filename;都不在白名单则 .bin(几乎不会触发,因为 MIME 已在路由层校验)。
  */
@@ -178,13 +190,14 @@ function pickExt(mimeType: string, originalName: string): string {
 /**
  * 本地文件系统驱动:把文件写到 `<rootDir>/<yyyy>/<mm>/<uuid><ext>`。
  * - 落盘根目录默认 `<cwd>/public/uploads`,Next.js 自动以 `/uploads/...` 暴露
+ * - 可由 env `UPLOAD_ROOT_DIR` 覆盖(绝对路径直接用,相对路径以 `cwd` 为基准)
  * - 测试可通过 `setRootDirForTest` 覆盖到临时目录
  */
 class LocalDriver implements StorageDriver {
   private rootDir: string
 
   constructor() {
-    this.rootDir = path.join(process.cwd(), "public", "uploads")
+    this.rootDir = resolveUploadRootDir()
   }
 
   /** 测试钩子:切换落盘根目录 */

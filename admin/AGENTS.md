@@ -201,7 +201,7 @@ All commands run from the project root with no `cd` needed.
 ### Storage subsystem
 
 - **`lib/storage/types.ts`** — `StorageDriver` 抽象接口(未来可加 `AliyunOssDriver`、`S3Driver`),`UploadInput` / `UploadResult` DTO。本地实现见 `lib/storage/local.ts`。
-- **`lib/storage/local.ts`** — `LocalDriver`(`__setRootDirForTest` 暴露给测试切到 `mkdtempSync` 临时目录)。文件落 `<rootDir>/<yyyy>/<mm>/<uuid>.<ext>`,`<rootDir>` 默认 `<cwd>/public/uploads`,Next.js 自动以 `/uploads/...` 暴露。公开 URL 通过 env `NEXT_PUBLIC_APP_URL` 拼接,缺省 `http://localhost:${PORT ?? 3000}`。`remove(key)` 用 `path.relative(rootDir, target)` 防越权,绝对路径与含 `..` 的相对路径都拒绝。
+- **`lib/storage/local.ts`** — `LocalDriver`(`__setRootDirForTest` 暴露给测试切到 `mkdtempSync` 临时目录)。文件落 `<rootDir>/<yyyy>/<mm>/<uuid>.<ext>`,`<rootDir>` 默认 `<cwd>/public/uploads`,可由 env `UPLOAD_ROOT_DIR` 覆盖(绝对路径直接用,相对路径以 `process.cwd()` 为基准),Next.js 自动以 `/uploads/...` 暴露。公开 URL 通过 env `NEXT_PUBLIC_APP_URL` 拼接,缺省 `http://localhost:${PORT ?? 3000}`。`remove(key)` 用 `path.relative(rootDir, target)` 防越权,绝对路径与含 `..` 的相对路径都拒绝。
 - **`getUploadLimits(purpose?)`** — 按 `purpose` 分级解析上传限制:
   - `purpose=avatar`(默认 5 MiB / 仅图片 4 种 MIME)→ env `UPLOAD_MAX_BYTES_AVATAR` / `UPLOAD_ALLOWED_MIME_AVATAR` 可覆盖
   - `purpose=generic`(默认 100 MiB / 20 种 MIME:图片 + 文档 + 压缩包 + 视频 + 音频)→ env `UPLOAD_MAX_BYTES` / `UPLOAD_ALLOWED_MIME` 可覆盖

@@ -130,13 +130,15 @@ frontend/
 │   │       ├── HomeIcon.tsx
 │   │       ├── ProfileIcon.tsx
 │   │       └── index.ts
-│   ├── pages/
-│   │   ├── index/                     # 首页
-│   │   ├── login/                     # 登录页(Tabs: 手机验证码 / 账号密码 + 微信一键)
-│   │   └── mine/                      # 我的页(用户卡片 + 设置入口 + 退出)
+│       ├── pages/
+│       │   ├── index/                     # 首页
+│       │   ├── login/                     # 登录页(Tabs: 手机验证码 / 账号密码 + 微信一键)
+│       │   ├── mine/                      # 我的页(用户卡片 + 设置入口 + 退出)
+│       │   └── profile/                   # 个人资料页(昵称 / 邮箱 / 头像 URL 编辑)
 │   ├── services/
 │   │   ├── request.ts                 # 统一请求封装(IResponse 解析/401 处理)
 │   │   ├── auth.ts                    # 鉴权 API(sendSmsCode/loginByCredentials/...)
+│   │   ├── upload.ts                  # 文件上传(weapp/tt 走 Taro.uploadFile,H5 走 fetch + FormData)
 │   │   └── cloud.ts                   # 微信云开发(预留,当前未被引用)
 │   ├── store/
 │   │   └── user.ts                    # Zustand 用户态(token + userInfo)
@@ -168,7 +170,7 @@ frontend/
 - `updateUser(patch)` — 局部更新用户信息(同时写回存储)
 - `hydrate()` — 从存储重新恢复(应用启动或 `useDidShow` 时调用)
 
-`UserInfo` 字段:`id` / `name` / `email` / `role` / `phone?`(从 email 解析) / `avatar?`。
+`UserInfo` 字段:`id` / `name` / `email` / `role` / `phone?`(从 email 解析) / `avatar?` / `avatarUrl?`(后端原字段,profile 页回填用)。
 
 ### 2. 请求层 `src/services/request.ts`
 
@@ -196,6 +198,17 @@ frontend/
 
 `toUserInfo(auth)` 把后端 `AuthUser` 映射为前端 `UserInfo`,并从 email 提取手机号(`/^(\d{11})@/` 形式)。
 
+### 3.1 上传服务 `src/services/upload.ts`
+
+通用文件上传(不依赖 `request<T>`,因为 multipart 与 JSON 序列化冲突):
+
+| 函数 | 底层 | 适用端 |
+| --- | --- | --- |
+| `uploadFile({ file, name?, purpose? })` | `Taro.uploadFile` | weapp / tt(传 `tempFilePath` 字符串) |
+| 同上 | `fetch + FormData` | H5(传 `File` 对象,即 `chooseMedia.originalFileObj`) |
+
+后端对应 `POST /api/upload`,5 MiB / 4 种图片 MIME(`image/jpeg|png|webp|gif`)默认限制,可通过后端 env 调整。`purpose: 'avatar'` 标识头像场景(便于将来按场景做清理)。
+
 ### 4. 入口与生命周期 `src/app.tsx`
 
 `useDidShow` 钩子:
@@ -222,12 +235,22 @@ frontend/
 - 4 个设置入口(个人资料 / 账号与安全 / 消息通知 / 关于我们)
 - 已登录态显示"退出登录"按钮(调用 `useUserStore().logout()`)
 - 未登录态显示"登录"按钮(导航到登录页)
+- 点击 **个人资料** Cell → `Taro.navigateTo({ url: '/pages/profile/index' })`
 
-### 8. 自定义 TabBar `src/components/CustomTabBar/index.tsx`
+### 8. 个人资料页 `src/pages/profile/index.tsx`
+
+- 顶部头像区:`<Avatar>` 实时预览 + "选择图片" / "更换头像" 按钮 + "清除" 按钮
+- 头像流程:`Taro.chooseMedia` 选图(weapp/tt 走 `tempFilePath`,H5 走 `originalFileObj`)→ `uploadFile({ file, purpose: 'avatar' })` → 拿到 `{ url }` → 自动回填头像预览
+- 表单:昵称(1-100 字符)+ 邮箱(可空,需合法格式)
+- 底部固定"保存"按钮:`Taro.navigateBack()` 返回"我的"页
+- 提交流程:调用 `updateMyProfile(patch)` → 后端 `PATCH /api/auth/me` 落库 → `useUserStore().updateUser(fromUserDTO(dto))` 同步本地
+- 未登录守卫:进入页面时若 `!isLoggedIn` 则 `reLaunch` 回登录页
+
+### 9. 自定义 TabBar `src/components/CustomTabBar/index.tsx`
 
 跨 weapp / h5 / tt 三端一致的底部 TabBar,使用 `Taro.reLaunch` 切 tab 避免栈累积。**注:path 比较时已做归一化,`useRouter().path`** **与** **`pagePath`** **在前导斜杠上的差异已被处理。**
 
-### 9. 主题与样式系统 `src/styles/`
+### 10. 主题与样式系统 `src/styles/`
 
 - `theme.scss` — 品牌色(可改)、功能色、背景/文本/边框色
 - `variables.scss` — 间距/圆角/字号/行高/字重/阴影/过渡 + 8 个 mixin(`text-ellipsis` / `flex-center` / `button-reset` 等)

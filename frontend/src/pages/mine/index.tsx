@@ -18,6 +18,11 @@ const MinePage: React.FC = () => {
     console.log('[Mine] click setting:', key);
   };
 
+  /** 跳转个人资料页 */
+  const handleProfile = (): void => {
+    Taro.navigateTo({ url: '/pages/profile/index' });
+  };
+
   /** 跳转登录页 */
   const handleLoginClick = (): void => {
     Taro.navigateTo({ url: '/pages/login/index' });
@@ -66,7 +71,7 @@ const MinePage: React.FC = () => {
         <Cell
           title="个人资料"
           isLink
-          onClick={() => handleSetting('profile')}
+          onClick={handleProfile}
         />
         <Cell
           title="账号与安全"

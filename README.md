@@ -46,6 +46,8 @@ root_project/
 ## 主要特性
 
 - **多端登录** — 邮箱+密码、手机号+短信验证码、微信小程序一键登录(基于 Auth.js v5,统一 `accounts` 表管理用户-登录方式绑定)
+- **个人资料管理** — 登录用户可改昵称/邮箱/头像(头像走本地文件上传,落 `public/uploads/<yyyy>/<mm>/<uuid>.<ext>`)
+- **通用文件上传** — `POST /api/upload`(本地存储,可换 OSS 驱动),支持 MIME/大小限制
 - **统一 API 信封** — 后端 `IResponse<T>` + 前端 `request<T>()` 自动解析,业务码非 2xx 统一抛错
 - **测试基线** — Vitest + happy-dom + MSW(单元/集成) + Playwright(E2E)
 - **结构化日志** — `lib/logger.ts` 统一 info/warn/error 事件记录

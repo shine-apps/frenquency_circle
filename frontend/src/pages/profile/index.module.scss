@@ -1,0 +1,97 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  padding: $spacing-lg;
+  // 预留底部固定按钮 + 安全区,避免内容被遮挡
+  padding-bottom: calc(160rpx + env(safe-area-inset-bottom) + #{$spacing-lg});
+  background-color: $color-bg-page;
+}
+
+.avatarSection {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $spacing-md;
+  padding: $spacing-xl 0;
+}
+
+.avatar {
+  background: $color-bg-card;
+  box-shadow: $shadow-card;
+}
+
+.avatarActions {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+}
+
+.avatarBtn {
+  // 缩小按钮在头像下方的视觉占比
+  flex-shrink: 0;
+}
+
+.hiddenFileInput {
+  // H5 隐藏 file input(chooseMedia 兜底)
+  display: none;
+}
+
+.form {
+  background-color: $color-bg-card;
+  border-radius: $radius-md;
+  overflow: hidden;
+  box-shadow: $shadow-card;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: $spacing-md;
+  padding: $spacing-md $spacing-lg;
+  border-bottom: 1rpx solid $color-divider;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.label {
+  flex-shrink: 0;
+  width: 120rpx;
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  // Taro Input 默认 font-size 较小,统一为正文尺寸
+  font-size: $font-size-md;
+  color: $color-text-primary;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.inputError {
+  color: $color-error;
+}
+
+.hint {
+  padding: $spacing-sm $spacing-lg 0;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.saveBar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: $spacing-md $spacing-lg;
+  padding-bottom: calc(#{$spacing-md} + env(safe-area-inset-bottom));
+  background-color: $color-bg-card;
+  box-shadow: $shadow-float;
+  z-index: 10;
+}

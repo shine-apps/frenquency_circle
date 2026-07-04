@@ -98,8 +98,11 @@ All commands run from the project root with no `cd` needed.
 │   │   ├── rate-limit.ts             # In-memory Map limiter (phone cooldown+hourly, IP hourly)
 │   │   ├── sms-sender.ts             # SmsSender interface + ConsoleSmsSender fallback + factory
 │   │   └── aliyun-sms.ts             # AliyunSmsSender (lazy client)
-│   └── wechat/
-│       └── miniprogram.ts            # 微信小程序 code2Session / access_token / getPhoneNumber
+│   │   └── wechat/
+│   │       └── miniprogram.ts            # 微信小程序 code2Session / access_token / getPhoneNumber
+│   └── storage/
+│       ├── types.ts                      # StorageDriver 抽象接口
+│       └── local.ts                      # 本地文件系统驱动(public/uploads/<yyyy>/<mm>/<uuid>.<ext>)
 ├── types/
 │   ├── api.ts                        # DTOs and Paginated<T>
 │   └── next-auth.d.ts                # Session/User/JWT augmentation (id, role, provider)
@@ -147,7 +150,7 @@ All commands run from the project root with no `cd` needed.
 
 - **Schema** lives only in `db/schema.ts`. Column names are `snake_case`; field names are `camelCase`. Primary keys are `uuid().defaultRandom()`. Timestamps use `timestamp({ withTimezone: true }).notNull().defaultNow()`.
 - **Tables:**
-  - `users` — id, email (unique), name, passwordHash, role, createdAt, updatedAt
+  - `users` — id, email (unique), name, passwordHash, role, avatarUrl, createdAt, updatedAt
   - `accounts` — id, userId (FK → users, cascade delete), provider, providerAccountId, type, createdAt, updatedAt. Unique index on `(provider, providerAccountId)`; index on `userId`.
   - `smsVerificationCodes` — id, phone, codeHash (bcrypt), attempts, expiresAt, consumedAt, createdAt. Index on `phone`.
 - **Client:** always import from `@/lib/db`. Run independent queries in parallel with `Promise.all`.
@@ -172,6 +175,7 @@ All commands run from the project root with no `cd` needed.
 
 - **SMS send endpoint** (`POST /api/auth/sms/send`): public, rate-limited. Response body is `IResponse<null>` with `message: "验证码已发送"` and HTTP 201. Does **not** leak whether the phone is registered (anti-enumeration). Failure responses: 400 (invalid phone), 429 (rate limit, Chinese message), 500 (issue failed), 502 (SMS provider failed — no rollback of issued code).
 - **WeChat mini-program login endpoint** (`POST /api/auth/wechat-miniprogram/login`): public (微信小程序客户端调用),body `{ code, phoneCode }`(对应 `wx.login()` 的 js_code 与 getPhoneNumber 按钮的 phone_code)。内部调用 `signIn("wechat-miniprogram", { ..., redirect: false })`,Auth.js 自动写 session cookie。成功响应 `IResponse<{ provider: "wechat-miniprogram" }>` HTTP 200;失败 400 (参数缺失) / 401 (登录失败) / 500 (内部异常)。
+- **File upload endpoint** (`POST /api/upload`): 登录用户可调,接收 `multipart/form-data`,字段 `file` (必填) 与 `purpose` (可选,`'avatar' | 'generic'`,默认 `generic`)。鉴权用 `readUserFromToken`(同 `/api/auth/me`)。MIME 与大小限制走 env:`UPLOAD_MAX_BYTES`(默认 5 MiB) / `UPLOAD_ALLOWED_MIME`(默认 `image/jpeg,image/png,image/webp,image/gif`)。文件落到 `public/uploads/<yyyy>/<mm>/<uuid>.<ext>`,Next.js 自动以 `/uploads/...` 暴露,公开 URL 用 env `NEXT_PUBLIC_APP_URL` 拼接。失败 400 (无 file / purpose 非法) / 401 (未登录) / 413 (超限) / 415 (MIME 非法) / 500 (落盘失败)。响应体 `IResponse<UploadResult>`,其中 `key` 为相对路径(用于将来切换 OSS 驱动时做删除)。
 
 ## Authentication
 
@@ -193,6 +197,17 @@ All commands run from the project root with no `cd` needed.
 - **`lib/sms/rate-limit.ts`** — in-memory `Map`-based limiter. `checkAndConsumePhone` (60s cooldown + 5/hr cap), `checkAndConsumeIp` (10/hr cap). Env-tunable via `SMS_RATE_PHONE_COOLDOWN_SECONDS` / `SMS_RATE_PHONE_HOURLY` / `SMS_RATE_IP_HOURLY`. **Not multi-instance safe** — swap for Redis if scaling horizontally.
 - **`lib/sms/sms-sender.ts`** — `SmsSender` interface + `ConsoleSmsSender` (dev fallback) + `createSmsSender()` factory. Cached singleton.
 - **`lib/sms/aliyun-sms.ts`** — `AliyunSmsSender` with lazy client init. Sends via `client.sendSms(req)` with `templateParam: JSON.stringify({ code })`.
+
+### Storage subsystem
+
+- **`lib/storage/types.ts`** — `StorageDriver` 抽象接口(未来可加 `AliyunOssDriver`、`S3Driver`),`UploadInput` / `UploadResult` DTO。本地实现见 `lib/storage/local.ts`。
+- **`lib/storage/local.ts`** — `LocalDriver`(`__setRootDirForTest` 暴露给测试切到 `mkdtempSync` 临时目录)。文件落 `<rootDir>/<yyyy>/<mm>/<uuid>.<ext>`,`<rootDir>` 默认 `<cwd>/public/uploads`,Next.js 自动以 `/uploads/...` 暴露。公开 URL 通过 env `NEXT_PUBLIC_APP_URL` 拼接,缺省 `http://localhost:${PORT ?? 3000}`。`remove(key)` 用 `path.relative(rootDir, target)` 防越权,绝对路径与含 `..` 的相对路径都拒绝。
+- **`getUploadLimits(purpose?)`** — 按 `purpose` 分级解析上传限制:
+  - `purpose=avatar`(默认 5 MiB / 仅图片 4 种 MIME)→ env `UPLOAD_MAX_BYTES_AVATAR` / `UPLOAD_ALLOWED_MIME_AVATAR` 可覆盖
+  - `purpose=generic`(默认 100 MiB / 20 种 MIME:图片 + 文档 + 压缩包 + 视频 + 音频)→ env `UPLOAD_MAX_BYTES` / `UPLOAD_ALLOWED_MIME` 可覆盖
+  - **env 优先级**:`UPLOAD_MAX_BYTES_<PURPOSE>` > `UPLOAD_MAX_BYTES` > 内置默认
+  - env 缺失/非法时回退到内置默认值,不抛错
+- **不要**在路由处理器里直接 `fs.writeFile`,全部走 `localDriver.put`;后续切到 OSS 时无需改路由。
 
 ### WeChat Mini-Program provider
 
@@ -218,7 +233,7 @@ All commands run from the project root with no `cd` needed.
 ## Logging
 
 - **`lib/logger.ts`** — structured single-line logger. Three levels (`info` / `warn` / `error`), each takes `(prefix, message, context?)`. Output format: `[ISO_TS] [PREFIX] message {json-context}`.
-- **`LOG_PREFIX`** constants: `AUTH` / `SMS` / `ACCOUNT` / `WECHAT`. Import from `@/lib/logger` and reuse — do not scatter string literals.
+- **`LOG_PREFIX`** constants: `AUTH` / `SMS` / `ACCOUNT` / `WECHAT` / `UPLOAD`. Import from `@/lib/logger` and reuse — do not scatter string literals.
 - Use `logger` (not `console.*`) in all auth and SMS code paths. Critical events to log:
   - Login success / failure (with reason: invalid input, user not found, password mismatch, code verify failed)
   - User auto-creation, account link / link refresh

@@ -5,7 +5,7 @@ import '@nutui/nutui-react-taro/dist/styles/themes/default.css';
 // 全局样式
 import './app.scss';
 import { useUserStore } from '@/store/user';
-import { fetchCurrentUser } from '@/services/auth';
+import { fetchCurrentUser, fromUserDTO } from '@/services/auth';
 
 function App(props) {
   // 可以使用所有的 React Hooks
@@ -23,12 +23,8 @@ function App(props) {
       fetchCurrentUser()
         .then((dto) => {
           // 用 DB 返回的最新 UserDTO 更新本地 user（保持 token 不变）
-          useUserStore.getState().updateUser({
-            id: dto.id,
-            name: dto.name,
-            email: dto.email,
-            role: dto.role,
-          });
+          // fromUserDTO 统一字段名映射(avatar / avatarUrl 都写回)
+          useUserStore.getState().updateUser(fromUserDTO(dto));
         })
         .catch(() => {
           // 忽略：401 已在 request.ts 处理；其他错误保留现状

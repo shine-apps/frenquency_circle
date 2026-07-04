@@ -67,7 +67,9 @@
 | `src/store/user.ts` | `code-implementer` | 任何写入 `localStorage` 字段都需在 `README.md` 同步说明 |
 | `src/services/request.ts` | `code-implementer` | 401 处理逻辑改动影响**所有**鉴权调用,需谨慎 |
 | `src/services/auth.ts` | `code-implementer` | 接口签名变更需同步通知后端 |
+| `src/services/upload.ts` | `code-implementer` | 跨端分支(weapp/tt 走 `Taro.uploadFile`,H5 走 `fetch + FormData`),改动需在两端回归;**不**复用 `request<T>`(multipart 与 JSON 序列化冲突) |
 | `src/pages/login/index.tsx` | `code-implementer` + `ui-stylist` | 含三方登录逻辑,改动需在 weapp 端回归 |
+| `src/pages/profile/index.tsx` | `code-implementer` + `ui-stylist` | 修改表单字段需同步后端 `PATCH /api/auth/me` 的 zod schema;头像走 `chooseMedia → uploadFile → PATCH /api/auth/me`,改动需在 weapp / H5 双端跑通 |
 | `src/components/CustomTabBar/index.tsx` | `code-implementer` | 修改 `TABS` 数组需同步检查 `app.config.ts` 的 `pages` |
 | `src/styles/variables.scss` | `ui-stylist` | 删除变量需全局 grep,使用频率高 |
 | `src/styles/theme.scss` | `ui-stylist` | 品牌色变更前需与产品/品牌侧确认 |
@@ -256,7 +258,17 @@
 3. 在 store 中按需新增切片(避免 store 膨胀)
 4. UI 组件只 `import` 函数,不知道 `Taro.request` 存在
 
-### 8.3 修复样式在多端不一致
+### 8.3 添加一个文件上传调用
+
+1. **不**复用 `request<T>`(其强制 `Content-Type: application/json` 会破坏 multipart boundary)
+2. 在 `src/services/upload.ts` 已有 `uploadFile(input: UploadInput): Promise<UploadResult>`
+3. 三端差异(由封装内部处理,业务侧无感):
+   - **weapp/tt**:`file` 传 `Taro.chooseMedia` 返回的 `tempFilePath` 字符串;底层 `Taro.uploadFile`(`SuccessCallbackResult.data` 是 string,需手动 JSON.parse)
+   - **H5**:`file` 传 `originalFileObj`(`File` 对象);底层 `fetch + FormData`
+4. UI 侧:`chooseMedia → uploadFile → setAvatarUrl → 调 PATCH /api/auth/me`
+5. 头像场景固定传 `purpose: 'avatar'`(后端会校验 MIME/大小并按年/月分目录落盘)
+
+### 8.4 修复样式在多端不一致
 
 1. 先在 weapp 端复现
 2. 在 `config/index.ts` 的对应端(`mini` / `h5`)调整 `pxtransform` 的 `selectorBlackList`

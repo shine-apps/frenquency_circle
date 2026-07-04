@@ -38,7 +38,7 @@ export function clearToken(): void {
 
 interface RequestOptions {
   url: string
-  method?: 'GET' | 'POST'
+  method?: 'GET' | 'POST' | 'PATCH'
   data?: Record<string, unknown>
   /** 是否跳过 Authorization 头(登录接口本身不需要) */
   skipAuth?: boolean

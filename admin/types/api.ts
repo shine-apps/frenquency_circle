@@ -21,6 +21,8 @@ export type UserDTO = {
   email: string
   name: string
   role: string
+  /** 头像 URL(可空) */
+  avatarUrl?: string | null
   createdAt: string
   updatedAt: string
 }

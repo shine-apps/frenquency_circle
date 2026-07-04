@@ -12,8 +12,10 @@ export interface UserInfo {
   role: string
   /** 绑定手机号(从 email 提取,可能为空) */
   phone?: string
-  /** 头像 URL(可选) */
+  /** 头像 URL(可选,用于 Avatar 组件展示) */
   avatar?: string
+  /** 头像 URL(后端原字段,profile 页回填用) */
+  avatarUrl?: string
 }
 
 interface UserState {

@@ -35,4 +35,5 @@ export const LOG_PREFIX = {
   SMS: "SMS",
   ACCOUNT: "ACCOUNT",
   WECHAT: "WECHAT",
+  UPLOAD: "UPLOAD",
 } as const

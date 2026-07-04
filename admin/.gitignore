@@ -48,3 +48,6 @@ next-env.d.ts
 
 # drizzle
 /drizzle/meta/
+
+# user uploaded files (POST /api/upload)
+/public/uploads/

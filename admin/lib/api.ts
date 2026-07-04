@@ -28,7 +28,7 @@ export function withCors(res: NextResponse, req?: Request): NextResponse {
   res.headers.set("Access-Control-Allow-Origin", origin)
   if (origin !== "*") res.headers.set("Vary", "Origin")
   res.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-  res.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+  res.headers.set("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
   res.headers.set("Access-Control-Max-Age", "86400")
   return res
 }

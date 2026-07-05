@@ -119,29 +119,46 @@ frontend/
 │   └── prod.ts                        # 生产配置(API_BASE_URL 占位域名)
 ├── src/
 │   ├── app.tsx                        # 应用入口(用户态 hydrate + fetchCurrentUser)
-│   ├── app.config.ts                  # 全局 app.json(页面列表/窗口样式)
+│   ├── app.config.ts                  # 全局 app.json(页面列表/窗口样式/permission.scope.userLocation)
 │   ├── app.scss                       # 全局样式入口
 │   ├── index.html                     # H5 入口模板(锁定 html fontSize=18px)
 │   ├── components/
-│   │   ├── CustomTabBar/             # 自定义底部 TabBar(跨端一致)
+│   │   ├── CustomTabBar/             # 自定义底部 TabBar(3 项:首页 / 发布[凸起] / 我的)
 │   │   │   ├── index.tsx
 │   │   │   └── index.module.scss
-│   │   └── Icons/                     # 内联 SVG 图标
-│   │       ├── HomeIcon.tsx
-│   │       ├── ProfileIcon.tsx
-│   │       └── index.ts
-│       ├── pages/
-│       │   ├── index/                     # 首页
-│       │   ├── login/                     # 登录页(Tabs: 手机验证码 / 账号密码 + 微信一键)
-│       │   ├── mine/                      # 我的页(用户卡片 + 设置入口 + 退出)
-│       │   └── profile/                   # 个人资料页(昵称 / 邮箱 / 头像 URL 编辑)
+│   │   ├── Icons/                     # 内联 SVG 图标
+│   │   │   ├── HomeIcon.tsx
+│   │   │   ├── ProfileIcon.tsx
+│   │   │   ├── PublishIcon.tsx        # 发布按钮凸起圆形渐变图标
+│   │   │   └── index.ts
+│   │   └── TagSelector/              # 通用兴趣标签选择器(搜索 + 联想 + 已选 + 六大类 + 自定义添加)
+│   │       ├── index.tsx
+│   │       └── index.module.scss
+│   ├── pages/
+│   │   ├── index/                     # 首页(搜索栏 + 定位卡片 + 范围 Tab + 推荐列表 + 发布按钮)
+│   │   ├── login/                     # 登录页(Tabs: 手机验证码 / 账号密码 + 微信一键)
+│   │   ├── mine/                      # 我的页(用户卡片 + 兴趣 + 圈子 + 隐私 + 退出)
+│   │   ├── profile/                   # 个人资料页(昵称 / 邮箱 / 头像 URL 编辑)
+│   │   ├── search/                    # 兴趣选择页(复用 TagSelector,完成按钮持久化)
+│   │   ├── publish/                   # 发布定位页(地图选点 + 兴趣卡片 + 范围 Tab)
+│   │   ├── match/                     # 匹配结果页(双 Tab:同频的人 / 圈子 + 范围筛选)
+│   │   ├── circle/                    # 圈子详情页(标题 + 创建者 + 联系老师 Popup)
+│   │   ├── create-circle/            # 创建/编辑圈子页(表单 + 标签 + 选点 + 实时校验)
+│   │   ├── my-circles/               # 我的圈子(展示 matchStore.circles 缓存)
+│   │   ├── my-published/             # 我发布的圈子(TEACHER 专属,编辑/下线)
+│   │   └── privacy/                  # 隐私设置(公开联系方式 / 允许被匹配 / 位置精度)
 │   ├── services/
 │   │   ├── request.ts                 # 统一请求封装(IResponse 解析/401 处理)
-│   │   ├── auth.ts                    # 鉴权 API(sendSmsCode/loginByCredentials/...)
+│   │   ├── auth.ts                    # 鉴权 + 用户扩展 API(login/sendSmsCode/updateMyTags/updatePrivacy/updateProfile/getMyProfile)
+│   │   ├── tags.ts                    # 标签 API(searchTags/getCategories/createCustomTag)
+│   │   ├── locations.ts              # 定位 API(publishLocation/matchPeople/matchCircles)
+│   │   ├── circles.ts                # 圈子 API(createCircle/getCircle/updateCircle/deleteCircle/getMyCircles/contactCircle)
 │   │   ├── upload.ts                  # 文件上传(weapp/tt 走 Taro.uploadFile,H5 走 fetch + FormData)
 │   │   └── cloud.ts                   # 微信云开发(预留,当前未被引用)
 │   ├── store/
-│   │   └── user.ts                    # Zustand 用户态(token + userInfo)
+│   │   ├── user.ts                    # Zustand 用户态(token + userInfo + tags/privacySettings/role)
+│   │   ├── match.ts                  # 匹配结果缓存(people / circles / rangeKm / location)
+│   │   └── location.ts              # 当前发布位置缓存(latitude / longitude / address)
 │   └── styles/
 │       ├── theme.scss                 # 品牌色/功能色/背景/文本/边框色变量
 │       ├── variables.scss             # 间距/圆角/字号/行高/字重/阴影/mixin
@@ -262,6 +279,76 @@ frontend/
 - 全局变量通过 `@use '@/styles/variables.scss' as *;` 引入
 - H5 端 `selectorBlackList: ['body']`,避免 `pxtransform` 误伤
 - 小程序端 `selectorBlackList: ['nut-']`,避免 NutUI 内部样式被转换
+
+### 11. 兴趣标签体系 `src/components/TagSelector/` + `src/pages/search/`
+
+「同频圈」核心模块之一,围绕六大类兴趣标签(太极 / 书法 / 古琴 / 茶道 / 国画 / 民乐)实现标签选择、搜索、自定义添加。
+
+- **TagSelector 通用组件** `src/components/TagSelector/index.tsx`
+  - props:`{ selectedIds: string[], onChange: (ids: string[]) => void, max?: number }`(默认 max=10)
+  - 顶部搜索框 + 300ms 防抖联想列表(调 `searchTags(q)`)
+  - 已选标签 chip 区(可删除)
+  - 六大类分类树骨架(后端无按 category 浏览接口,仅作展开/收起提示)
+  - 自定义添加入口:输入框 + 提交按钮调 `createCustomTag(name)`,成功后自动加入已选
+- **兴趣选择页** `src/pages/search/index.tsx`
+  - 复用 TagSelector,顶部"完成(N)"按钮
+  - 进入时若已有 tags 则预填
+  - 完成后调 `updateMyTags(tagIds)` 持久化,`useUserStore().updateUser({ tags })` 同步 store,`Taro.navigateBack()`
+- **服务层** `src/services/tags.ts`:`searchTags(q)` / `getCategories()` / `createCustomTag(name)`
+- **类型**:`TagDTO` / `Category` 定义在 `types/global.d.ts`,与后端 DTO 对齐
+
+### 12. 同频匹配 `src/pages/publish/` + `src/pages/match/`
+
+基于地理位置 + 兴趣重合度 + 活跃度的多维度匹配。
+
+- **发布定位页** `src/pages/publish/index.tsx`
+  - 地图组件 + 重新定位按钮(weapp 用 `Taro.chooseLocation`,H5 退化用 `Taro.getLocation`)
+  - 当前位置卡片 + 我的兴趣卡片(点击跳 search)+ 范围选择 Tab + "发布并匹配"按钮
+  - 未选兴趣时禁用按钮
+  - 发布调 `publishLocation(input)`,成功后跳 `pages/match/index` 并携带参数
+- **匹配结果页** `src/pages/match/index.tsx`
+  - 双 Tab(同频的人 / 同频的圈子)+ 范围筛选(全部/≤1km/≤5km/≤10km)
+  - 进入时并发调 `matchPeople + matchCircles`,缓存到 `store/match`
+  - 人列表项:头像 + 昵称 + 距离 + 标签 + 活跃度 + 练习时长;点击 Toast 提示(spec 设计缺陷:`MatchPersonDTO` 无 `phone`/`publicContact` 字段)
+  - 圈子列表项:标题 + 距离 + 标签 + 活动时间 + 成员数;点击跳 `pages/circle/index?id=xxx`
+  - 空状态 + 下拉刷新(上拉加载更多留 TODO)
+- **服务层** `src/services/locations.ts`:`publishLocation(input)` / `matchPeople(params)` / `matchCircles(params)`
+- **状态层** `src/store/match.ts`(缓存匹配结果)+ `src/store/location.ts`(缓存发布位置)
+
+### 13. 圈子管理 `src/pages/circle/` + `src/pages/create-circle/` + `src/pages/my-published/`
+
+TEACHER 角色专属(普通 USER 提交创建圈子时自动升级 role)。
+
+- **圈子详情页** `src/pages/circle/index.tsx`
+  - 标题 + 标签 + 创建者卡片 + 介绍 + 活动时间 + 活动地点(文字展示)+ 成员人数 + 底部按钮
+  - 非创建者:底部"联系老师"按钮 → 调 `contactCircle(id, type)` → 弹 NutUI `Popup`(优先 phone,phone 为 null 改用 wechat)
+  - 创建者:底部"编辑圈子信息"按钮 → 跳 `pages/create-circle?id=xxx`;额外展示"被联系次数"
+  - 边界:圈子不存在展示"该圈子已不存在"
+- **创建/编辑圈子页** `src/pages/create-circle/index.tsx`
+  - 表单(标题 / 标签搜索选择[最多 5 个] / 描述[NutUI `TextArea`] / 活动地点 / 联系电话 / 微信号 / 活动时间 / 人数上限)
+  - 实时校验:必填项未填禁用按钮;联系电话与微信号至少填一项
+  - 提交:非 TEACHER 时先调 `updateProfile({ role: 'TEACHER' })` 升级;成功跳 `pages/circle/index?id=xxx`(`Taro.redirectTo` 避免栈累积)
+  - 编辑模式:预填现有数据,提交调 `updateCircle`(排除 lat/lng/address,因 `UpdateCircleInput` 不含这三字段)
+- **我发布的圈子** `src/pages/my-published/index.tsx`:TEACHER 用户展示自己创建的圈子列表,支持编辑/下线
+- **我加入的圈子** `src/pages/my-circles/index.tsx`:展示 `useMatchStore.circles` 缓存(最近匹配的圈子)
+- **服务层** `src/services/circles.ts`:`createCircle` / `getCircle` / `updateCircle` / `deleteCircle` / `getMyCircles` / `contactCircle`
+
+### 14. 隐私设置 `src/pages/privacy/`
+
+- 三个开关:公开联系方式 / 允许被匹配 / 位置精度(`community` / `region`)
+- 位置精度用 NutUI `Radio.Group` 单选
+- 300ms 防抖保存(调 `updatePrivacy(settings)`)
+- `initialized` 标记避免首次 mount 触发保存
+- 后端集成:people-matcher 过滤 `privacySettings.allowMatch=false` 用户;`locationPrecision='community'` 时 `distanceKm` 四舍五入到 0.5km,`'region'` 时 5km
+
+### 15. 自定义 TabBar(3 项凸起) `src/components/CustomTabBar/index.tsx`
+
+「同频圈」MVP 改版后的 TabBar:
+
+- 3 项:**首页** / **发布[中间凸起]** / **我的**
+- 中间"发布"按钮:`transform: translateY(-20rpx)` 实现凸起 + 圆形渐变背景 + 阴影(`PublishIcon` SVG)
+- 点击逻辑:`role === 'TEACHER'` 时 `showActionSheet`(发布定位 / 创建圈子);其他角色直接跳 `pages/publish`
+- 左右两项用 `Taro.reLaunch` 切换避免栈累积
 
 ***
 

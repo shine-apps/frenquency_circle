@@ -1,5 +1,5 @@
 import { getToken } from "next-auth/jwt"
-import type { AuthUser } from "@/types/api"
+import type { AuthUser, UserRole } from "@/types/api"
 
 /**
  * Session cookie 名称(开发环境 HTTP)。
@@ -77,6 +77,6 @@ export async function readUserFromToken(
     id: (token.id as string) ?? "",
     email: (token.email as string) ?? "",
     name: (token.name as string) ?? "",
-    role: (token.role as string) ?? "USER",
+    role: (token.role as UserRole) ?? "USER",
   }
 }

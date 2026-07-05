@@ -1,9 +1,9 @@
 import { desc, sql } from "drizzle-orm"
 
 import { db } from "@/lib/db"
-import { users } from "@/db/schema"
+import { users, DEFAULT_PRIVACY_SETTINGS } from "@/db/schema"
 import { UsersTable } from "./_components/users-table"
-import type { UserDTO } from "@/types/api"
+import type { UserDTO, UserRole, PrivacySettings } from "@/types/api"
 
 // SSR 用户列表单页上限，防止全量加载导致内存膨胀 / 慢查询。
 // 完整分页可通过 /api/users 接口（已支持分页）消费。
@@ -23,7 +23,17 @@ export default async function AdminUsersPage() {
     id: u.id,
     email: u.email,
     name: u.name,
-    role: u.role,
+    role: u.role as UserRole,
+    phone: u.phone ?? null,
+    practiceYears: u.practiceYears ?? null,
+    activityLevel: u.activityLevel as UserDTO["activityLevel"],
+    privacySettings:
+      (u.privacySettings as PrivacySettings | null) ?? DEFAULT_PRIVACY_SETTINGS,
+    location:
+      u.latitude !== null && u.longitude !== null
+        ? { latitude: u.latitude, longitude: u.longitude }
+        : null,
+    address: u.address ?? null,
     createdAt: u.createdAt.toISOString(),
     updatedAt: u.updatedAt.toISOString(),
   }))

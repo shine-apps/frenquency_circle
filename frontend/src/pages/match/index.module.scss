@@ -1,0 +1,214 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  padding: $spacing-md $spacing-lg;
+  padding-bottom: calc(env(safe-area-inset-bottom) + #{$spacing-lg});
+  background-color: $color-bg-page;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+}
+
+// ====== 顶部双 Tab ======
+.tabBar {
+  display: flex;
+  background-color: $color-bg-card;
+  border-radius: $radius-md;
+  padding: $spacing-xs;
+  box-shadow: $shadow-card;
+}
+
+.tabItem {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-sm 0;
+  border-radius: $radius-sm;
+
+  &:active {
+    opacity: 0.8;
+  }
+}
+
+.tabItemActive {
+  background-color: $color-primary;
+}
+
+.tabText {
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+}
+
+.tabTextActive {
+  font-size: $font-size-md;
+  color: $color-text-white;
+  font-weight: $font-weight-medium;
+}
+
+// ====== 范围筛选 ======
+.rangeBar {
+  width: 100%;
+  white-space: nowrap;
+}
+
+.rangeInner {
+  display: inline-flex;
+  gap: $spacing-sm;
+  padding: 0 $spacing-xs;
+}
+
+.rangeChip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-xs $spacing-md;
+  border-radius: $radius-round;
+  background-color: $color-bg-card;
+  border: 2rpx solid $color-border;
+
+  &:active {
+    opacity: 0.8;
+  }
+}
+
+.rangeChipActive {
+  background-color: rgba(22, 93, 255, 0.08);
+  border-color: $color-primary;
+}
+
+.rangeChipText {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.rangeChipTextActive {
+  font-size: $font-size-sm;
+  color: $color-primary;
+  font-weight: $font-weight-medium;
+}
+
+// ====== 列表 ======
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+}
+
+.card {
+  background-color: $color-bg-card;
+  border-radius: $radius-md;
+  padding: $spacing-md;
+  box-shadow: $shadow-card;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+
+  &:active {
+    background-color: $color-bg-hover;
+  }
+}
+
+.cardHead {
+  display: flex;
+  align-items: flex-start;
+  gap: $spacing-md;
+}
+
+.circleIcon {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: $radius-md;
+  background: linear-gradient(135deg, $color-primary 0%, $color-primary-light 100%);
+  color: $color-text-white;
+  font-size: $font-size-lg;
+  font-weight: $font-weight-bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.cardMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.nameRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-sm;
+}
+
+.name {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  @include text-ellipsis;
+}
+
+.distance {
+  font-size: $font-size-sm;
+  color: $color-primary;
+  flex-shrink: 0;
+}
+
+.metaRow {
+  display: flex;
+  align-items: center;
+  gap: $spacing-xs;
+  flex-wrap: wrap;
+}
+
+.meta {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.dot {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.address {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+  @include text-ellipsis;
+}
+
+// ====== 标签行 ======
+.tagRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-xs;
+  align-items: center;
+}
+
+.tagItem {
+  // NutUI Tag 自带样式,这里仅控制间距
+}
+
+.tagMore {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+  padding-left: $spacing-xs;
+}
+
+// ====== 空状态 ======
+.empty {
+  padding: $spacing-xl * 2 $spacing-md;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.emptyText {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+  text-align: center;
+}

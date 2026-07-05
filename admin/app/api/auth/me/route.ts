@@ -2,23 +2,40 @@ import { and, eq, ne } from "drizzle-orm"
 import { z } from "zod"
 
 import { db } from "@/lib/db"
-import { users } from "@/db/schema"
+import { users, DEFAULT_PRIVACY_SETTINGS } from "@/db/schema"
 import { corsOptions, fail, ok, withCors } from "@/lib/api"
 import { readUserFromToken } from "@/lib/auth/session-token"
+import { fetchUserTags } from "@/lib/user-tags"
 import { logger, LOG_PREFIX } from "@/lib/logger"
-import type { UserDTO } from "@/types/api"
+import type {
+  UserDTO,
+  UserProfileDTO,
+  UserRole,
+  PrivacySettings,
+} from "@/types/api"
 
 /**
  * 将 users 表行映射为 UserDTO。
  * 集中在此处避免 GET/PATCH 两处重复定义。
  */
 function toUserDTO(row: typeof users.$inferSelect): UserDTO {
+  const privacySettings =
+    (row.privacySettings as PrivacySettings | null) ?? DEFAULT_PRIVACY_SETTINGS
   return {
     id: row.id,
     email: row.email,
     name: row.name,
-    role: row.role,
+    role: row.role as UserRole,
     avatarUrl: row.avatarUrl ?? null,
+    phone: row.phone ?? null,
+    practiceYears: row.practiceYears ?? null,
+    activityLevel: row.activityLevel as UserDTO["activityLevel"],
+    privacySettings,
+    location:
+      row.latitude !== null && row.longitude !== null
+        ? { latitude: row.latitude, longitude: row.longitude }
+        : null,
+    address: row.address ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }
@@ -66,7 +83,14 @@ export async function GET(req: Request) {
     return withCors(fail(401, "用户不存在"), req)
   }
 
-  return withCors(ok(toUserDTO(row)), req)
+  // 扩展返回 UserProfileDTO:在原 UserDTO 基础上拼接 tags 列表
+  const userTagsList = await fetchUserTags(authUser.id)
+  const profile: UserProfileDTO = {
+    ...toUserDTO(row),
+    tags: userTagsList,
+  }
+
+  return withCors(ok(profile), req)
 }
 
 /**

@@ -4,46 +4,273 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  padding: $spacing-lg;
-  // 预留底部 tabbar 高度(100rpx) + 安全区,避免内容被 tabbar 遮挡
+  padding: $spacing-md $spacing-lg;
+  // 预留底部 tabbar 高度(100rpx) + 安全区
   padding-bottom: calc(100rpx + env(safe-area-inset-bottom) + #{$spacing-lg});
   background: linear-gradient(180deg, #f0f5ff 0%, $color-bg-page 100%);
+  gap: $spacing-md;
 }
 
+// ====== 顶部:搜索栏 + 发布按钮 ======
 .header {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  padding: $spacing-xl $spacing-lg;
-  margin-bottom: $spacing-lg;
+  gap: $spacing-sm;
 }
 
-.title {
-  font-size: $font-size-xxl;
-  font-weight: $font-weight-bold;
-  color: $color-text-primary;
-  margin-bottom: $spacing-sm;
-  line-height: $line-height-tight;
-}
-
-.subtitle {
-  font-size: $font-size-md;
-  color: $color-text-tertiary;
-  line-height: $line-height-normal;
-}
-
-.section {
-  width: 100%;
-  background: $color-bg-card;
-  border-radius: $radius-md;
-  overflow: hidden;
+.searchBar {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: $spacing-sm $spacing-md;
+  background-color: $color-bg-card;
+  border-radius: $radius-round;
   box-shadow: $shadow-card;
-  margin-bottom: $spacing-xl;
+
+  &:active {
+    background-color: $color-bg-hover;
+  }
 }
 
-.actions {
+.searchPlaceholder {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+}
+
+.publishBtn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-sm $spacing-md;
+  background: linear-gradient(135deg, $color-primary 0%, $color-primary-light 100%);
+  border-radius: $radius-round;
+  box-shadow: $shadow-card;
+
+  &:active {
+    opacity: 0.85;
+  }
+}
+
+.publishBtnText {
+  font-size: $font-size-sm;
+  color: $color-text-white;
+  font-weight: $font-weight-medium;
+}
+
+// ====== 定位卡片 ======
+.locationCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $spacing-md;
+  background-color: $color-bg-card;
+  border-radius: $radius-md;
+  box-shadow: $shadow-card;
+
+  &:active {
+    background-color: $color-bg-hover;
+  }
+}
+
+.locationInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+  min-width: 0;
+  flex: 1;
+}
+
+.locationLabel {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.locationAddress {
+  font-size: $font-size-md;
+  color: $color-text-primary;
+  font-weight: $font-weight-medium;
+  @include text-ellipsis;
+}
+
+.locationArrow {
+  font-size: $font-size-sm;
+  color: $color-primary;
+  flex-shrink: 0;
+  padding-left: $spacing-sm;
+}
+
+// ====== 引导卡片(授权 / 选兴趣) ======
+.guideCard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: $spacing-sm;
+  padding: $spacing-md;
+  background-color: rgba(255, 125, 0, 0.08);
+  border: 1rpx solid rgba(255, 125, 0, 0.3);
+  border-radius: $radius-md;
+
+  &:active {
+    opacity: 0.85;
+  }
+}
+
+.guideTitle {
+  font-size: $font-size-md;
+  color: $color-text-primary;
+  font-weight: $font-weight-medium;
+}
+
+.guideHint {
+  font-size: $font-size-sm;
+  color: $color-primary;
+}
+
+// ====== 范围 Tab ======
+.rangeBar {
+  width: 100%;
+  white-space: nowrap;
+}
+
+.rangeInner {
+  display: inline-flex;
+  gap: $spacing-sm;
+  padding: 0 $spacing-xs;
+}
+
+.rangeChip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-xs $spacing-md;
+  border-radius: $radius-round;
+  background-color: $color-bg-card;
+  border: 2rpx solid $color-border;
+
+  &:active {
+    opacity: 0.8;
+  }
+}
+
+.rangeChipActive {
+  background-color: rgba(22, 93, 255, 0.08);
+  border-color: $color-primary;
+}
+
+.rangeChipText {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.rangeChipTextActive {
+  font-size: $font-size-sm;
+  color: $color-primary;
+  font-weight: $font-weight-medium;
+}
+
+// ====== 推荐列表 ======
+.list {
   display: flex;
   flex-direction: column;
   gap: $spacing-md;
-  padding: 0 $spacing-sm;
+}
+
+.card {
+  background-color: $color-bg-card;
+  border-radius: $radius-md;
+  padding: $spacing-md;
+  box-shadow: $shadow-card;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+
+  &:active {
+    background-color: $color-bg-hover;
+  }
+}
+
+.cardHead {
+  display: flex;
+  align-items: flex-start;
+  gap: $spacing-md;
+}
+
+.circleIcon {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: $radius-md;
+  background: linear-gradient(135deg, $color-primary 0%, $color-primary-light 100%);
+  color: $color-text-white;
+  font-size: $font-size-lg;
+  font-weight: $font-weight-bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.cardMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.nameRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-sm;
+}
+
+.name {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  @include text-ellipsis;
+}
+
+.distance {
+  font-size: $font-size-sm;
+  color: $color-primary;
+  flex-shrink: 0;
+}
+
+.meta {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+// ====== 标签行 ======
+.tagRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-xs;
+  align-items: center;
+}
+
+.tagItem {
+  // NutUI Tag 自带样式
+}
+
+.tagMore {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+  padding-left: $spacing-xs;
+}
+
+// ====== 空状态 ======
+.empty {
+  padding: $spacing-xl * 2 $spacing-md;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.emptyText {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+  text-align: center;
 }

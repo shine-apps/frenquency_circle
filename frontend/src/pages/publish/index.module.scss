@@ -1,0 +1,149 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  padding: $spacing-md $spacing-lg;
+  padding-bottom: calc(env(safe-area-inset-bottom) + #{$spacing-xl});
+  background-color: $color-bg-page;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+}
+
+// ====== 地图 ======
+.mapWrap {
+  position: relative;
+  width: 100%;
+  height: 400rpx;
+  border-radius: $radius-md;
+  overflow: hidden;
+  box-shadow: $shadow-card;
+}
+
+.map {
+  width: 100%;
+  height: 100%;
+}
+
+.mapPlaceholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-xs;
+  background-color: $color-bg-hover;
+}
+
+.mapPlaceholderText {
+  font-size: $font-size-md;
+  color: $color-text-tertiary;
+}
+
+.mapPlaceholderHint {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.relocateBtn {
+  position: absolute;
+  right: $spacing-sm;
+  bottom: $spacing-sm;
+  z-index: 2;
+}
+
+// ====== 通用卡片 ======
+.card {
+  background-color: $color-bg-card;
+  border-radius: $radius-md;
+  padding: $spacing-md;
+  box-shadow: $shadow-card;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-xs;
+
+  &:active {
+    background-color: $color-bg-hover;
+  }
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cardTitle {
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.cardArrow {
+  font-size: $font-size-sm;
+  color: $color-primary;
+}
+
+.cardValue {
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+  line-height: $line-height-normal;
+}
+
+.cardMeta {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+// ====== 范围选择 ======
+.rangeTabs {
+  display: flex;
+  gap: $spacing-sm;
+  margin-top: $spacing-xs;
+}
+
+.rangeItem {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-sm 0;
+  border-radius: $radius-sm;
+  background-color: $color-bg-hover;
+  border: 2rpx solid transparent;
+
+  &:active {
+    opacity: 0.8;
+  }
+}
+
+.rangeItemActive {
+  background-color: rgba(22, 93, 255, 0.08);
+  border-color: $color-primary;
+}
+
+.rangeItemText {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.rangeItemTextActive {
+  font-size: $font-size-sm;
+  color: $color-primary;
+  font-weight: $font-weight-medium;
+}
+
+// ====== 底部按钮 ======
+.footer {
+  margin-top: $spacing-md;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $spacing-xs;
+}
+
+.footerHint {
+  font-size: $font-size-xs;
+  color: $color-error;
+}

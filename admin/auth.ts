@@ -22,6 +22,7 @@ import {
   WechatMpError,
 } from "@/lib/wechat/miniprogram"
 import { logger, LOG_PREFIX } from "@/lib/logger"
+import type { UserRole } from "@/types/api"
 
 function errMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
@@ -99,7 +100,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           id: user.id,
           email: user.email,
           name: user.name,
-          role: user.role,
+          role: user.role as UserRole,
         }
       },
     }),
@@ -154,7 +155,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           id: user.id,
           email: user.email,
           name: user.name,
-          role: user.role,
+          role: user.role as UserRole,
         }
       },
     }),
@@ -269,7 +270,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           id: user.id,
           email: user.email,
           name: user.name,
-          role: user.role,
+          role: user.role as UserRole,
         }
       },
     }),

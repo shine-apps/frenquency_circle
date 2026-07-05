@@ -1,0 +1,124 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  padding: $spacing-md $spacing-lg;
+  padding-bottom: calc(env(safe-area-inset-bottom) + #{$spacing-lg});
+  background-color: $color-bg-page;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+}
+
+// ====== 顶部说明 ======
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.headerTitle {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.headerHint {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+// ====== 列表 ======
+.list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+}
+
+.card {
+  background-color: $color-bg-card;
+  border-radius: $radius-md;
+  padding: $spacing-md;
+  box-shadow: $shadow-card;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+}
+
+.cardHead {
+  display: flex;
+  align-items: flex-start;
+  gap: $spacing-md;
+}
+
+.cardMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-sm;
+}
+
+.title {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  @include text-ellipsis;
+}
+
+.statusChip {
+  // NutUI Tag 自带样式
+  flex-shrink: 0;
+}
+
+.metaRow {
+  display: flex;
+  align-items: center;
+  gap: $spacing-xs;
+  flex-wrap: wrap;
+}
+
+.meta {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.dot {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+// ====== 操作按钮 ======
+.actions {
+  display: flex;
+  gap: $spacing-sm;
+  padding-top: $spacing-xs;
+  border-top: 1rpx solid $color-divider;
+}
+
+.actionBtn {
+  flex: 1;
+}
+
+// ====== 空状态 ======
+.empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-xl * 2 $spacing-md;
+}
+
+.emptyText {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+  text-align: center;
+}

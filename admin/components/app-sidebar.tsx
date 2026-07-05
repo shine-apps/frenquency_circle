@@ -6,6 +6,8 @@ import {
   LayoutDashboardIcon,
   UsersIcon,
   AudioWaveformIcon,
+  TagIcon,
+  CircleIcon,
 } from "lucide-react"
 
 import {
@@ -25,6 +27,8 @@ import { SignOutButton } from "@/components/sign-out-button"
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboardIcon, exact: true },
   { href: "/admin/users", label: "Users", icon: UsersIcon },
+  { href: "/admin/tags", label: "标签管理", icon: TagIcon },
+  { href: "/admin/circles", label: "圈子审核", icon: CircleIcon },
 ]
 
 export function AppSidebar() {

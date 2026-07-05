@@ -150,9 +150,17 @@ All commands run from the project root with no `cd` needed.
 
 - **Schema** lives only in `db/schema.ts`. Column names are `snake_case`; field names are `camelCase`. Primary keys are `uuid().defaultRandom()`. Timestamps use `timestamp({ withTimezone: true }).notNull().defaultNow()`.
 - **Tables:**
-  - `users` — id, email (unique), name, passwordHash, role, avatarUrl, createdAt, updatedAt
+  - `users` — id, email (unique), name, passwordHash, role, avatarUrl, createdAt, updatedAt. **Phase 1 扩展字段:** `phone` / `wechatOpenid` / `latitude` / `longitude`(lat/lng 双列方案替代 PostGIS Point)/ `address` / `privacySettings`(JSONB)/ `practiceYears` / `activityLevel` / `lastActiveAt`;`role` 类型扩展为 `'ADMIN' | 'USER' | 'TEACHER'`。
   - `accounts` — id, userId (FK → users, cascade delete), provider, providerAccountId, type, createdAt, updatedAt. Unique index on `(provider, providerAccountId)`; index on `userId`.
   - `smsVerificationCodes` — id, phone, codeHash (bcrypt), attempts, expiresAt, consumedAt, createdAt. Index on `phone`.
+  - `tags` — id, name, category, subCategory, pinyin, pinyinInitials, status(`'pending' | 'approved' | 'rejected'`), createdBy, createdAt, updatedAt. 索引:name ILIKE、pinyin、pinyinInitials、(category+subCategory)、status。六大类兴趣标签(太极 / 书法 / 古琴 / 茶道 / 国画 / 民乐)。
+  - `userTags` — id, userId (FK → users), tagId (FK → tags), level int, createdAt. 唯一索引 `(userId, tagId)`。每个用户最多 10 个标签。
+  - `circles` — id, title, description, creatorId (FK → users), latitude, longitude(lat/lng 双列), address, contactPhone, wechat, activityTime, maxMembers int, memberCount int default 0, status(`'active' | 'offline' | 'deleted' | 'violated'`), createdAt, updatedAt. 复合 btree 索引 (latitude, longitude)。TEACHER 创建,普通用户联系老师。
+  - `circleTags` — id, circleId (FK → circles), tagId (FK → tags). 唯一索引 `(circleId, tagId)`。圈子与标签多对多。
+  - `circleMembers` — id, circleId (FK → circles), userId (FK → users), role(`'member' | 'creator'`), joinedAt. 唯一索引 `(circleId, userId)`。
+  - `locations` — id, userId (FK → users), latitude, longitude(lat/lng 双列), address, tagIds (uuid[] 快照), publishedAt. 复合 btree 索引 (latitude, longitude)。用户发布定位用于匹配。
+  - `contactLogs` — id, circleId (FK → circles), userId (FK → users), contactType(`'phone' | 'wechat'`), createdAt. 索引 on circleId。记录用户联系老师的行为。
+- **空间索引说明:** 原 spec 设计用 PostGIS GIST 索引,实际采用 lat/lng 双列方案(spec SubTask 1.3 允许),GIST 改为 (latitude, longitude) btree 复合索引;距离计算用 haversine 公式(`lib/match/distance.ts`)。
 - **Client:** always import from `@/lib/db`. Run independent queries in parallel with `Promise.all`.
 - **Migrations:** after editing schema, run `pnpm db:generate`, review the generated SQL in `drizzle/`, then `pnpm db:migrate`. Use `pnpm db:push` only for throwaway debugging.
 - **DTOs:** never return raw rows from API handlers. Convert via a local `toDTO()` function and strip sensitive fields (e.g. `passwordHash`).
@@ -176,6 +184,53 @@ All commands run from the project root with no `cd` needed.
 - **SMS send endpoint** (`POST /api/auth/sms/send`): public, rate-limited. Response body is `IResponse<null>` with `message: "验证码已发送"` and HTTP 201. Does **not** leak whether the phone is registered (anti-enumeration). Failure responses: 400 (invalid phone), 429 (rate limit, Chinese message), 500 (issue failed), 502 (SMS provider failed — no rollback of issued code).
 - **WeChat mini-program login endpoint** (`POST /api/auth/wechat-miniprogram/login`): public (微信小程序客户端调用),body `{ code, phoneCode }`(对应 `wx.login()` 的 js_code 与 getPhoneNumber 按钮的 phone_code)。内部调用 `signIn("wechat-miniprogram", { ..., redirect: false })`,Auth.js 自动写 session cookie。成功响应 `IResponse<{ provider: "wechat-miniprogram" }>` HTTP 200;失败 400 (参数缺失) / 401 (登录失败) / 500 (内部异常)。
 - **File upload endpoint** (`POST /api/upload`): 登录用户可调,接收 `multipart/form-data`,字段 `file` (必填) 与 `purpose` (可选,`'avatar' | 'generic'`,默认 `generic`)。鉴权用 `readUserFromToken`(同 `/api/auth/me`)。MIME 与大小限制走 env:`UPLOAD_MAX_BYTES`(默认 5 MiB) / `UPLOAD_ALLOWED_MIME`(默认 `image/jpeg,image/png,image/webp,image/gif`)。文件落到 `public/uploads/<yyyy>/<mm>/<uuid>.<ext>`,Next.js 自动以 `/uploads/...` 暴露,公开 URL 用 env `NEXT_PUBLIC_APP_URL` 拼接。失败 400 (无 file / purpose 非法) / 401 (未登录) / 413 (超限) / 415 (MIME 非法) / 500 (落盘失败)。响应体 `IResponse<UploadResult>`,其中 `key` 为相对路径(用于将来切换 OSS 驱动时做删除)。
+
+### Phase 2-3: 标签子系统与匹配引擎 API
+
+「同频圈」核心业务 API,均走 `requireSession(req)` 鉴权(非 admin),返回 `IResponse<T>` 信封。
+
+- **`GET /api/tags/search?q=&limit=`**:公开,搜索标签。策略:1) 精确 name → 2) ILIKE `%q%` → 3) pinyin 完全匹配 → 4) pinyinInitials 完全匹配 → 5) pinyinInitials 前缀匹配。`q` 为空时返回热门 top 10。`limit` 默认 10,最大 50。
+- **`GET /api/tags/categories`**:公开,返回六大类与二级分类树(从 tags 表 group by)。
+- **`POST /api/tags/custom`**:登录用户,zod 校验 `name`(1-30 字符)→ 自动填充 pinyin → 创建 `status='pending'` 标签 → 返回 `TagDTO`(需管理员审核后才进入匹配池)。
+- **`PUT /api/users/me/tags`**:登录用户,zod 校验 `tagIds: string[]`(1-10 项)→ 全量替换 `userTags` → 返回 `TagDTO[]`。
+- **`PUT /api/users/me/privacy`**:登录用户,zod 校验 `PrivacySettings` → 写入 `users.privacySettings` JSONB。
+- **`PATCH /api/users/me/profile`**:登录用户,支持更新 `role('USER' | 'TEACHER')` / `phone` / `practiceYears` / `activityLevel`。复用 `readUserFromToken`。
+- **`GET /api/auth/me`**:扩展返回 `UserProfileDTO`(含 `phone / role / practiceYears / activityLevel / privacySettings / tags`)。
+
+### Phase 3: 定位与匹配 API
+
+- **`POST /api/locations/publish`**:登录用户,zod 校验 `{ latitude, longitude, address, tagIds, rangeKm }` → 写入 `locations` 表(同时更新 `users.latitude/longitude/address` 为最新位置)→ 返回 `{ locationId, publishedAt }`。频率限制:同一用户 5 分钟内只能 publish 1 次(`lib/rate-limit/publish.ts`),超限 429。
+- **`GET /api/locations/match-people`**:登录用户,query 参数 `latitude / longitude / tagIds / rangeKm / page / pageSize` → 调 `matchPeople`(`lib/match/people-matcher.ts`)→ 返回 `Paginated<MatchPersonDTO>`。范围筛选用 haversine;排除当前用户与 `privacySettings.allowMatch=false` 用户;加权排序(距离 40% + 兴趣重合度 40% + 活跃度 20%);`privacySettings.locationPrecision` 对 `distanceKm` 脱敏(`community` → 0.5km,`region` → 5km)。
+- **`GET /api/locations/match-circles`**:登录用户,同上,调 `matchCircles`(`lib/match/circle-matcher.ts`),过滤 `status='active'`,加权(30/50/20%)。
+
+### Phase 4: 圈子 CRUD 与联系 API
+
+- **`POST /api/circles`**:登录用户,校验 `role === 'TEACHER'`(否则 403)→ zod 校验完整圈子 schema → 插入 `circles` + `circleTags` + `circleMembers(role=creator)` → 24h 配额校验(超 5 个 429)→ 返回 `{ circleId, status: 'active' }`。
+- **`GET /api/circles/:id`**:返回 `CircleDetailDTO`(含 creator 信息、tags、memberCount、被联系次数)。非创建者访问 `pending` 圈子返回 404。
+- **`PUT /api/circles/:id`**:校验 `creatorId === 当前用户`(否则 403)→ 更新可变字段(title/description/contactPhone/wechat/activityTime/maxMembers/tagIds)。
+- **`DELETE /api/circles/:id`**:校验创建者 → 软删除(`status='deleted'`),不再被匹配。
+- **`GET /api/circles/mine`**:返回当前用户创建的圈子列表(分页)。
+- **`POST /api/circles/:id/contact`**:zod 校验 `contactType` → 插入 `contactLogs` → 返回 `{ contactPhone?, wechat? }`(根据圈子字段)。
+
+### Phase 4: 管理后台 API
+
+均走 `requireAdmin()` 鉴权。
+
+- **`GET /api/admin/tags`**:分页 + 按 `status/category` 筛选 + 关键词搜索。
+- **`PATCH /api/admin/tags/:id`**:更新 `status`(`approved` / `rejected`)与 `category` / `subCategory`(管理员可重新分类)。
+- **`GET /api/admin/circles`**:分页 + 按 `status/creator` 筛选。
+- **`PATCH /api/admin/circles/:id`**:更新 `status`(`offline` / `violated` / `active`)。
+- **`GET /api/admin/stats`**:返回 `{ userCount, circleCount, todayMatchCount, pendingTagCount, pendingCircleCount }`,供仪表盘 5 张 StatCard。
+
+### 匹配引擎与隐私脱敏(`lib/match/`)
+
+- **`lib/match/distance.ts`**:`withinRangeSql(lng, lat, rangeKm)` 返回 drizzle `sql` 模板(haversine 范围筛选);`distanceKmSql(lng, lat)` 返回距离表达式。
+- **`lib/match/people-matcher.ts`**:`matchPeople({ lng, lat, tagIds, rangeKm, currentUserId, page, pageSize })` — 范围筛选 → JOIN `userTags` 算 tag 重合度 → 加权打分 → 排序分页 → 返回 `MatchPersonDTO[]`。
+- **`lib/match/circle-matcher.ts`**:`matchCircles(...)` — 类似,JOIN `circleTags`,过滤 `status='active'`,加权(30/50/20%)。
+- **`lib/match/precision.ts`**:`locationPrecision` 隐私脱敏,在 DTO 转换层对 `distanceKm` 四舍五入(`community` → 0.5km,`region` → 5km)。
+- **`lib/search/tag-search.ts`**:`searchTags(query, limit)` 多策略搜索;`lib/search/pinyin.ts` 封装 `pinyin-pro` 提供 `toPinyin` / `toPinyinInitials`。
+- **`lib/rate-limit/publish.ts`**:定位发布频率限制(5 分钟 1 次),参考 `lib/sms/rate-limit.ts` 模式,**非多实例安全**。
+- **`lib/auth-utils.ts`**:`requireSession(req)` 返回 `{ user: AuthUser } | { response: NextResponse }`,供非 admin 业务接口复用(基于 `readUserFromToken`)。
 
 ## Authentication
 

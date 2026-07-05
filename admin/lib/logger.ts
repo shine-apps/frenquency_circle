@@ -36,4 +36,7 @@ export const LOG_PREFIX = {
   ACCOUNT: "ACCOUNT",
   WECHAT: "WECHAT",
   UPLOAD: "UPLOAD",
+  MATCH: "MATCH",
+  CIRCLE: "CIRCLE",
+  ADMIN: "ADMIN",
 } as const

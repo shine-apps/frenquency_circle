@@ -38,10 +38,42 @@ export function clearToken(): void {
 
 interface RequestOptions {
   url: string
-  method?: 'GET' | 'POST' | 'PATCH'
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  /** 请求体(POST/PUT/PATCH);GET/DELETE 时若需 query 请用 `params` */
   data?: Record<string, unknown>
+  /** GET/DELETE query 参数(自动拼接到 URL query string) */
+  params?: Record<string, unknown>
   /** 是否跳过 Authorization 头(登录接口本身不需要) */
   skipAuth?: boolean
+}
+
+/**
+ * 把 params 对象序列化为 URL query string。
+ * - 数组值序列化为逗号分隔字符串(后端 `tagIds=a,b,c` 解析)
+ * - undefined / null 跳过
+ * - 已存在的 query string 会被追加(以 `&` 连接)
+ */
+function appendQuery(
+  url: string,
+  params: Record<string, unknown> | undefined
+): string {
+  if (!params) return url
+  const parts: string[] = []
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null) continue
+    let v: string
+    if (Array.isArray(value)) {
+      v = value.join(',')
+    } else if (typeof value === 'object') {
+      // 不支持嵌套对象,直接 JSON 化(理论上业务接口不会用)
+      v = JSON.stringify(value)
+    } else {
+      v = String(value)
+    }
+    parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(v)}`)
+  }
+  if (parts.length === 0) return url
+  return url.includes('?') ? `${url}&${parts.join('&')}` : `${url}?${parts.join('&')}`
 }
 
 /**
@@ -54,7 +86,8 @@ interface RequestOptions {
 export async function request<T = unknown>(
   options: RequestOptions
 ): Promise<T> {
-  const { url, method = 'GET', data, skipAuth = false } = options
+  const { method = 'GET', data, params, skipAuth = false } = options
+  const url = appendQuery(options.url, params)
 
   const header: Record<string, string> = {
     'Content-Type': 'application/json',

@@ -16,10 +16,14 @@ module.exports = {
       'import',
       {
         libraryName: '@nutui/nutui-react-taro',
-        libraryDirectory: 'dist/es/packages',
+        // NutUI 3.x 的目录命名约定为全小写(textarea / inputnumber / cellgroup),
+        // 默认 camel2DashComponentName: true 会把 TextArea 转成 text-area(连字符),
+        // 导致 webpack 解析 dist/es/packages/text-area 失败。
+        // customName 返回完整模块路径,style: 'css' 会自动追加 /style/css。
+        camel2DashComponentName: false,
+        customName: (name) =>
+          `@nutui/nutui-react-taro/dist/es/packages/${name.toLowerCase()}`,
         style: 'css',
-        // 默认 camel2DashComponentName: true,把 Button 转为 button,
-        // 与 NutUI 3.x 的 dist/es/packages/<lowercase>/ 目录结构匹配
       },
       '@nutui/nutui-react-taro',
     ],

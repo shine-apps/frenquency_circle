@@ -1,0 +1,258 @@
+@use '@/styles/variables.scss' as *;
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+}
+
+// ====== 搜索框 ======
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  background-color: $color-bg-card;
+  border-radius: $radius-md;
+  padding: 0 $spacing-md;
+  box-shadow: $shadow-card;
+}
+
+.searchInput {
+  flex: 1;
+}
+
+.searchHint {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+  flex-shrink: 0;
+}
+
+// ====== 已选标签区 ======
+.selectedWrap {
+  background-color: $color-bg-card;
+  border-radius: $radius-md;
+  padding: $spacing-sm $spacing-md;
+  box-shadow: $shadow-card;
+}
+
+.selectedHeader {
+  display: flex;
+  align-items: center;
+  margin-bottom: $spacing-xs;
+}
+
+.selectedTitle {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  font-weight: $font-weight-medium;
+}
+
+.selectedScroll {
+  width: 100%;
+  white-space: nowrap;
+}
+
+.chips {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: $spacing-xs;
+  padding-bottom: $spacing-xs;
+}
+
+.chipItem {
+  flex-shrink: 0;
+}
+
+// ====== 联想列表 ======
+.suggestWrap {
+  background-color: $color-bg-card;
+  border-radius: $radius-md;
+  overflow: hidden;
+  box-shadow: $shadow-card;
+}
+
+.suggestItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $spacing-md;
+  border-bottom: 1rpx solid $color-divider;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:active {
+    background-color: $color-bg-hover;
+  }
+}
+
+.suggestItemActive {
+  opacity: 0.6;
+}
+
+.suggestInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+  min-width: 0;
+  flex: 1;
+}
+
+.suggestName {
+  font-size: $font-size-md;
+  color: $color-text-primary;
+  font-weight: $font-weight-medium;
+  @include text-ellipsis;
+}
+
+.suggestCat {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.suggestAdd {
+  font-size: $font-size-sm;
+  color: $color-primary;
+  flex-shrink: 0;
+  padding-left: $spacing-sm;
+}
+
+.suggestAdded {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+  flex-shrink: 0;
+  padding-left: $spacing-sm;
+}
+
+// ====== 分类骨架 ======
+.categoryWrap {
+  background-color: $color-bg-card;
+  border-radius: $radius-md;
+  padding: $spacing-md;
+  box-shadow: $shadow-card;
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: $spacing-sm;
+}
+
+.sectionTitleText {
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.sectionTitleHint {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.categoryItem {
+  border-bottom: 1rpx solid $color-divider;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.categoryHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $spacing-sm 0;
+
+  &:active {
+    background-color: $color-bg-hover;
+  }
+}
+
+.categoryName {
+  font-size: $font-size-md;
+  color: $color-text-primary;
+}
+
+.categoryArrow {
+  font-size: $font-size-xs;
+  color: $color-primary;
+}
+
+.subCategories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-xs;
+  padding-bottom: $spacing-sm;
+}
+
+.subCategory {
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+  background-color: $color-bg-hover;
+  border-radius: $radius-xs;
+  padding: 4rpx $spacing-sm;
+}
+
+// ====== 空状态 ======
+.empty {
+  padding: $spacing-xl $spacing-md;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.emptyText {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+  text-align: center;
+}
+
+// ====== 自定义添加 ======
+.customWrap {
+  background-color: $color-bg-card;
+  border-radius: $radius-md;
+  overflow: hidden;
+  box-shadow: $shadow-card;
+}
+
+.customToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $spacing-md;
+
+  &:active {
+    background-color: $color-bg-hover;
+  }
+}
+
+.customToggleText {
+  font-size: $font-size-md;
+  color: $color-primary;
+  font-weight: $font-weight-medium;
+}
+
+.customToggleHint {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.customForm {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  padding: 0 $spacing-md $spacing-md;
+}
+
+.customInputWrap {
+  flex: 1;
+  background-color: $color-bg-hover;
+  border-radius: $radius-sm;
+  padding: 0 $spacing-sm;
+}
+
+.customInput {
+  width: 100%;
+}

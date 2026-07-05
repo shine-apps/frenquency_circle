@@ -4,24 +4,35 @@ import bcrypt from "bcryptjs"
 import { z } from "zod"
 
 import { db } from "@/lib/db"
-import { users } from "@/db/schema"
+import { users, DEFAULT_PRIVACY_SETTINGS } from "@/db/schema"
 import { fail, ok, parsePagination } from "@/lib/api"
 import { requireAdmin } from "@/lib/auth-utils"
-import type { UserDTO, Paginated } from "@/types/api"
+import type { UserDTO, UserRole, Paginated, PrivacySettings } from "@/types/api"
 
 const createUserSchema = z.object({
   email: z.string().email(),
   name: z.string().min(1).max(100),
   password: z.string().min(6).max(100),
-  role: z.enum(["ADMIN", "USER"]).default("USER"),
+  role: z.enum(["ADMIN", "USER", "TEACHER"]).default("USER"),
 })
 
 function toUserDTO(row: typeof users.$inferSelect): UserDTO {
+  const privacySettings =
+    (row.privacySettings as PrivacySettings | null) ?? DEFAULT_PRIVACY_SETTINGS
   return {
     id: row.id,
     email: row.email,
     name: row.name,
-    role: row.role,
+    role: row.role as UserRole,
+    phone: row.phone ?? null,
+    practiceYears: row.practiceYears ?? null,
+    activityLevel: row.activityLevel as UserDTO["activityLevel"],
+    privacySettings,
+    location:
+      row.latitude !== null && row.longitude !== null
+        ? { latitude: row.latitude, longitude: row.longitude }
+        : null,
+    address: row.address ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }

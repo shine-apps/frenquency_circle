@@ -7,7 +7,7 @@
   bottom: 0;
   z-index: 100;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-around;
   height: 100rpx;
   // 兼容 iPhone X 等底部安全区
@@ -25,6 +25,7 @@
   justify-content: center;
   gap: 4rpx;
   padding: 8rpx 0;
+  height: 100rpx;
   // 微信小程序 button 默认 border 去除
   &::after {
     border: none;
@@ -61,4 +62,22 @@
     color: $color-primary;
     font-weight: $font-weight-medium;
   }
+}
+
+// ====== 中间凸起按钮 ======
+.center {
+  // 视觉上比左右两个高出一截
+  position: relative;
+  // 整体上移,避免被 tabbar 顶部边框裁切
+  transform: translateY(-20rpx);
+}
+
+.centerIcon {
+  // 圆形凸起背景 + 主色填充
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, $color-primary 0%, $color-primary-light 100%);
+  color: $color-text-white;
+  box-shadow: 0 4rpx 16rpx rgba(22, 93, 255, 0.4);
 }

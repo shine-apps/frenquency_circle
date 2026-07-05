@@ -1,0 +1,221 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: $color-bg-page;
+}
+
+.scroll {
+  flex: 1;
+  // 预留底部固定按钮 + 安全区
+  padding-bottom: calc(160rpx + env(safe-area-inset-bottom));
+}
+
+// ====== 顶部标题区 ======
+.header {
+  padding: $spacing-lg;
+  background-color: $color-bg-card;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+}
+
+.title {
+  font-size: $font-size-xl;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  line-height: $line-height-tight;
+}
+
+.tagScroll {
+  width: 100%;
+  white-space: nowrap;
+}
+
+.tagRow {
+  display: inline-flex;
+  gap: $spacing-xs;
+  align-items: center;
+}
+
+.tagItem {
+  // NutUI Tag 自带样式
+}
+
+// ====== 创建者卡片 ======
+.creatorCard {
+  margin: $spacing-md $spacing-lg;
+  padding: $spacing-md;
+  background-color: $color-bg-card;
+  border-radius: $radius-md;
+  box-shadow: $shadow-card;
+  display: flex;
+  align-items: center;
+  gap: $spacing-md;
+}
+
+.creatorInfo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.creatorNameRow {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+}
+
+.creatorName {
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  @include text-ellipsis;
+}
+
+.roleChip {
+  // NutUI Tag 自带 warning 配色
+  flex-shrink: 0;
+}
+
+.creatorMeta {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+// ====== 通用信息块 ======
+.section {
+  margin: 0 $spacing-lg $spacing-md;
+  padding: $spacing-md;
+  background-color: $color-bg-card;
+  border-radius: $radius-md;
+  box-shadow: $shadow-card;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-xs;
+}
+
+.sectionTitle {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+  font-weight: $font-weight-medium;
+}
+
+.sectionContent {
+  font-size: $font-size-md;
+  color: $color-text-primary;
+  line-height: $line-height-normal;
+}
+
+// ====== 成员人数 ======
+.memberRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.memberCount {
+  font-size: $font-size-md;
+  color: $color-primary;
+  font-weight: $font-weight-semibold;
+}
+
+.fullHint {
+  font-size: $font-size-xs;
+  color: $color-warning;
+}
+
+.contactCountText {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+// ====== 底部固定按钮 ======
+.footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: $spacing-md $spacing-lg;
+  padding-bottom: calc(#{$spacing-md} + env(safe-area-inset-bottom));
+  background-color: $color-bg-card;
+  box-shadow: $shadow-float;
+  z-index: 10;
+}
+
+// ====== 居中态(加载/404) ======
+.center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-md;
+  padding: $spacing-xl $spacing-md;
+}
+
+.muted {
+  font-size: $font-size-md;
+  color: $color-text-tertiary;
+}
+
+.actionBtn {
+  margin-top: $spacing-sm;
+}
+
+// ====== 联系方式弹层 ======
+.sheet {
+  padding: $spacing-lg;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+  padding-bottom: calc(#{$spacing-lg} + env(safe-area-inset-bottom));
+}
+
+.sheetTitle {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  text-align: center;
+}
+
+.sheetItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $spacing-md;
+  background-color: $color-bg-hover;
+  border-radius: $radius-sm;
+
+  &:active {
+    opacity: 0.8;
+  }
+}
+
+.sheetItemLabel {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+}
+
+.sheetItemValue {
+  font-size: $font-size-md;
+  color: $color-primary;
+  font-weight: $font-weight-medium;
+}
+
+.sheetHint {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+  text-align: center;
+}
+
+.sheetEmpty {
+  font-size: $font-size-md;
+  color: $color-text-tertiary;
+  text-align: center;
+  padding: $spacing-md 0;
+}

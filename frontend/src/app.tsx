@@ -6,6 +6,10 @@ import '@nutui/nutui-react-taro/dist/styles/themes/default.css';
 import './app.scss';
 import { useUserStore } from '@/store/user';
 import { fetchCurrentUser, fromUserDTO } from '@/services/auth';
+import H5Layout from '@/components/H5Layout';
+
+/** 仅 H5 端启用外壳:weapp / tt 下 H5Layout 内部 passthrough children,不影响原生 navbar / tabbar */
+const IS_H5 = process.env.TARO_ENV === 'h5';
 
 function App(props) {
   // 可以使用所有的 React Hooks
@@ -35,7 +39,9 @@ function App(props) {
   // 对应 onHide
   useDidHide(() => {});
 
-  return props.children;
+  // H5 端:在外壳中渲染(顶部 H5NavBar + 居中容器)
+  // 非 H5 端:直接渲染 children,等价于无包装
+  return IS_H5 ? <H5Layout>{props.children}</H5Layout> : props.children;
 }
 
 export default App;

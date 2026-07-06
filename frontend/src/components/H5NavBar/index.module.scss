@@ -1,0 +1,75 @@
+@use '@/styles/variables.scss' as *;
+
+// ====== H5 端顶部导航栏 ======
+// 仅 H5 端使用,weapp / tt 不引用此样式。
+.navbar {
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 99;
+  display: flex;
+  align-items: center;
+  height: 88rpx;
+  padding: 0 $spacing-md;
+  background-color: $color-bg-card;
+  border-bottom: 1rpx solid $color-divider;
+  // 兼容 iOS Safari 顶部刘海
+  padding-top: env(safe-area-inset-top);
+  // 兼容:sticky 元素要求父容器不可 overflow:hidden / auto
+  // 现有页面 .page 没有 overflow 限制,默认安全
+}
+
+.left,
+.right {
+  flex: 0 0 80rpx;
+  display: flex;
+  align-items: center;
+}
+
+.right {
+  justify-content: flex-end;
+}
+
+.center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.title {
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  color: $color-text-primary;
+  max-width: 100%;
+  @include text-ellipsis;
+}
+
+// ====== 返回按钮 ======
+.backBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: $radius-round;
+  // 微信小程序 button 默认 border 去除
+  &::after {
+    border: none;
+  }
+}
+
+.backBtnHover {
+  // 微信小程序 hover-class 默认半透明遮罩;H5 端用浅灰底
+  background-color: $color-bg-hover;
+}
+
+.backIcon {
+  font-size: 48rpx;
+  line-height: 1;
+  color: $color-text-primary;
+  // 用 ‹ 字符占位,避免新增 SVG 资源;
+  // 如需更精致,后续可替换为与 CustomTabBar 图标风格一致的 SVG
+}

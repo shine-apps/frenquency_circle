@@ -10,3 +10,17 @@ page {
   color: $color-text-primary;
   background-color: $color-bg-page;
 }
+
+// ====== H5 端:限制 body 宽度并居中 ======
+// 仅 H5 端生效:
+// - pxtransform.config.selectorBlackList: ['body'] 让 750px 保持字面像素(不被转 rem)
+// - weapp / tt 没有 body 元素,该规则不命中(等价于 no-op)
+// - 桌面浏览器(>750px)时,body 居中;外侧露出的颜色用 $color-bg-page 营造"手机外壳"感
+body {
+  max-width: 750px;
+  margin-left: auto;
+  margin-right: auto;
+  background-color: $color-bg-page;
+  // 防止内容在 max-width 居中后,Fixed 定位元素(如 CustomTabBar)水平溢出
+  overflow-x: hidden;
+}

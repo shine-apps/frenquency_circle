@@ -1,0 +1,19 @@
+@use '@/styles/variables.scss' as *;
+
+// ====== H5 端页面外壳 ======
+// 容器宽度由 src/app.scss 的 body { max-width: 750px; margin: 0 auto } 约束,
+// 本组件只负责纵向结构(顶部 navbar + 内容区)。
+.layout {
+  display: flex;
+  flex-direction: column;
+  // 关键:让 sticky 导航栏生效,父容器不可 overflow:hidden / auto
+  min-height: 100vh;
+  background-color: $color-bg-page;
+}
+
+.body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  // 内容继续由各自页面的 .page 容器接管,本层只做骨架
+}

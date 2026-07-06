@@ -3,6 +3,7 @@ import { signIn } from "@/auth"
 import { corsOptions, fail, ok, withCors } from "@/lib/api"
 import {
   extractSessionToken,
+  readSessionTokenFromCookies,
   readUserFromToken,
 } from "@/lib/auth/session-token"
 import { logger, LOG_PREFIX } from "@/lib/logger"
@@ -17,7 +18,7 @@ const phoneSchema = z.object({
  * 手机号+验证码登录(Token 模式)。
  *
  * 内部调用 Auth.js `signIn("phone", { redirect: false })`,
- * 成功后从 Response 的 Set-Cookie 提取 JWT,以 JSON body 回传给客户端。
+ * 成功后从 Set-Cookie(或 next/headers cookies())提取 JWT,以 JSON body 回传。
  */
 export async function OPTIONS(req: Request) {
   return corsOptions(req)
@@ -35,7 +36,7 @@ export async function POST(req: Request) {
   }
 
   const { phone, code } = parsed.data
-  let res: Response
+  let res: Response | undefined
   try {
     res = await signIn("phone", {
       phone,
@@ -45,11 +46,16 @@ export async function POST(req: Request) {
   } catch (err) {
     logger.error(LOG_PREFIX.AUTH, "Phone token login: signIn threw", {
       error: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
     })
     return withCors(fail(500, "登录服务异常"), req)
   }
 
-  const token = extractSessionToken(res)
+  // 兜底逻辑同 credentials 路由:从 Response 头拿不到 token 时,从 cookies() 读
+  let token = extractSessionToken(res)
+  if (!token) {
+    token = await readSessionTokenFromCookies()
+  }
   if (!token) {
     logger.warn(LOG_PREFIX.AUTH, "Phone token login failed", { phone })
     return withCors(fail(401, "手机号或验证码错误"), req)

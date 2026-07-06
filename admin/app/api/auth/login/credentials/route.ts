@@ -3,6 +3,7 @@ import { signIn } from "@/auth"
 import { corsOptions, fail, ok, withCors } from "@/lib/api"
 import {
   extractSessionToken,
+  readSessionTokenFromCookies,
   readUserFromToken,
 } from "@/lib/auth/session-token"
 import { logger, LOG_PREFIX } from "@/lib/logger"
@@ -17,7 +18,7 @@ const credentialsSchema = z.object({
  * 邮箱+密码登录(Token 模式)。
  *
  * 内部调用 Auth.js `signIn("credentials", { redirect: false })`,
- * 成功后从 Response 的 Set-Cookie 提取 JWT,以 JSON body 回传给客户端。
+ * 成功后从 Set-Cookie(或 next/headers cookies())提取 JWT,以 JSON body 回传。
  * 适用于 Taro 小程序 / h5 等不便依赖 cookie 的客户端。
  */
 export async function OPTIONS(req: Request) {
@@ -36,7 +37,7 @@ export async function POST(req: Request) {
   }
 
   const { email, password } = parsed.data
-  let res: Response
+  let res: Response | undefined
   try {
     res = await signIn("credentials", {
       email,
@@ -46,12 +47,19 @@ export async function POST(req: Request) {
   } catch (err) {
     logger.error(LOG_PREFIX.AUTH, "Credentials token login: signIn threw", {
       error: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
     })
     return withCors(fail(500, "登录服务异常"), req)
   }
 
-  // signIn 失败时不写 Set-Cookie;extractSessionToken 返回 null 即视为登录失败
-  const token = extractSessionToken(res)
+  // Auth.js v5 的 signIn 在不同调用栈下返回形态不一致:
+  //   - 旧路径:返回 NextResponse,Set-Cookie 头在上面;
+  //   - 新路径:返回空对象 `{}`,cookie 通过 next/headers 写入。
+  // 所以优先从 Response 头拿,拿不到再从 cookies() 兜底。
+  let token = extractSessionToken(res)
+  if (!token) {
+    token = await readSessionTokenFromCookies()
+  }
   if (!token) {
     logger.warn(LOG_PREFIX.AUTH, "Credentials token login failed", { email })
     return withCors(fail(401, "邮箱或密码错误"), req)

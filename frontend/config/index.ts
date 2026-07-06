@@ -123,9 +123,27 @@ export default defineConfig<'webpack5'>(async (merge, { command, mode }) => {
     },
   };
   if (process.env.NODE_ENV === 'development') {
-    // 本地开发构建配置（不混淆压缩）
-    return merge({}, baseConfig, devConfig);
+    // 本地开发构建配置(不混淆压缩)。
+    // 透传 devConfig 中的 h5.devServer.proxy(仅 H5 构建生效),
+    // 并按当前编译目标覆盖 API_BASE_URL:
+    //   - H5: 置为空串,让请求落到 devServer 自身(同源),再由 h5.devServer.proxy
+    //         转发到 admin 后端,避免浏览器 CORS preflight。
+    //   - 非 H5(weapp / tt / alipay 等):保持绝对地址,小程序开发工具已勾选
+    //         "不校验合法域名",可直接请求 localhost。
+    //
+    // 实现要点:不要用 merge() 的第三个参数覆盖 defineConstants(实测 Taro 的 merge
+    // 不会按字段级合并,会导致 baseConfig/devConfig 中的 defineConstants 整体保留),
+    // 而是先合并,再手动改最终的 defineConstants.API_BASE_URL。
+    console.log('[config/index.ts] mode =', JSON.stringify(mode), 'TARO_ENV =', JSON.stringify(process.env.TARO_ENV), 'NODE_ENV =', JSON.stringify(process.env.NODE_ENV));
+    const isH5 = process.env.TARO_ENV === 'h5';
+    const merged = merge({}, baseConfig, devConfig);
+    merged.defineConstants = {
+      ...(merged.defineConstants || {}),
+      API_BASE_URL: JSON.stringify(isH5 ? '' : 'http://localhost:3000'),
+    };
+    console.log('[config/index.ts] final defineConstants =', JSON.stringify(merged.defineConstants));
+    return merged;
   }
-  // 生产构建配置（默认开启压缩混淆等）
+  // 生产构建配置(默认开启压缩混淆等)
   return merge({}, baseConfig, prodConfig);
 });

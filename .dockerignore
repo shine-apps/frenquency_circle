@@ -1,0 +1,44 @@
+# 依赖目录(镜像内会重装)
+**/node_modules
+
+# 构建产物(已包含在镜像最终层,不需要从源码目录复制)
+**/.next
+**/dist
+**/.taro
+**/.swc
+
+# 环境变量(只保留 .env.example,生产环境通过 --env-file 注入)
+**/.env
+**/.env.local
+**/.env.*.local
+!**/.env.example
+
+# 测试与覆盖率产物
+**/coverage
+**/test-results
+**/playwright-report
+**/.vitest
+
+# 日志与临时文件
+**/*.log
+**/*.tsbuildinfo
+**/.DS_Store
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+**/.pnpm-debug.log*
+
+# IDE / 工具本地状态
+**/.trae
+**/.pai
+**/.idea
+**/.vscode
+
+# Docker 自身(避免递归)
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.*.yml
+
+# 数据库 docker-compose(只用于本地 dev,不进镜像)
+admin/docker-compose.yml

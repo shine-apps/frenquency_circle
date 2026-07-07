@@ -20,7 +20,7 @@ ignoredBuiltDependencies:
   - unrs-resolver
 
 allowBuilds:
-  '@alicloud/openapi-core': set this to true or false
+  '@alicloud/openapi-core': false
   '@nutui/nutui-react-taro': true
   '@swc/core': true
   '@tarojs/binding': true

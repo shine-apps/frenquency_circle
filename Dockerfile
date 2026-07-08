@@ -32,7 +32,7 @@ WORKDIR /app/frontend
 
 # 利用缓存:仅当 frontend/ 源码变更才重跑此层
 COPY frontend/ ./
-RUN pnpm run build:h5
+RUN pnpm -C /app/frontend exec taro build --type h5
 
 # 把产物收集到 /tmp/h5-build/(避免与后续 stage 的工作目录冲突)
 RUN mkdir -p /tmp/h5-build && cp -r dist/. /tmp/h5-build/

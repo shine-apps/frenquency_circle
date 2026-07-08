@@ -57,7 +57,9 @@ COPY --from=builder-h5 /tmp/h5-build/ ./public/
 #       next build 时会从 Google 下载字体文件,构建机必须能访问外网。
 #       离线环境请改用 next/font/local 加载本地字体后再构建。
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN pnpm exec next build
+# 直接调用 next 二进制,绕过 pnpm exec 的依赖状态检查
+# (pnpm 11 的 deps check 会因 ERR_PNPM_IGNORED_BUILDS 报错退出)
+RUN ./node_modules/.bin/next build
 
 # ------------------------------------------------------------------------------
 # Stage 4:Runner - 最小化运行时镜像

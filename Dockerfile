@@ -8,13 +8,10 @@
 # ------------------------------------------------------------------------------
 # Stage 1: 依赖准备
 # 安装 admin + frontend 全部依赖(含 devDependencies,用于后续构建)
-# 基础镜像选 Debian bookworm-slim(glibc)而非 Alpine(musl):
-#   @tarojs/binding 走 optionalDependencies 分发平台特定二进制
-#   (linux-x64-gnu / linux-x64-musl / darwin-* / win32-*),锁文件在 glibc/macOS
-#   开发机上生成,只包含 gnu/darwin 变体;Alpine 容器会找不到 linux-x64-musl
-#   而报 Cannot find module。改用 glibc 镜像后,直接复用宿主机锁文件即可。
+# 注意:使用 slim (Debian/glibc) 而非 alpine (musl),因为 @tarojs/binding
+#       4.1.9 未发布 linux-x64-musl 原生包,只有 linux-x64-gnu。
 # ------------------------------------------------------------------------------
-FROM node:24-bookworm-slim AS deps
+FROM node:24-slim AS deps
 WORKDIR /app
 
 # corepack 启用 pnpm,锁定到与本地一致的具体版本(避免不同时间构建拿到不同 10.x)
@@ -63,10 +60,10 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm exec next build
 
 # ------------------------------------------------------------------------------
-# Stage 4: Runner - 最小化运行时镜像
+# Stage 4:Runner - 最小化运行时镜像
 # 仅保留 standalone 输出 + 静态资源 + 入口脚本
 # ------------------------------------------------------------------------------
-FROM node:24-bookworm-slim AS runner
+FROM node:24-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -74,14 +71,10 @@ ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# 安装 su-exec(entrypoint 用)+ wget(HEALTHCHECK 用)
-# bookworm-slim 不像 Alpine 默认带 apk,也不像 full Debian 镜像自带 su-exec/wget
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends su-exec wget ca-certificates \
+# 非 root 用户 + gosu(用于 entrypoint 中降权);wget 用于 healthcheck
+RUN groupadd -g 1001 nodejs && useradd -u 1001 -g nodejs -s /bin/sh nextjs \
+    && apt-get update && apt-get install -y --no-install-recommends gosu wget \
     && rm -rf /var/lib/apt/lists/*
-
-# 非 root 用户(su-exec 降权目标)
-RUN groupadd --gid 1001 nodejs && useradd --uid 1001 --gid nodejs --shell /bin/bash --create-home nextjs
 
 # 复制 standalone 产物(已含 package.json、.next/server、public 快照、traced node_modules)
 COPY --from=builder-admin --chown=nextjs:nodejs /app/admin/.next/standalone/ ./
@@ -98,7 +91,7 @@ RUN chmod +x ./entrypoint.sh
 RUN mkdir -p /app/public/uploads && chown -R nextjs:nodejs /app/public/uploads
 VOLUME /app/public/uploads
 
-# 不在此处设 USER nextjs — entrypoint.sh 以 root 启动,chown 挂载卷后用 su-exec 降权
+# 不在此处设 USER nextjs — entrypoint.sh 以 root 启动,chown 挂载卷后用 gosu 降权
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

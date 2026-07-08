@@ -16,6 +16,8 @@ env:
   REGISTRY: ghcr.io
   # 镜像名使用 GitHub 仓库名(小写),最终镜像地址:ghcr.io/shine-apps/frenquency_circle
   IMAGE_NAME: ${{ github.repository }}
+  # 强制 JavaScript Actions 使用 Node 24(GHA v2.328.0+ 仍默认 Node 20)
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
   build-and-push:

@@ -9,7 +9,7 @@
 # Stage 1: 依赖准备
 # 安装 admin + frontend 全部依赖(含 devDependencies,用于后续构建)
 # ------------------------------------------------------------------------------
-FROM node:22-alpine AS deps
+FROM node:24-alpine AS deps
 WORKDIR /app
 
 # corepack 启用 pnpm,锁定到与本地一致的具体版本(避免不同时间构建拿到不同 10.x)
@@ -32,7 +32,7 @@ WORKDIR /app/frontend
 
 # 利用缓存:仅当 frontend/ 源码变更才重跑此层
 COPY frontend/ ./
-RUN pnpm exec taro build --type h5
+RUN pnpm run build:h5
 
 # 把产物收集到 /tmp/h5-build/(避免与后续 stage 的工作目录冲突)
 RUN mkdir -p /tmp/h5-build && cp -r dist/. /tmp/h5-build/
@@ -61,7 +61,7 @@ RUN pnpm exec next build
 # Stage 4: Runner - 最小化运行时镜像
 # 仅保留 standalone 输出 + 静态资源 + 入口脚本
 # ------------------------------------------------------------------------------
-FROM node:22-alpine AS runner
+FROM node:24-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production

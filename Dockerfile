@@ -85,6 +85,12 @@ COPY --from=builder-admin --chown=nextjs:nodejs /app/admin/.next/static/ ./.next
 # 显式覆盖 public(确保 H5 一定在)
 COPY --from=builder-admin --chown=nextjs:nodejs /app/admin/public/ ./public/
 
+# 复制数据库迁移脚本与迁移 SQL
+# drizzle-orm / postgres 已在 standalone node_modules 中(server.js 链路引用),
+# 迁移由 entrypoint.sh 在容器启动时执行,而非构建阶段
+COPY --from=builder-admin --chown=nextjs:nodejs /app/admin/db/migrate.mjs ./db/migrate.mjs
+COPY --from=builder-admin --chown=nextjs:nodejs /app/admin/drizzle ./drizzle
+
 # 入口脚本
 COPY --chown=nextjs:nodejs entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh

@@ -86,8 +86,9 @@ COPY --from=builder-admin --chown=nextjs:nodejs /app/admin/.next/static/ ./.next
 COPY --from=builder-admin --chown=nextjs:nodejs /app/admin/public/ ./public/
 
 # 复制数据库迁移脚本与迁移 SQL
-# drizzle-orm / postgres 已在 standalone node_modules 中(server.js 链路引用),
 # 迁移由 entrypoint.sh 在容器启动时执行,而非构建阶段
+# drizzle-orm / postgres 通过 next.config.ts 的 serverExternalPackages 保留在
+# standalone node_modules 中,migrate.mjs 可直接 import,无需手动复制包
 COPY --from=builder-admin --chown=nextjs:nodejs /app/admin/db/migrate.mjs ./db/migrate.mjs
 COPY --from=builder-admin --chown=nextjs:nodejs /app/admin/drizzle ./drizzle
 

@@ -7,6 +7,11 @@ const nextConfig: NextConfig = {
   // 无需携带完整 node_modules,显著减小运行时镜像体积
   output: "standalone",
 
+  // 让 drizzle-orm / postgres 不被 Next.js 打包,保留在 standalone node_modules 中
+  // 这样独立的 db/migrate.mjs 迁移脚本(容器启动时由 entrypoint.sh 调用)也能 import 到
+  // 否则 ERR_MODULE_NOT_FOUND: Cannot find package 'drizzle-orm'
+  serverExternalPackages: ["drizzle-orm", "postgres"],
+
   // 允许 portal H5 跨域访问 admin API;通过 CORS_ALLOW_ORIGIN 配置生产域名
   async headers() {
     return [

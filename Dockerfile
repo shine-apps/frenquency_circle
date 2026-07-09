@@ -61,6 +61,17 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # (pnpm 11 的 deps check 会因 ERR_PNPM_IGNORED_BUILDS 报错退出)
 RUN ./node_modules/.bin/next build
 
+# 显式将迁移脚本依赖的 drizzle-orm / postgres 真实文件(解引用 pnpm 符号链接)
+# 放入 standalone/node_modules。
+# 原因:Next.js 16 (Turbopack) 的 standalone 输出在 pnpm 隔离 node-linker 下,
+#   可能不把 serverExternalPackages 的真实文件复制进 standalone/node_modules
+#   (或仅保留指向 .pnpm 虚拟存储的符号链接,后续 COPY --from 会断链),
+#   导致运行时 ERR_MODULE_NOT_FOUND: Cannot find package 'drizzle-orm'。
+# drizzle-orm 与 postgres 均无运行时 dependencies,复制这两个包即自洽。
+RUN mkdir -p .next/standalone/node_modules && \
+    cp -rL node_modules/drizzle-orm .next/standalone/node_modules/ && \
+    cp -rL node_modules/postgres .next/standalone/node_modules/
+
 # ------------------------------------------------------------------------------
 # Stage 4:Runner - 最小化运行时镜像
 # 仅保留 standalone 输出 + 静态资源 + 入口脚本
@@ -87,8 +98,8 @@ COPY --from=builder-admin --chown=nextjs:nodejs /app/admin/public/ ./public/
 
 # 复制数据库迁移脚本与迁移 SQL
 # 迁移由 entrypoint.sh 在容器启动时执行,而非构建阶段
-# drizzle-orm / postgres 通过 next.config.ts 的 serverExternalPackages 保留在
-# standalone node_modules 中,migrate.mjs 可直接 import,无需手动复制包
+# drizzle-orm / postgres 已在 builder-admin 阶段被显式解引用复制进
+# standalone/node_modules(见上方 cp -rL 步骤),随 standalone 一起 COPY 进 /app/node_modules
 COPY --from=builder-admin --chown=nextjs:nodejs /app/admin/db/migrate.mjs ./db/migrate.mjs
 COPY --from=builder-admin --chown=nextjs:nodejs /app/admin/drizzle ./drizzle
 

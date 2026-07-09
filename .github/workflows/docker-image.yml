@@ -244,7 +244,7 @@ jobs:
         id: trivy
         if: always() && steps.build.outcome == 'success'
         continue-on-error: true
-        uses: aquasecurity/trivy-action@0.20.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: frenqency-circle:ci-test
           format: sarif

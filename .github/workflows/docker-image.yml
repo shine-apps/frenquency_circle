@@ -1,0 +1,419 @@
+# =============================================================================
+# Docker Image CI — 构建、验证、发布 frenqency_circle 全量镜像
+# =============================================================================
+# 触发:push 到 main/master、打 v* 标签、提交 PR、手动 dispatch
+# 产物:ghcr.io/<owner>/<repo>:<tag>  (GitHub Container Registry)
+# 切换 Docker Hub:修改 REGISTRY 并在 login 步骤换用 DOCKERHUB secrets
+# =============================================================================
+
+name: Docker Image CI
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      skip_verify:
+        description: '跳过功能验证(仅快速构建)'
+        required: false
+        type: boolean
+        default: false
+
+# 同一分支的新推送取消旧构建,节省资源
+concurrency:
+  group: docker-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# 最小权限原则:仅声明所需权限
+# - contents: read         → checkout 代码
+# - packages: write        → 推送镜像到 GHCR
+# - security-events: write → 上传 Trivy SARIF 到 Security tab
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+
+env:
+  REGISTRY: ghcr.io
+  # github.repository 格式为 owner/repo,直接用作 GHCR 镜像名
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-verify:
+    name: Build, Verify & Publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # 功能验证依赖 PostgreSQL(与 admin/docker-compose.yml 凭据一致)
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: frenqency
+          POSTGRES_PASSWORD: frenqency
+          POSTGRES_DB: frenqency_circle
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U frenqency -d frenqency_circle"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      # ============================================================
+      # 1. 检出代码
+      # ============================================================
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 完整历史,便于 metadata-action 提取 semver
+
+      # ============================================================
+      # 2. Dockerfile 静态校验(Hadolint)
+      # ============================================================
+      - name: Validate Dockerfile with Hadolint
+        id: lint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+          # error 级别才失败;warning/info 仅报告不阻断
+          failure-threshold: error
+
+      # ============================================================
+      # 3. 安装 Docker Buildx(支持层缓存、多阶段构建优化)
+      # ============================================================
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ============================================================
+      # 4. 提取镜像标签与元数据
+      #    生成规则:
+      #      main 分支  → latest, main
+      #      tag v1.2.3 → 1.2.3, 1.2, 1
+      #      PR         → pr-<number>
+      #      所有构建   → sha-<short>(commit hash)
+      # ============================================================
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,format=short,prefix=sha-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+          labels: |
+            org.opencontainers.image.title=frenqency_circle
+            org.opencontainers.image.description=Admin (Next.js) + H5 + Drizzle migrations
+            org.opencontainers.image.licenses=MIT
+
+      # ============================================================
+      # 5. 构建镜像(load 到本地 Docker,供验证步骤使用)
+      #    使用 GitHub Actions 缓存加速后续构建
+      # ============================================================
+      - name: Build Docker image (load for verification)
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          load: true
+          tags: frenqency-circle:ci-test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
+      # ============================================================
+      # 6. 功能验证:启动容器 + 健康检查 + HTTP 探测 + 文件校验
+      #    容器入口脚本会先执行 Drizzle 迁移再启动 Next.js,
+      #    若迁移失败容器会直接退出(验证自动失败)
+      # ============================================================
+      - name: Verify image (functional test)
+        id: verify
+        if: ${{ !inputs.skip_verify }}
+        run: |
+          set -euo pipefail
+
+          # 生成临时 AUTH_SECRET(Auth.js 必需)
+          AUTH_SECRET=$(openssl rand -base64 32)
+
+          echo "::group::启动验证容器"
+          docker run -d \
+            --name verify-app \
+            --network host \
+            -e DATABASE_URL="postgresql://frenqency:frenqency@localhost:5432/frenqency_circle" \
+            -e AUTH_SECRET="$AUTH_SECRET" \
+            -e AUTH_TRUST_HOST="true" \
+            -e PORT=3000 \
+            frenqency-circle:ci-test
+          echo "::endgroup::"
+
+          echo "::group::等待健康检查通过"
+          for i in $(seq 1 60); do
+            # 检查容器是否已退出(迁移失败等情况)
+            CONTAINER_STATE=$(docker inspect --format='{{.State.Status}}' verify-app 2>/dev/null || echo "gone")
+            if [ "$CONTAINER_STATE" = "exited" ] || [ "$CONTAINER_STATE" = "dead" ] || [ "$CONTAINER_STATE" = "gone" ]; then
+              echo "::error::容器提前退出 (state=$CONTAINER_STATE),迁移或启动可能失败"
+              docker logs verify-app 2>&1 || true
+              docker rm -f verify-app 2>/dev/null || true
+              exit 1
+            fi
+
+            # 检查 Docker 健康状态
+            HEALTH=$(docker inspect --format='{{.State.Health.Status}}' verify-app 2>/dev/null || echo "starting")
+            case "$HEALTH" in
+              healthy)
+                echo "✅ 容器健康检查通过"
+                break
+                ;;
+              unhealthy)
+                echo "::error::容器状态为 unhealthy"
+                docker logs verify-app 2>&1 || true
+                docker rm -f verify-app 2>/dev/null || true
+                exit 1
+                ;;
+              *)
+                if [ "$i" = "60" ]; then
+                  echo "::error::等待健康检查超时 (120s)"
+                  docker logs verify-app 2>&1 || true
+                  docker rm -f verify-app 2>/dev/null || true
+                  exit 1
+                fi
+                echo "  [$i/60] 状态: $HEALTH ..."
+                sleep 2
+                ;;
+            esac
+          done
+          echo "::endgroup::"
+
+          echo "::group::HTTP 探测"
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/ || echo "000")
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::HTTP 检查失败: 期望 200, 实际 $HTTP_CODE"
+            docker logs verify-app 2>&1 || true
+            docker rm -f verify-app 2>/dev/null || true
+            exit 1
+          fi
+          echo "✅ HTTP 200 — H5 入口正常响应"
+          echo "::endgroup::"
+
+          echo "::group::文件校验"
+          # 验证 H5 静态文件位于 /h5/ 路径
+          docker exec verify-app test -f /h5/index.html || {
+            echo "::error::/h5/index.html 不存在"
+            docker rm -f verify-app 2>/dev/null || true
+            exit 1
+          }
+          echo "✅ /h5/index.html 存在"
+
+          # 验证 Drizzle 迁移文件存在
+          docker exec verify-app test -d /app/drizzle || {
+            echo "::error::/app/drizzle 迁移目录不存在"
+            docker rm -f verify-app 2>/dev/null || true
+            exit 1
+          }
+          echo "✅ /app/drizzle 迁移目录存在"
+
+          # 验证入口脚本存在
+          docker exec verify-app test -f /entrypoint.sh || {
+            echo "::error::/entrypoint.sh 不存在"
+            docker rm -f verify-app 2>/dev/null || true
+            exit 1
+          }
+          echo "✅ /entrypoint.sh 入口脚本存在"
+          echo "::endgroup::"
+
+          # 清理
+          docker rm -f verify-app 2>/dev/null || true
+
+          echo "verify_result=success" >> "$GITHUB_OUTPUT"
+
+      # ============================================================
+      # 7. 安全扫描(Trivy)— 检测镜像漏洞
+      #    exit-code=0:仅报告不阻断(可按需改为 1 阻断 HIGH/CRITICAL)
+      # ============================================================
+      - name: Run Trivy vulnerability scanner
+        id: trivy
+        if: always() && steps.build.outcome == 'success'
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          image-ref: frenqency-circle:ci-test
+          format: sarif
+          output: trivy-results.sarif
+          exit-code: '0'
+          severity: CRITICAL,HIGH,MEDIUM,LOW
+          ignore-unfixed: true
+
+      - name: Parse Trivy results for summary
+        if: always() && steps.trivy.outcome == 'success'
+        run: |
+          set -euo pipefail
+          # SARIF 格式:runs[0].results[] — 每条结果对应一个漏洞
+          TOTAL=$(jq '.runs[0].results | length' trivy-results.sarif 2>/dev/null || echo "0")
+          CRITICAL=$(jq '[.runs[0].results[] | select(.level=="error")] | length' trivy-results.sarif 2>/dev/null || echo "0")
+          WARNINGS=$(jq '[.runs[0].results[] | select(.level=="warning")] | length' trivy-results.sarif 2>/dev/null || echo "0")
+          echo "trivy_total=$TOTAL" >> "$GITHUB_ENV"
+          echo "trivy_critical=$CRITICAL" >> "$GITHUB_ENV"
+          echo "trivy_warnings=$WARNINGS" >> "$GITHUB_ENV"
+          echo "Trivy 扫描完成: 总计 $TOTAL 个发现 (error 级: $CRITICAL, warning 级: $WARNINGS)"
+
+      - name: Upload Trivy SARIF to GitHub Security
+        if: always() && steps.trivy.outcome == 'success'
+        uses: github/codeql-action/upload-sarif@v3
+        continue-on-error: true
+        with:
+          sarif_file: trivy-results.sarif
+
+      # ============================================================
+      # 8. 登录容器仓库(仅 push 到 main/master 或打 tag 时)
+      # ============================================================
+      - name: Login to Container Registry
+        id: login
+        if: >
+          success()
+          && github.event_name == 'push'
+          && (github.ref == 'refs/heads/main'
+              || github.ref == 'refs/heads/master'
+              || startsWith(github.ref, 'refs/tags/v'))
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          # GITHUB_TOKEN 由 Actions 自动注入,无需手动创建 secret
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ============================================================
+      # 9. 发布镜像到 GHCR
+      #    利用缓存重建(几乎所有层命中缓存,秒级完成)
+      # ============================================================
+      - name: Publish image to GHCR
+        id: publish
+        if: >
+          success()
+          && steps.login.outcome == 'success'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          provenance: false
+
+      # ============================================================
+      # 10. 生成状态摘要(显示在 Actions 运行页面)
+      #     使用 env 传递动态值,避免 ${{ }} 直接插入脚本(防注入)
+      # ============================================================
+      - name: Generate workflow summary
+        if: always()
+        env:
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+          PUBLISH_OUTCOME: ${{ steps.publish.outcome }}
+          META_TAGS: ${{ steps.meta.outputs.tags }}
+          IMAGE_FULL: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          COMMIT_SHA: ${{ github.sha }}
+          REF_NAME: ${{ github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPO_FULL: ${{ github.repository }}
+          TRIVY_TOTAL: ${{ env.trivy_total }}
+          TRIVY_CRITICAL: ${{ env.trivy_critical }}
+          TRIVY_WARNINGS: ${{ env.trivy_warnings }}
+        run: |
+          # 状态图标映射
+          icon() {
+            case "$1" in
+              success) printf '✅' ;;
+              failure) printf '❌' ;;
+              skipped) printf '➖' ;;
+              *) printf '⏳' ;;
+            esac
+          }
+          # 空值兜底为 skipped
+          [ -z "$LINT_OUTCOME" ] && LINT_OUTCOME="skipped"
+          [ -z "$BUILD_OUTCOME" ] && BUILD_OUTCOME="skipped"
+          [ -z "$VERIFY_OUTCOME" ] && VERIFY_OUTCOME="skipped"
+          [ -z "$PUBLISH_OUTCOME" ] && PUBLISH_OUTCOME="skipped"
+
+          {
+            echo "## 🐳 Docker Image CI 摘要"
+            echo ""
+            echo "| 步骤 | 状态 |"
+            echo "|------|------|"
+            echo "| Dockerfile 校验 (Hadolint) | $(icon "$LINT_OUTCOME") $LINT_OUTCOME |"
+            echo "| 镜像构建 | $(icon "$BUILD_OUTCOME") $BUILD_OUTCOME |"
+            echo "| 功能验证 | $(icon "$VERIFY_OUTCOME") $VERIFY_OUTCOME |"
+            echo "| 镜像发布 | $(icon "$PUBLISH_OUTCOME") $PUBLISH_OUTCOME |"
+            echo ""
+            echo "### 镜像信息"
+            echo "- **镜像:** \`$IMAGE_FULL\`"
+            echo "- **Commit:** \`$COMMIT_SHA\`"
+            echo "- **分支/标签:** \`$REF_NAME\`"
+            echo "- **触发事件:** \`$EVENT_NAME\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # 镜像标签列表
+          if [ -n "$META_TAGS" ]; then
+            {
+              echo ""
+              echo "### 生成的镜像标签"
+              echo '```'"
+              echo "$META_TAGS"
+              echo '```'"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # Trivy 安全扫描结果
+          if [ -n "$TRIVY_TOTAL" ]; then
+            {
+              echo ""
+              echo "### 安全扫描 (Trivy)"
+              echo "| 级别 | 数量 |"
+              echo "|------|------|"
+              echo "| Error (Critical/High) | $TRIVY_CRITICAL |"
+              echo "| Warning (Medium/Low) | $TRIVY_WARNINGS |"
+              echo "| **总计** | **$TRIVY_TOTAL** |"
+              echo ""
+              echo "> 详细结果请查看 [Security tab](https://github.com/$REPO_FULL/security/code-scanning)"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # 发布成功
+          if [ "$PUBLISH_OUTCOME" = "success" ]; then
+            {
+              echo ""
+              echo "### 📦 已发布"
+              echo "镜像已推送到 GHCR: \`$IMAGE_FULL\`"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # ============================================================
+      # 11. 构建失败时上传容器日志(便于排障)
+      # ============================================================
+      - name: Upload container logs on failure
+        if: failure()
+        run: |
+          if docker ps -a --format '{{.Names}}' | grep -q verify-app; then
+            docker logs verify-app > container-logs.txt 2>&1 || true
+            echo "容器日志已保存到 container-logs.txt"
+          fi
+
+      - name: Upload logs artifact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-logs
+          path: container-logs.txt
+          retention-days: 7
+          if-no-files-found: ignore

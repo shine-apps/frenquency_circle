@@ -1,5 +1,4 @@
 import type { NextConfig } from "next";
-import path from "node:path";
 
 const corsOrigin = process.env.CORS_ALLOW_ORIGIN || "http://localhost:9000";
 
@@ -7,12 +6,6 @@ const nextConfig: NextConfig = {
   // standalone 输出:Docker 镜像仅需复制 .next/standalone/ + .next/static/ + public/,
   // 无需携带完整 node_modules,显著减小运行时镜像体积
   output: "standalone",
-
-  // monorepo 下让 NFT (Node File Tracing) 以 workspace 根为追踪根,
-  // 否则 pnpm 的 .pnpm 符号链接结构(跨 /app/admin 与 /app/node_modules)会被误判为
-  // "whole project traced unintentionally",并可能在 standalone 复制阶段因符号链接
-  // 解析失败 (ENOENT symlink) 而中断,导致 server.js 等关键文件缺失。
-  outputFileTracingRoot: path.join(__dirname, "../"),
 
   // 注意:不再使用 serverExternalPackages 把 drizzle-orm / postgres 保持为外部依赖。
   // 原因:在 pnpm 隔离 node-linker 下,serverExternalPackages 会让 NFT 追踪

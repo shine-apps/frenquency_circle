@@ -7,7 +7,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: 构建 frontend H5 端静态文件
 # -----------------------------------------------------------------------------
-FROM node:20-alpine AS frontend-builder
+FROM node:24-alpine AS frontend-builder
 
 # musl 兼容 + 启用 corepack(pnpm)
 RUN apk add --no-cache libc6-compat \
@@ -28,7 +28,7 @@ RUN ./node_modules/.bin/taro build --type h5
 # -----------------------------------------------------------------------------
 # Stage 2: 构建 admin Next.js standalone 产物
 # -----------------------------------------------------------------------------
-FROM node:20-alpine AS admin-builder
+FROM node:24-alpine AS admin-builder
 
 RUN apk add --no-cache libc6-compat \
     && corepack enable \
@@ -48,7 +48,7 @@ RUN ./node_modules/.bin/next build
 # -----------------------------------------------------------------------------
 # Stage 3: 运行时镜像(精简,仅含运行所需文件)
 # -----------------------------------------------------------------------------
-FROM node:20-alpine AS runtime
+FROM node:24-alpine AS runtime
 
 ENV NODE_ENV=production
 ENV PORT=3000

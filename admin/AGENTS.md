@@ -1,6 +1,8 @@
 # AGENTS.md
 
-Guidance for AI coding agents working in this repository. All paths are relative to the **project root** (the directory containing this file).
+Guidance for AI coding agents working in `admin/`, the Next.js 16 backend & admin dashboard sub-project of the `frenqency_circle` repository. All paths are relative to the **project root** (the directory containing this file, i.e. `admin/`).
+
+> `admin/` is a **standalone** project: it has its own `package.json` / `pnpm-lock.yaml` / `node_modules/`, and does **not** share dependencies with the sibling `frontend/` sub-project. Run `pnpm install` inside `admin/` only.
 
 ## Project overview
 

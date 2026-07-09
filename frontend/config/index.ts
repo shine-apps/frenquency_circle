@@ -1,16 +1,8 @@
 import { defineConfig, type UserConfigExport } from '@tarojs/cli';
 import TsconfigPathsPlugin from 'tsconfig-paths-webpack-plugin';
-import path from 'path';
 import devConfig from './dev';
 import prodConfig from './prod';
 
-// frontend 本地安装的 react / react-dom(18.3.1)绝对路径。
-// pnpm 工作区同时存在 admin(React 19),默认解析会让 @nutui/icons-react-taro
-// 等包错解析到根 .pnpm 中的 react@19,导致 React 18/19 内部 API 不兼容
-// (运行时 `Cannot read properties of undefined (reading 'recentlyCreatedOwnerStacks')`)。
-// 这里强制把 react 系列解析到 frontend 本地的 18.3.1。
-const REACT_DIR = path.resolve(__dirname, '../node_modules/react');
-const REACT_DOM_DIR = path.resolve(__dirname, '../node_modules/react-dom');
 // https://taro-docs.jd.com/docs/next/config#defineconfig-辅助函数
 export default defineConfig<'webpack5'>(async (merge, { command, mode }) => {
   const baseConfig: UserConfigExport<'webpack5'> = {
@@ -62,12 +54,6 @@ export default defineConfig<'webpack5'>(async (merge, { command, mode }) => {
       },
       webpackChain(chain) {
         chain.resolve.plugin('tsconfig-paths').use(TsconfigPathsPlugin);
-        // 强制 react 系列解析到 frontend 本地 18.3.1(见文件顶部说明)。
-        chain.resolve.alias
-          .set('react', REACT_DIR)
-          .set('react-dom', REACT_DOM_DIR)
-          .set('react/jsx-runtime', path.join(REACT_DIR, 'jsx-runtime'))
-          .set('react/jsx-dev-runtime', path.join(REACT_DIR, 'jsx-dev-runtime'));
       },
     },
     h5: {
@@ -105,12 +91,6 @@ export default defineConfig<'webpack5'>(async (merge, { command, mode }) => {
       },
       webpackChain(chain) {
         chain.resolve.plugin('tsconfig-paths').use(TsconfigPathsPlugin);
-        // 强制 react 系列解析到 frontend 本地 18.3.1(见文件顶部说明)。
-        chain.resolve.alias
-          .set('react', REACT_DIR)
-          .set('react-dom', REACT_DOM_DIR)
-          .set('react/jsx-runtime', path.join(REACT_DIR, 'jsx-runtime'))
-          .set('react/jsx-dev-runtime', path.join(REACT_DIR, 'jsx-dev-runtime'));
       },
     },
     rn: {

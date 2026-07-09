@@ -11,8 +11,7 @@ export default {
       open: false, //禁止自动打开浏览器
       // H5 端所有 /api/** 请求由 webpack-dev-server 代理到 admin 后端,
       // 避免浏览器 CORS preflight。此块仅在 H5 构建时生效,小程序端忽略。
-      // 生产环境由 nginx 等反向代理承担同样职责。
-      // dev 模式下后端默认地址固定为 http://localhost:3000,如有变动直接改 target。
+      // 后端默认地址固定为 http://localhost:3000,如有变动直接改 target。
       proxy: {
         '/api': {
           target: 'http://localhost:3000',

@@ -10,10 +10,12 @@
 
 **范围:** 本文档仅约束 `frontend/` 目录内的修改。
 
+> `frontend/` 是**独立项目**:依赖与 `admin/` 不共享,`pnpm install` 仅作用于 `frontend/` 目录。
+
 **不在范围:**
 
 - `admin/` 后端子项目(请阅读 [`../admin/AGENTS.md`](../admin/AGENTS.md))
-- 根级 `pnpm-workspace.yaml` / `.gitignore` 等横切配置
+- 仓库根 `README.md` / `nginx.conf` / `docs/` 等横切资源
 - 微信开发者工具侧的 IDE 配置文件(`project.config.json` 的 `appid` 字段除外)
 
 如任务跨越前后端,代理应**先在 `admin/` 与 `frontend/` 之间建立明确的接口契约**(URL/方法/请求体/响应体),再分别落地,避免双向重复实现。

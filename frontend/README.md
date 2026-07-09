@@ -1,8 +1,10 @@
-# Frontend (Taro 小程序)
+# 项目名 (Taro 小程序 / H5 / 抖音)
 
-`frontend/` 是 该项目的客户端子项目,基于 **Taro 4.x + React 18 + TypeScript** 构建,使用 **NutUI React Taro** 作为跨端 UI 组件库,目标平台为微信小程序(主)、H5、抖音小程序(可扩展支付宝/QQ/京东/百度/快应用等)。
+基于 **Taro 4.x + React 18 + TypeScript** 构建的跨端客户端,使用 **NutUI React Taro** 作为跨端 UI 组件库,目标平台为微信小程序(主)、H5、抖音小程序(可扩展支付宝/QQ/京东/百度/快应用等)。
 
-它配合同仓库的 `admin/` Next.js 后端(提供 `IResponse<T>` 信封的 REST API、JWT 鉴权与 SMS 登录),共同构成完整的多端登录与用户中心示例。
+它配合同仓库 `admin/` Next.js 后端(提供 `IResponse<T>` 信封的 REST API、JWT 鉴权与 SMS 登录),共同构成完整的多端登录与用户中心示例。
+
+> 本子项目是**独立项目**,依赖与 `admin/` 不共享,`pnpm install` 仅作用于 `frontend/` 目录。
 
 ***
 
@@ -28,23 +30,24 @@
 ### 环境要求
 
 - **Node.js** ≥ 18(推荐 LTS 20.x)
-- **pnpm** ≥ 8(本仓库使用 pnpm 工作区,根目录已有 `pnpm-workspace.yaml`)
+- **pnpm** ≥ 8
 - 微信开发者工具(用于 `weapp` 端调试)
 - H5 端可选任意现代浏览器
 
 ### 安装步骤
 
-在仓库根目录执行(整个 monorepo 统一安装):
+在 `frontend/` 目录内执行(整个子项目独立安装):
 
 ```bash
-# 1. 安装根级依赖与所有 workspace 成员
+# 1. 安装 frontend 依赖(不需要先在仓库根执行 pnpm install)
+cd frontend
 pnpm install
 
 # 2. 如首次使用 Taro CLI(可选,dev/build 脚本会自动调用 npx taro)
 pnpm add -g @tarojs/cli
 ```
 
-> **pnpm 10+ 提示:** 首次安装若出现 `[ERR_PNPM_IGNORED_BUILDS]`,可在 `pnpm-workspace.yaml` 的 `allowBuilds` 块显式放行 `@nutui/nutui-react-taro`、`@tarojs/cli`、`esbuild` 等构建依赖,或运行 `pnpm approve-builds` 交互式放行。
+> **pnpm 10+ 提示:** 首次安装若出现 `[ERR_PNPM_IGNORED_BUILDS]`,可运行 `pnpm approve-builds` 交互式放行 `@nutui/nutui-react-taro`、`@tarojs/cli`、`esbuild` 等构建依赖。
 
 ### 验证安装
 

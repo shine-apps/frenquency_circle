@@ -61,6 +61,21 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # (pnpm 11 的 deps check 会因 ERR_PNPM_IGNORED_BUILDS 报错退出)
 RUN ./node_modules/.bin/next build
 
+# 归一化 standalone 输出结构。
+# 背景:当根目录有 pnpm-workspace.yaml 时,Next.js 会自动检测到 monorepo,
+#   将 NFT 追踪根设为 workspace 根,导致 standalone 输出保留 admin/ 子目录层级
+#   (server.js 落在 .next/standalone/admin/server.js 而非 .next/standalone/server.js)。
+#   即使 next.config.ts 设了 outputFileTracingRoot: __dirname,也不能 100% 保证扁平。
+# 做法:如果 .next/standalone/admin/ 存在 (嵌套结构),把其内容提升到 standalone 根目录。
+#   这样无论 Next.js 输出扁平还是嵌套,后续步骤都能假设 server.js 在 standalone 根。
+RUN if [ -d .next/standalone/admin ]; then \
+      echo "Detected nested standalone output, flattening..." && \
+      cp -a .next/standalone/admin/. .next/standalone/ && \
+      rm -rf .next/standalone/admin; \
+    fi && \
+    echo "=== Verifying server.js location ===" && \
+    ls -la .next/standalone/server.js
+
 # 显式将迁移脚本依赖的 drizzle-orm / postgres 真实文件(解引用 pnpm 符号链接)
 # 放入 standalone/node_modules。
 # 原因:next.config.ts 已移除 serverExternalPackages,drizzle-orm / postgres 现在

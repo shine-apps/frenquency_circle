@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "node:path";
 
 const corsOrigin = process.env.CORS_ALLOW_ORIGIN || "http://localhost:9000";
 
@@ -6,6 +7,14 @@ const nextConfig: NextConfig = {
   // standalone 输出:Docker 镜像仅需复制 .next/standalone/ + .next/static/ + public/,
   // 无需携带完整 node_modules,显著减小运行时镜像体积
   output: "standalone",
+
+  // 显式将 NFT (Node File Tracing) 追踪根设为 admin/ 项目目录本身。
+  // 原因:根目录有 pnpm-workspace.yaml,Next.js 会自动检测到 monorepo 并把追踪根
+  //   设为 workspace 根 (/app/),导致 standalone 输出保留 admin/ 子目录层级,
+  //   server.js 落在 .next/standalone/admin/server.js 而非 .next/standalone/server.js,
+  //   Dockerfile COPY 后 /app/server.js 不存在 → ERR_MODULE_NOT_FOUND。
+  // 设为 __dirname (admin/) 后,standalone 输出扁平化,server.js 直接在根目录。
+  outputFileTracingRoot: __dirname,
 
   // 注意:不再使用 serverExternalPackages 把 drizzle-orm / postgres 保持为外部依赖。
   // 原因:在 pnpm 隔离 node-linker 下,serverExternalPackages 会让 NFT 追踪

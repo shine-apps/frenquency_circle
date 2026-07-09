@@ -47,7 +47,9 @@ next-env.d.ts
 /playwright/.cache/
 
 # drizzle
-/drizzle/meta/
+# 注意:meta/_journal.json 与 meta/*_snapshot.json 是 drizzle-orm 运行时 migrator
+# 必需的(不只是 drizzle-kit 生成器用),必须随 SQL 文件一起入库,
+# 否则容器内 db/migrate.mjs 会报 "Can't find meta/_journal.json file"。
 
 # user uploaded files (POST /api/upload)
 /public/uploads/

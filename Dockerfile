@@ -108,8 +108,8 @@ USER nodejs
 
 EXPOSE 3000
 
-# 健康检查:Next.js 在 / 提供 H5 index.html(200)
+# 健康检查:探测 /api/health(无需鉴权,返回 200 表示进程存活)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD wget -q --spider http://localhost:3000/ || exit 1
+  CMD wget -q --spider http://localhost:3000/api/health || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]

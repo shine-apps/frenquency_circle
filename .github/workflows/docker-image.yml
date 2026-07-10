@@ -195,14 +195,15 @@ jobs:
           echo "::endgroup::"
 
           echo "::group::HTTP 探测"
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/ || echo "000")
+          # 探测 /api/health(无需鉴权,返回 200 表示 Next.js 路由正常响应)
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/health || echo "000")
           if [ "$HTTP_CODE" != "200" ]; then
             echo "::error::HTTP 检查失败: 期望 200, 实际 $HTTP_CODE"
             docker logs verify-app 2>&1 || true
             docker rm -f verify-app 2>/dev/null || true
             exit 1
           fi
-          echo "✅ HTTP 200 — H5 入口正常响应"
+          echo "✅ HTTP 200 — /api/health 正常响应"
           echo "::endgroup::"
 
           echo "::group::文件校验"

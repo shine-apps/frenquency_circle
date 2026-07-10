@@ -369,9 +369,9 @@ jobs:
             {
               echo ""
               echo "### 生成的镜像标签"
-              echo '```'"
+              echo '```'
               echo "$META_TAGS"
-              echo '```'"
+              echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 

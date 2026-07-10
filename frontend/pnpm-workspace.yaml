@@ -1,0 +1,17 @@
+# pnpm 11 配置:settings 从 package.json 的 pnpm 字段迁移至此文件
+# allowBuilds 是 pnpm 11 的构建脚本白名单 (map 格式: 包名 -> true/false)。
+# 设为 true 的包允许运行 postinstall 等 build scripts,
+# 未列出或设为 false 的包构建脚本会被跳过,不再触发 ERR_PNPM_IGNORED_BUILDS。
+allowBuilds:
+  "@nutui/nutui-react-taro": true
+  "@parcel/watcher": true
+  "@swc/core": true
+  "@tarojs/binding": true
+  "@tarojs/cli": true
+  bufferutil: true
+  core-js: true
+  core-js-pure: true
+  esbuild: true
+  less: true
+  minidev: true
+  protobufjs: true

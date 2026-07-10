@@ -17,7 +17,8 @@ RUN apk add --no-cache libc6-compat \
 WORKDIR /build
 
 # 先复制依赖清单,利用 Docker 层缓存(源码变更不会触发重装)
-COPY frontend/package.json frontend/pnpm-lock.yaml ./
+# pnpm-workspace.yaml 含 allowBuilds 配置,缺少它会触发 ERR_PNPM_IGNORED_BUILDS
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
 # 复制源码并构建 H5 产物(输出到 dist/)
@@ -36,7 +37,7 @@ RUN apk add --no-cache libc6-compat \
 
 WORKDIR /build
 
-COPY admin/package.json admin/pnpm-lock.yaml ./
+COPY admin/package.json admin/pnpm-lock.yaml admin/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
 COPY admin/ ./

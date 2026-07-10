@@ -74,10 +74,9 @@ COPY --from=admin-builder /build/.next/static ./.next/static
 COPY --from=admin-builder /build/public ./public
 
 # ---- 3) frontend H5 静态文件 ----
-# 需求要求:存放于容器内 /h5/ 路径下
-COPY --from=frontend-builder /build/dist /h5
-# 同时合并到 Next.js public/,由 next.config.ts 的 rewrite(/ → /index.html)同源托管
-COPY --from=frontend-builder /build/dist/ ./public/
+# 复制到 public/h5/:Next.js 会把 public/ 下的文件映射到 URL 根路径,
+# 因此 public/h5/index.html → URL /h5/(Taro prod publicPath 已设为 /h5/)
+COPY --from=frontend-builder /build/dist/ ./public/h5/
 
 # ---- 4) Drizzle 迁移文件 + 迁移脚本(容器启动时执行) ----
 COPY --from=admin-builder /build/drizzle ./drizzle
@@ -91,7 +90,7 @@ COPY --from=admin-builder /build/node_modules/postgres ./node_modules/postgres
 
 # ---- 6) 上传目录(可写,供 LocalDriver 落盘) + 权限 ----
 RUN mkdir -p ./public/uploads \
-    && chown -R nodejs:nodejs /app /h5
+    && chown -R nodejs:nodejs /app
 
 # ---- 7) 启动入口脚本:先迁移,再启动 Next.js ----
 RUN printf '%s\n' \

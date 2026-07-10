@@ -21,17 +21,6 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-
-  // 当 public/index.html 存在时,生产环境把根路径重写到 H5 入口。
-  // 适用于把 frontend H5 产物手动放进 public/ 后同源托管的场景;
-  // 没有该文件时此规则不命中,不影响其它路径。
-  // 开发环境保持原样(app/page.tsx 的鉴权重定向逻辑仍生效)
-  async rewrites() {
-    if (process.env.NODE_ENV !== "production") return [];
-    return [
-      { source: "/", destination: "/index.html" },
-    ];
-  },
 };
 
 export default nextConfig;

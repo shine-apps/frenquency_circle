@@ -207,13 +207,13 @@ jobs:
           echo "::endgroup::"
 
           echo "::group::文件校验"
-          # 验证 H5 静态文件位于 /h5/ 路径
-          docker exec verify-app test -f /h5/index.html || {
-            echo "::error::/h5/index.html 不存在"
+          # 验证 H5 静态文件位于 public/h5/ 路径(由 Next.js 同源托管)
+          docker exec verify-app test -f /app/public/h5/index.html || {
+            echo "::error::/app/public/h5/index.html 不存在"
             docker rm -f verify-app 2>/dev/null || true
             exit 1
           }
-          echo "✅ /h5/index.html 存在"
+          echo "✅ /app/public/h5/index.html 存在"
 
           # 验证 Drizzle 迁移文件存在
           docker exec verify-app test -d /app/drizzle || {

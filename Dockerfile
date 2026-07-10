@@ -6,12 +6,13 @@
 
 # -----------------------------------------------------------------------------
 # Stage 1: 构建 frontend H5 端静态文件
+# 使用 slim (Debian/glibc) 而非 alpine (musl):Taro/swc/esbuild 等原生模块
+# 的 lockfile 只含 glibc 变体,alpine 需要 musl 变体但 lockfile 未包含。
 # -----------------------------------------------------------------------------
-FROM node:24-alpine AS frontend-builder
+FROM node:24-slim AS frontend-builder
 
-# musl 兼容 + 启用 corepack(pnpm)
-RUN apk add --no-cache libc6-compat \
-    && corepack enable \
+# 启用 corepack(pnpm);slim 已自带 glibc,无需 libc6-compat
+RUN corepack enable \
     && corepack prepare pnpm@11.5.1 --activate
 
 WORKDIR /build
@@ -28,11 +29,11 @@ RUN ./node_modules/.bin/taro build --type h5
 
 # -----------------------------------------------------------------------------
 # Stage 2: 构建 admin Next.js standalone 产物
+# 使用 slim (Debian/glibc),原因同 Stage 1
 # -----------------------------------------------------------------------------
-FROM node:24-alpine AS admin-builder
+FROM node:24-slim AS admin-builder
 
-RUN apk add --no-cache libc6-compat \
-    && corepack enable \
+RUN corepack enable \
     && corepack prepare pnpm@11.5.1 --activate
 
 WORKDIR /build
@@ -48,8 +49,10 @@ RUN ./node_modules/.bin/next build
 
 # -----------------------------------------------------------------------------
 # Stage 3: 运行时镜像(精简,仅含运行所需文件)
+# 必须与 builder 同基础镜像:standalone 里的原生模块(sharp 等)是 glibc 编译的,
+# 放到 alpine (musl) 上会无法加载。
 # -----------------------------------------------------------------------------
-FROM node:24-alpine AS runtime
+FROM node:24-slim AS runtime
 
 ENV NODE_ENV=production
 ENV PORT=3000
@@ -57,8 +60,10 @@ ENV HOSTNAME=0.0.0.0
 
 WORKDIR /app
 
-# 创建非 root 用户(最佳实践:不以 root 运行应用)
-RUN addgroup -S nodejs && adduser -S nodejs -G nodejs
+# 创建非 root 用户(Debian 方式);安装 wget 供 healthcheck 使用
+RUN groupadd -r nodejs && useradd -r -g nodejs nodejs \
+    && apt-get update && apt-get install -y --no-install-recommends wget \
+    && rm -rf /var/lib/apt/lists/*
 
 # ---- 1) Next.js standalone 运行时(server.js + 精简 node_modules) ----
 COPY --from=admin-builder /build/.next/standalone ./

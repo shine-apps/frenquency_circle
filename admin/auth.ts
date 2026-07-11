@@ -1,18 +1,14 @@
 import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
-import { eq } from "drizzle-orm"
 import { z } from "zod"
 import { authConfig } from "./auth.config"
-import { db } from "@/lib/db"
-import { users } from "@/db/schema"
 import { isValidPhone, normalizePhone, phoneToEmail } from "@/lib/sms/phone"
 import { verifyCode } from "@/lib/sms/phone-code-service"
 import { rateLimiter } from "@/lib/sms/rate-limit"
 import {
   findOrCreateUserAndLinkAccount,
   findUserByAccount,
-  linkAccount,
 } from "@/lib/auth/account-service"
 import {
   code2Session,
@@ -66,11 +62,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
         const { email, password } = parsed.data
 
-        // 优先按 account 查，回退到 users 表（向后兼容已存在用户）
-        const byAccount = await findUserByAccount(PROVIDER_CREDENTIALS, email)
-        const user =
-          byAccount ??
-          (await db.query.users.findFirst({ where: eq(users.email, email) }))
+        // 按 account 查
+        const user = await findUserByAccount(PROVIDER_CREDENTIALS, email)
         if (!user) {
           logger.warn(LOG_PREFIX.AUTH, "Credentials login: user not found", {
             email,
@@ -85,13 +78,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           })
           return null
         }
-
-        // 首次以新方式登录 → 补 link account
-        await linkAccount({
-          userId: user.id,
-          provider: PROVIDER_CREDENTIALS,
-          providerAccountId: email,
-        })
 
         logger.info(LOG_PREFIX.AUTH, "Credentials login success", {
           userId: user.id,

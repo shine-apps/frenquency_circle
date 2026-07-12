@@ -1,16 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const { signInMock, extractSessionTokenMock, readUserFromTokenMock } =
+const { signInMock, extractSessionTokenMock, readUserFromTokenMock, readSessionTokenFromCookiesMock } =
   vi.hoisted(() => ({
     signInMock: vi.fn(),
     extractSessionTokenMock: vi.fn(),
     readUserFromTokenMock: vi.fn(),
+    readSessionTokenFromCookiesMock: vi.fn(),
   }))
 
 vi.mock("@/auth", () => ({ signIn: signInMock }))
 vi.mock("@/lib/auth/session-token", () => ({
   extractSessionToken: extractSessionTokenMock,
   readUserFromToken: readUserFromTokenMock,
+  readSessionTokenFromCookies: readSessionTokenFromCookiesMock,
 }))
 vi.mock("@/lib/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -40,9 +42,11 @@ beforeEach(() => {
   signInMock.mockReset()
   extractSessionTokenMock.mockReset()
   readUserFromTokenMock.mockReset()
+  readSessionTokenFromCookiesMock.mockReset()
   signInMock.mockResolvedValue(new Response(null, { status: 200 }))
   extractSessionTokenMock.mockReturnValue(FAKE_TOKEN)
   readUserFromTokenMock.mockResolvedValue(FAKE_USER)
+  readSessionTokenFromCookiesMock.mockResolvedValue(null)
 })
 
 describe("POST /api/auth/login/credentials", () => {

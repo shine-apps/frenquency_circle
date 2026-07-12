@@ -14,6 +14,19 @@ const SESSION_COOKIE_NAMES = [
   "__Secure-next-auth.session-token",
 ] as const
 
+/**
+ * Auth.js v5 的 JWT 是加密的(A256CBC-HS512),加密密钥由 secret + salt 经 HKDF 派生。
+ * salt 默认等于 cookie 名:
+ *   - HTTP (secureCookie=false): "authjs.session-token"
+ *   - HTTPS (secureCookie=true): "__Secure-authjs.session-token"
+ * 解密时 salt 必须与加密时一致,否则 jwtDecrypt 静默失败返回 null。
+ * 本数组涵盖两种环境,readUserFromToken 依次尝试直到解密成功。
+ */
+const JWT_SALTS = [
+  "authjs.session-token",
+  "__Secure-authjs.session-token",
+] as const
+
 type HeadersWithSetCookie = Headers & { getSetCookie?: () => string[] }
 
 /**
@@ -100,19 +113,31 @@ export function readBearerToken(req: Request): string | null {
  * 利用 Auth.js v5 的 `getToken`,原生支持从 `Authorization: Bearer` 头读取 JWT。
  * JWT payload 中的 `id` / `email` / `name` / `role` 由 `auth.config.ts` 的
  * `jwt` callback 写入。
+ *
+ * 注意:Auth.js v5 的 JWT 是加密的,加密密钥由 secret + salt 经 HKDF 派生。
+ * salt 取决于 secureCookie 设置(HTTP vs HTTPS),生产环境(HTTPS)和开发环境(HTTP)
+ * 使用不同的 salt。本函数依次尝试两种 salt,兼容两种部署环境。
  */
 export async function readUserFromToken(
   req: Request
 ): Promise<AuthUser | null> {
-  const token = await getToken({
-    req,
-    secret: process.env.AUTH_SECRET,
-  })
-  if (!token) return null
-  return {
-    id: (token.id as string) ?? "",
-    email: (token.email as string) ?? "",
-    name: (token.name as string) ?? "",
-    role: (token.role as UserRole) ?? "USER",
+  const secret = process.env.AUTH_SECRET
+  if (!secret) return null
+
+  for (const salt of JWT_SALTS) {
+    const token = await getToken({
+      req,
+      secret,
+      salt,
+    })
+    if (token) {
+      return {
+        id: (token.id as string) ?? "",
+        email: (token.email as string) ?? "",
+        name: (token.name as string) ?? "",
+        role: (token.role as UserRole) ?? "USER",
+      }
+    }
   }
+  return null
 }

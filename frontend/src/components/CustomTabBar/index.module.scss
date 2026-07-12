@@ -17,11 +17,12 @@
   box-shadow: $shadow-float;
   // H5 端:桌面浏览器(>750px)时收窄到 750px 并居中,与 body 容器对齐
   // 移动端(<=750px)、weapp / tt 视口宽度永远 < 750px,媒体查询不命中,行为不变
+  // 注意:H5 pxtransform 会把普通 px 转成 rem,而 html font-size 被锁定为 18px,
+  // 导致 750px 实际只有 360px。这里用 750PX 让 pxtransform 忽略,保持字面像素。
   @media (min-width: 751px) {
     left: 50%;
     right: auto;
-    width: 100%;
-    max-width: 750px;
+    width: 750PX;
     transform: translateX(-50%);
   }
 }

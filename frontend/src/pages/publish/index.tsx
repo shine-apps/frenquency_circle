@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Map } from '@tarojs/components';
+import { View, Text } from '@tarojs/components';
 import { Button } from '@nutui/nutui-react-taro';
 import Taro from '@tarojs/taro';
 import { useUserStore } from '@/store/user';
 import { useLocationStore } from '@/store/location';
 import { useMatchStore } from '@/store/match';
 import { publishLocation } from '@/services/locations';
+import MapView from '@/components/MapView';
+import { reverseGeocode } from '@/utils/amap';
 import styles from './index.module.scss';
 
 /** 可选匹配范围(公里),与后端 LocationPublishInput.rangeKm 一致 */
@@ -28,8 +30,9 @@ const RANGE_OPTIONS: Array<{ label: string; value: 1 | 5 | 10 | 30 }> = [
  *    成功后缓存 location + 预填 match store,跳 pages/match
  *
  * 平台差异:
- * - weapp:Taro.chooseLocation 直接拿到地址
- * - H5:chooseLocation 不可用,退化用 Taro.getLocation 只拿经纬度,address 显示"已定位"
+ * - weapp:Taro.chooseLocation 直接拿到地址;地图用 Taro 原生 <Map>(腾讯地图)
+ * - H5:chooseLocation 不可用,用 Taro.getLocation 拿经纬度 + 高德逆地理编码拿真实地址;
+ *   地图用 MapView(高德 JS API)
  */
 const PublishPage: React.FC = () => {
   const user = useUserStore((s) => s.user);
@@ -54,10 +57,16 @@ const PublishPage: React.FC = () => {
   useEffect(() => {
     if (latitude === null || longitude === null) {
       Taro.getLocation({ type: 'gcj02' })
-        .then((res) => {
+        .then(async (res) => {
           setLatitude(res.latitude);
           setLongitude(res.longitude);
-          setAddress((prev) => prev ?? '已定位');
+          // H5 端用高德逆地理拿到真实地址;weapp 保持 "已定位" 兜底
+          if (process.env.TARO_ENV === 'h5') {
+            const addr = await reverseGeocode(res.latitude, res.longitude);
+            setAddress((prev) => prev ?? addr);
+          } else {
+            setAddress((prev) => prev ?? '已定位');
+          }
         })
         .catch(() => {
           // 静默:用户可点"重新定位"按钮手动授权
@@ -66,7 +75,7 @@ const PublishPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** 重新定位:weapp 用 chooseLocation(可选点 + 拿地址),H5 退化用 getLocation */
+  /** 重新定位:weapp 用 chooseLocation(可选点 + 拿地址),H5 用 getLocation + 高德逆地理 */
   const handleRelocate = async (): Promise<void> => {
     if (locating) return;
     setLocating(true);
@@ -78,11 +87,12 @@ const PublishPage: React.FC = () => {
         setLongitude(res.longitude);
         setAddress(res.address || res.name || '已选择位置');
       } else {
-        // H5 / 其他端:chooseLocation 不可用,退化只拿经纬度
+        // H5 端:getLocation 拿经纬度 + 高德逆地理拿真实地址
         const res = await Taro.getLocation({ type: 'gcj02' });
         setLatitude(res.latitude);
         setLongitude(res.longitude);
-        setAddress('已定位');
+        const addr = await reverseGeocode(res.latitude, res.longitude);
+        setAddress(addr);
       }
     } catch (e) {
       // 用户取消或授权失败
@@ -151,15 +161,11 @@ const PublishPage: React.FC = () => {
       {/* ====== 1. 顶部地图 ====== */}
       <View className={styles.mapWrap}>
         {hasLocation ? (
-          <Map
-            className={styles.map}
-            longitude={longitude as number}
+          <MapView
             latitude={latitude as number}
+            longitude={longitude as number}
             scale={15}
             showLocation
-            onError={() => {
-              // 地图加载异常静默处理,不影响主流程
-            }}
           />
         ) : (
           <View className={styles.mapPlaceholder}>

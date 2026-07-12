@@ -1,0 +1,102 @@
+@use '@/styles/variables.scss' as *;
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 80vh;
+  background-color: $color-bg-card;
+}
+
+.header {
+  flex-shrink: 0;
+  padding: $spacing-md $spacing-lg;
+  border-bottom: 1rpx solid $color-divider;
+}
+
+.title {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+// 地图区域(相对定位,图钉绝对居中)
+.mapWrap {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  overflow: hidden;
+}
+
+.map {
+  width: 100%;
+  height: 100%;
+}
+
+// 中心图钉
+.pin {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.pinBody {
+  width: 32rpx;
+  height: 32rpx;
+  background-color: $color-primary;
+  border: 4rpx solid $color-text-white;
+  border-radius: 50%;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.3);
+}
+
+.pinShadow {
+  width: 20rpx;
+  height: 8rpx;
+  margin: 4rpx auto 0;
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 50%;
+}
+
+// 加载遮罩
+.loadingMask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(255, 255, 255, 0.6);
+  z-index: 3;
+}
+
+.loadingText {
+  font-size: $font-size-md;
+  color: $color-text-tertiary;
+}
+
+// 底部地址 + 确认按钮
+.footer {
+  flex-shrink: 0;
+  padding: $spacing-md $spacing-lg;
+  padding-bottom: calc(env(safe-area-inset-bottom) + #{$spacing-md});
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+  border-top: 1rpx solid $color-divider;
+}
+
+.address {
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+  line-height: $line-height-normal;
+  // 限制两行
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}

@@ -118,7 +118,19 @@ jobs:
       # ============================================================
       # 5. 构建镜像(load 到本地 Docker,供验证步骤使用)
       #    使用 GitHub Actions 缓存加速后续构建
+      #
+      #    高德地图 key 通过 BuildKit secret 注入(不在镜像层留痕):
+      #    - 在仓库 Settings → Secrets and variables → Actions 添加:
+      #      AMAP_KEY / AMAP_SECURITY_CODE
+      #    - 下方先生成临时 .env 文件,再以 file: 形式传给 build-push-action
+      #    - PR from fork 无权访问 secrets → key 为空,构建仍成功,仅地图不可用
       # ============================================================
+      - name: Create temporary .env for AMap secrets
+        run: |
+          printf 'AMAP_KEY=%s\nAMAP_SECURITY_CODE=%s\n' \
+            "${{ secrets.AMAP_KEY }}" \
+            "${{ secrets.AMAP_SECURITY_CODE }}" > /tmp/amap.env
+
       - name: Build Docker image (load for verification)
         id: build
         uses: docker/build-push-action@v6
@@ -130,6 +142,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false
+          secrets: |
+            "amap_env=file:/tmp/amap.env"
 
       # ============================================================
       # 6. 功能验证:启动容器 + 健康检查 + HTTP 探测 + 文件校验
@@ -310,6 +324,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           provenance: false
+          secrets: |
+            "amap_env=file:/tmp/amap.env"
 
       # ============================================================
       # 10. 生成状态摘要(显示在 Actions 运行页面)

@@ -32,6 +32,11 @@ declare namespace NodeJS {
  */
 declare const API_BASE_URL: string
 
+/** 高德地图 JS API key,由 config/{dev,prod}.ts 的 defineConstants 注入 */
+declare const AMAP_KEY: string
+/** 高德地图 JS API 安全密钥,由 config/{dev,prod}.ts 的 defineConstants 注入 */
+declare const AMAP_SECURITY_CODE: string
+
 // ============ 业务 DTO 类型(与后端 admin/types/api.ts 对齐) ============
 
 /** 兴趣标签 */

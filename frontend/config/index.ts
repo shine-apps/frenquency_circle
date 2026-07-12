@@ -1,3 +1,5 @@
+// 必须在 dev/prod 之前加载,确保 .env 中的环境变量注入 process.env
+import './env';
 import { defineConfig, type UserConfigExport } from '@tarojs/cli';
 import TsconfigPathsPlugin from 'tsconfig-paths-webpack-plugin';
 import devConfig from './dev';

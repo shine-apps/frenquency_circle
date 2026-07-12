@@ -25,7 +25,17 @@ RUN pnpm install --frozen-lockfile
 # 复制源码并构建 H5 产物(输出到 dist/)
 COPY frontend/ ./
 # 直接调用 taro 二进制,避免 pnpm 11 的 ERR_PNPM_IGNORED_BUILDS 拦截
-RUN ./node_modules/.bin/taro build --type h5
+#
+# 高德地图 key 通过 BuildKit secret 注入(--mount=type=secret):
+#   - 密钥以 .env 文件形式挂载到 /build/.env,仅在此 RUN 步骤可见
+#   - config/env.ts 读取 .env → process.env → config/prod.ts defineConstants 内联到 webpack 产物
+#   - 密钥不会写入任何镜像层,docker history 不可见
+#
+# 本地构建:  docker build --secret id=amap_env,src=frontend/.env .
+# CI 构建:   通过 build-push-action 的 secrets 输入传递(见 .github/workflows/docker-image.yml)
+# 未提供密钥时: 构建仍成功,仅 H5 地图功能不可用(key 为空串)
+RUN --mount=type=secret,id=amap_env,target=/build/.env \
+    ./node_modules/.bin/taro build --type h5
 
 # -----------------------------------------------------------------------------
 # Stage 2: 构建 admin Next.js standalone 产物

@@ -1,0 +1,22 @@
+@use '@/styles/variables.scss' as *;
+
+// 地图容器(H5 端为 div,weapp 端为 Map 组件)
+.map {
+  width: 100%;
+  height: 100%;
+}
+
+// 加载失败占位
+.placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: $color-bg-hover;
+}
+
+.placeholderText {
+  font-size: $font-size-md;
+  color: $color-text-tertiary;
+}

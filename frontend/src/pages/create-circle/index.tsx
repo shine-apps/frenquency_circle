@@ -3,6 +3,7 @@ import { View, Text, ScrollView } from '@tarojs/components';
 import { Input, TextArea, Button } from '@nutui/nutui-react-taro';
 import Taro, { useDidShow, useRouter } from '@tarojs/taro';
 import TagSelector from '@/components/TagSelector';
+import H5LocationPicker from '@/components/H5LocationPicker';
 import {
   createCircle,
   getCircle,
@@ -41,7 +42,8 @@ const PHONE_RE = /^1\d{10}$/;
  *
  * 简化:
  * - 活动时间用单个文本输入框,不强制格式(如"每周六上午 9:00-11:00")
- * - 活动地点用 Taro.chooseLocation 选点,仅展示 address 卡片,不展示经纬度
+ * - 活动地点选点:weapp 用 Taro.chooseLocation;H5 用 H5LocationPicker 地图选点弹层;
+ *   仅展示 address 卡片,不展示经纬度
  */
 const CreateCirclePage: React.FC = () => {
   const router = useRouter();
@@ -68,6 +70,8 @@ const CreateCirclePage: React.FC = () => {
   const [maxMembers, setMaxMembers] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(false);
+  // H5 端地图选点弹层显隐
+  const [pickerVisible, setPickerVisible] = useState(false);
 
   /** 拉取圈子详情用于编辑预填 */
   const fetchForEdit = async (id: string): Promise<void> => {
@@ -107,7 +111,7 @@ const CreateCirclePage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   });
 
-  /** 选地点:weapp 用 chooseLocation,H5 退化用 getLocation */
+  /** 选地点:weapp 用 chooseLocation,H5 打开地图选点弹层 */
   const handleChooseLocation = async (): Promise<void> => {
     try {
       if (process.env.TARO_ENV === 'weapp') {
@@ -116,11 +120,8 @@ const CreateCirclePage: React.FC = () => {
         setLongitude(res.longitude);
         setAddress(res.address || res.name || '已选择位置');
       } else {
-        // H5 / 其他端:chooseLocation 不可用,退化只拿经纬度
-        const res = await Taro.getLocation({ type: 'gcj02' });
-        setLatitude(res.latitude);
-        setLongitude(res.longitude);
-        setAddress('已定位');
+        // H5:打开地图选点弹层(拖动选点 + 逆地理编码)
+        setPickerVisible(true);
       }
     } catch (e) {
       const err = e as Error & { errMsg?: string };
@@ -131,6 +132,18 @@ const CreateCirclePage: React.FC = () => {
         icon: 'none',
       });
     }
+  };
+
+  /** H5 选点弹层确认回调 */
+  const handlePickerConfirm = (loc: {
+    latitude: number;
+    longitude: number;
+    address: string;
+  }): void => {
+    setLatitude(loc.latitude);
+    setLongitude(loc.longitude);
+    setAddress(loc.address);
+    setPickerVisible(false);
   };
 
   // ====== 实时校验 ======
@@ -425,6 +438,17 @@ const CreateCirclePage: React.FC = () => {
         </Button>
         {formErr && <Text className={styles.footerErr}>{formErr}</Text>}
       </View>
+
+      {/* ====== H5 端地图选点弹层 ====== */}
+      {process.env.TARO_ENV === 'h5' && (
+        <H5LocationPicker
+          visible={pickerVisible}
+          initialLat={latitude}
+          initialLng={longitude}
+          onConfirm={handlePickerConfirm}
+          onClose={() => setPickerVisible(false)}
+        />
+      )}
     </View>
   );
 };

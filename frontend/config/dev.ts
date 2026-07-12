@@ -26,5 +26,9 @@ export default {
   // 以配合 h5.devServer.proxy 走相对路径代理。prod 模式在 config/prod.ts 中配置。
   defineConstants: {
     API_BASE_URL: JSON.stringify('http://localhost:3000'),
+    // 高德地图 JS API key + 安全密钥(从 .env 读取,避免硬编码到代码仓库)
+    // 申请地址:https://lbs.amap.com → 控制台 → 应用管理 → 创建 Web端(JS API) Key
+    AMAP_KEY: JSON.stringify(process.env.AMAP_KEY || ''),
+    AMAP_SECURITY_CODE: JSON.stringify(process.env.AMAP_SECURITY_CODE || ''),
   },
 } satisfies UserConfigExport<'webpack5'>;

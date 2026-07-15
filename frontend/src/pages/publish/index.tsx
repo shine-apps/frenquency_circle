@@ -7,6 +7,7 @@ import { useLocationStore } from '@/store/location';
 import { useMatchStore } from '@/store/match';
 import { publishLocation } from '@/services/locations';
 import MapView from '@/components/MapView';
+import H5LocationPicker from '@/components/H5LocationPicker';
 import { reverseGeocode } from '@/utils/amap';
 import { getCurrentLocation } from '@/utils/location';
 import styles from './index.module.scss';
@@ -23,7 +24,7 @@ const RANGE_OPTIONS: Array<{ label: string; value: 1 | 5 | 10 | 30 }> = [
  * 发布定位页。
  *
  * 流程:
- * 1. 顶部地图展示当前定位;"重新定位"按钮触发 chooseLocation(weapp)/ getLocation(H5 兜底)
+ * 1. 顶部地图展示当前定位;"选择位置"按钮触发 chooseLocation(weapp)/ H5LocationPicker(H5 选点)
  * 2. 当前位置卡片展示地址与经纬度
  * 3. 我的兴趣卡片展示 user.tags,点击跳 pages/search 修改
  * 4. 范围 Tab(1/5/10/30km)
@@ -32,8 +33,8 @@ const RANGE_OPTIONS: Array<{ label: string; value: 1 | 5 | 10 | 30 }> = [
  *
  * 平台差异:
  * - weapp:Taro.chooseLocation 直接拿到地址;地图用 Taro 原生 <Map>(腾讯地图)
- * - H5:chooseLocation 不可用,用 Taro.getLocation 拿经纬度 + 高德逆地理编码拿真实地址;
- *   地图用 MapView(高德 JS API)
+ * - H5:chooseLocation 不可用,用 H5LocationPicker 弹层让用户拖动地图选点 + 高德逆地理拿真实地址;
+ *   顶部展示地图用 MapView(高德 JS API)
  */
 const PublishPage: React.FC = () => {
   const user = useUserStore((s) => s.user);
@@ -49,6 +50,8 @@ const PublishPage: React.FC = () => {
   const [rangeKm, setRangeKm] = useState<1 | 5 | 10 | 30>(5);
   const [submitting, setSubmitting] = useState(false);
   const [locating, setLocating] = useState(false);
+  // H5 端地图选点弹层显隐
+  const [pickerVisible, setPickerVisible] = useState(false);
 
   const tagIds = (user?.tags || []).map((t) => t.id);
   const hasTags = tagIds.length > 0;
@@ -76,34 +79,49 @@ const PublishPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** 重新定位:weapp 用 chooseLocation(可选点 + 拿地址),H5 用 getLocation + 高德逆地理 */
+  /**
+   * 重新定位/选择位置:
+   * - weapp:Taro.chooseLocation 原生选点(可选点 + 拿地址)
+   * - H5:打开 H5LocationPicker 地图选点弹层,允许用户拖动选择其他地点
+   */
   const handleRelocate = async (): Promise<void> => {
     if (locating) return;
+    if (process.env.TARO_ENV === 'h5') {
+      // H5 端:打开地图选点弹层(拖动选点 + 逆地理编码)
+      setPickerVisible(true);
+      return;
+    }
+    // weapp:chooseLocation 选点
     setLocating(true);
     try {
-      if (process.env.TARO_ENV === 'weapp') {
-        // chooseLocation 无 type 参数(仅 getLocation 有),不传默认 gcj02
-        const res = await Taro.chooseLocation({});
-        setLatitude(res.latitude);
-        setLongitude(res.longitude);
-        setAddress(res.address || res.name || '已选择位置');
-      } else {
-        // H5 端:getCurrentLocation(高德定位)拿经纬度 + 高德逆地理拿真实地址
-        const res = await getCurrentLocation();
-        setLatitude(res.latitude);
-        setLongitude(res.longitude);
-        const addr = await reverseGeocode(res.latitude, res.longitude);
-        setAddress(addr);
-      }
+      // chooseLocation 无 type 参数(仅 getLocation 有),不传默认 gcj02
+      const res = await Taro.chooseLocation({});
+      setLatitude(res.latitude);
+      setLongitude(res.longitude);
+      setAddress(res.address || res.name || '已选择位置');
     } catch (e) {
-      // 用户取消或授权失败
+      const err = e as Error & { errMsg?: string };
+      // 用户取消静默
+      if (err?.errMsg && /cancel/i.test(err.errMsg)) return;
       Taro.showToast({
-        title: (e as Error).message || '定位失败,请检查授权',
+        title: err?.message || '定位失败,请检查授权',
         icon: 'none',
       });
     } finally {
       setLocating(false);
     }
+  };
+
+  /** H5 选点弹层确认回调 */
+  const handlePickerConfirm = (loc: {
+    latitude: number;
+    longitude: number;
+    address: string;
+  }): void => {
+    setLatitude(loc.latitude);
+    setLongitude(loc.longitude);
+    setAddress(loc.address);
+    setPickerVisible(false);
   };
 
   /** 跳兴趣选择页 */
@@ -172,7 +190,7 @@ const PublishPage: React.FC = () => {
           <View className={styles.mapPlaceholder}>
             <Text className={styles.mapPlaceholderText}>未获取到位置</Text>
             <Text className={styles.mapPlaceholderHint}>
-              点击右下角"重新定位"
+              点击右下角"选择位置"
             </Text>
           </View>
         )}
@@ -184,7 +202,7 @@ const PublishPage: React.FC = () => {
           onClick={handleRelocate}
           className={styles.relocateBtn}
         >
-          重新定位
+          选择位置
         </Button>
       </View>
 
@@ -260,6 +278,17 @@ const PublishPage: React.FC = () => {
           <Text className={styles.footerHint}>请先选择位置</Text>
         )}
       </View>
+
+      {/* ====== H5 端地图选点弹层 ====== */}
+      {process.env.TARO_ENV === 'h5' && (
+        <H5LocationPicker
+          visible={pickerVisible}
+          initialLat={latitude}
+          initialLng={longitude}
+          onConfirm={handlePickerConfirm}
+          onClose={() => setPickerVisible(false)}
+        />
+      )}
     </View>
   );
 };

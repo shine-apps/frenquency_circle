@@ -21,6 +21,14 @@
       })();
       <%= htmlWebpackPlugin.options.script %>
     </script>
+    <!--
+      高德地图 key 注入:运行时由 admin 通过 GET /api/config/amap.js 提供。
+      同步加载(无 async/defer),确保在 Taro bundle 执行前设置好
+      window.__AMAP_KEY__ / window.__AMAP_SECURITY_CODE__,供 utils/amap.ts 读取。
+      本地开发:webpack-dev-server proxy /api → admin:3000,自动同源。
+      生产:H5 与 admin 同源(部署在 /h5/),浏览器直接命中 admin 路由。
+    -->
+    <script src="/api/config/amap.js"></script>
   </head>
   <body>
     <div id="app"></div>

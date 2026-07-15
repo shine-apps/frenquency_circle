@@ -15,6 +15,13 @@ declare global {
     AMap?: any
     /** 高德安全密钥配置,须在 script 加载前设置 */
     _AMapSecurityConfig?: { securityJsCode: string }
+    /**
+     * 运行时注入的高德地图 key / 安全密钥,由 admin 的
+     * GET /api/config/amap.js 端点在 H5 index.html 中同步加载并赋值。
+     * 见 frontend/src/index.html 中的 <script src="/api/config/amap.js">。
+     */
+    __AMAP_KEY__?: string
+    __AMAP_SECURITY_CODE__?: string
   }
 }
 
@@ -35,14 +42,19 @@ export function loadAMap(): Promise<any> {
       return
     }
 
+    // 读取运行时注入的 key / 安全密钥
+    // (由 admin /api/config/amap.js 在 H5 加载阶段写入 window 全局)
+    const amapKey = window.__AMAP_KEY__ || ''
+    const amapSecurityCode = window.__AMAP_SECURITY_CODE__ || ''
+
     // 设置安全密钥(必须在 script 加载前)
     window._AMapSecurityConfig = {
-      securityJsCode: AMAP_SECURITY_CODE,
+      securityJsCode: amapSecurityCode,
     }
 
     const script = document.createElement('script')
     // 加载 2.0 版本,预加载 Geocoder(逆地理)与 Geolocation(定位)插件
-    script.src = `https://webapi.amap.com/maps?v=2.0&key=${AMAP_KEY}&plugin=AMap.Geocoder,AMap.Geolocation`
+    script.src = `https://webapi.amap.com/maps?v=2.0&key=${amapKey}&plugin=AMap.Geocoder,AMap.Geolocation`
     script.async = true
     script.onload = () => {
       if (window.AMap) {

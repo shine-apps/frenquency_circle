@@ -17,9 +17,7 @@ export default {
   // 若部署到不同域(如 m.example.com),把空串换成完整 baseURL 即可。
   defineConstants: {
     API_BASE_URL: JSON.stringify(''),
-    // 高德地图 JS API key + 安全密钥(从 .env 读取,避免硬编码到代码仓库)
-    // 生产环境需在高德控制台为该 Key 配置域名白名单(如 fc.shinehe.cn)
-    AMAP_KEY: JSON.stringify(process.env.AMAP_KEY || ''),
-    AMAP_SECURITY_CODE: JSON.stringify(process.env.AMAP_SECURITY_CODE || ''),
+    // 注:AMAP_KEY / AMAP_SECURITY_CODE 不再在此注入,改为运行时由
+    // admin 的 GET /api/config/amap.js 端点提供(见 frontend/src/index.html)。
   },
 } satisfies UserConfigExport<'webpack5'>;

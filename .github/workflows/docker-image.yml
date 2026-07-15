@@ -119,18 +119,11 @@ jobs:
       # 5. 构建镜像(load 到本地 Docker,供验证步骤使用)
       #    使用 GitHub Actions 缓存加速后续构建
       #
-      #    高德地图 key 通过 BuildKit secret 注入(不在镜像层留痕):
-      #    - 在仓库 Settings → Secrets and variables → Actions 添加:
-      #      AMAP_KEY / AMAP_SECURITY_CODE
-      #    - 下方先生成临时 .env 文件,再以 file: 形式传给 build-push-action
-      #    - PR from fork 无权访问 secrets → key 为空,构建仍成功,仅地图不可用
+      #    注:高德地图 key 已改为运行时注入(由 admin /api/config/amap.js 提供),
+      #    不再通过 BuildKit secret 注入。构建期无需任何 secret,
+      #    PR from fork 也可自由复现构建。
+      #    容器启动时通过 -e AMAP_KEY / -e AMAP_SECURITY_CODE 传入。
       # ============================================================
-      - name: Create temporary .env for AMap secrets
-        run: |
-          printf 'AMAP_KEY=%s\nAMAP_SECURITY_CODE=%s\n' \
-            "${{ secrets.AMAP_KEY }}" \
-            "${{ secrets.AMAP_SECURITY_CODE }}" > /tmp/amap.env
-
       - name: Build Docker image (load for verification)
         id: build
         uses: docker/build-push-action@v6
@@ -142,8 +135,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false
-          secrets: |
-            "amap_env=file:/tmp/amap.env"
 
       # ============================================================
       # 6. 功能验证:启动容器 + 健康检查 + HTTP 探测 + 文件校验
@@ -153,6 +144,11 @@ jobs:
       - name: Verify image (functional test)
         id: verify
         if: ${{ !inputs.skip_verify }}
+        env:
+          # 用 env 传递 secrets,避免 ${{ }} 直接插入脚本(防注入)
+          # PR from fork 无 secrets 访问权限 → 值为空串,验证仍通过(仅 H5 地图不可用)
+          AMAP_KEY: ${{ secrets.AMAP_KEY }}
+          AMAP_SECURITY_CODE: ${{ secrets.AMAP_SECURITY_CODE }}
         run: |
           set -euo pipefail
 
@@ -167,6 +163,8 @@ jobs:
             -e AUTH_SECRET="$AUTH_SECRET" \
             -e AUTH_TRUST_HOST="true" \
             -e PORT=3000 \
+            -e AMAP_KEY="$AMAP_KEY" \
+            -e AMAP_SECURITY_CODE="$AMAP_SECURITY_CODE" \
             frenqency-circle:ci-test
           echo "::endgroup::"
 
@@ -218,6 +216,22 @@ jobs:
             exit 1
           fi
           echo "✅ HTTP 200 — /api/health 正常响应"
+
+          # 探测 /api/config/amap.js(运行时注入高德地图 key 的端点)
+          # 应返回 200 + application/javascript,且 body 包含 window.__AMAP_KEY__
+          AMAP_CODE=$(curl -s -o /tmp/amap-config.js -w "%{http_code}" http://localhost:3000/api/config/amap.js || echo "000")
+          if [ "$AMAP_CODE" != "200" ]; then
+            echo "::error::/api/config/amap.js 检查失败: 期望 200, 实际 $AMAP_CODE"
+            docker logs verify-app 2>&1 || true
+            docker rm -f verify-app 2>/dev/null || true
+            exit 1
+          fi
+          if ! grep -q 'window.__AMAP_KEY__' /tmp/amap-config.js; then
+            echo "::error::/api/config/amap.js 响应未包含 window.__AMAP_KEY__"
+            docker rm -f verify-app 2>/dev/null || true
+            exit 1
+          fi
+          echo "✅ HTTP 200 — /api/config/amap.js 正常响应(window.__AMAP_KEY__ 已注入)"
           echo "::endgroup::"
 
           echo "::group::文件校验"
@@ -324,8 +338,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           provenance: false
-          secrets: |
-            "amap_env=file:/tmp/amap.env"
 
       # ============================================================
       # 10. 生成状态摘要(显示在 Actions 运行页面)

@@ -3,6 +3,7 @@ import { View, Text, ScrollView } from '@tarojs/components';
 import { Avatar, Tag, Button } from '@nutui/nutui-react-taro';
 import Taro from '@tarojs/taro';
 import CustomTabBar from '@/components/CustomTabBar';
+import H5LocationPicker from '@/components/H5LocationPicker';
 import { useUserStore } from '@/store/user';
 import { useMatchStore } from '@/store/match';
 import { matchPeople, matchCircles } from '@/services/locations';
@@ -78,6 +79,8 @@ const IndexPage: React.FC = () => {
   const [rangeKm, setRangeKm] = useState<number>(5);
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<MixedItem[]>([]);
+  // H5 端地图选点弹层显隐(用于切换位置)
+  const [pickerVisible, setPickerVisible] = useState(false);
 
   const tagIds = (user?.tags || []).map((t) => t.id);
 
@@ -176,6 +179,49 @@ const IndexPage: React.FC = () => {
     }
   };
 
+  /** 切换位置:weapp 用 chooseLocation,H5 打开地图选点弹层 */
+  const handleChangeLocation = async (): Promise<void> => {
+    try {
+      if (process.env.TARO_ENV === 'weapp') {
+        const res = await Taro.chooseLocation({});
+        setLatitude(res.latitude);
+        setLongitude(res.longitude);
+        setAddress(res.address || res.name || '已选择位置');
+        setLocationDenied(false);
+        if (tagIds.length > 0) {
+          loadAll(res.latitude, res.longitude, rangeKm);
+        }
+      } else {
+        // H5:打开地图选点弹层(拖动选点 + 逆地理编码)
+        setPickerVisible(true);
+      }
+    } catch (e) {
+      const err = e as Error & { errMsg?: string };
+      // 用户取消静默
+      if (err?.errMsg && /cancel/i.test(err.errMsg)) return;
+      Taro.showToast({
+        title: err?.message || '选择位置失败',
+        icon: 'none',
+      });
+    }
+  };
+
+  /** H5 选点弹层确认回调 */
+  const handlePickerConfirm = (loc: {
+    latitude: number;
+    longitude: number;
+    address: string;
+  }): void => {
+    setLatitude(loc.latitude);
+    setLongitude(loc.longitude);
+    setAddress(loc.address);
+    setPickerVisible(false);
+    setLocationDenied(false);
+    if (tagIds.length > 0) {
+      loadAll(loc.latitude, loc.longitude, rangeKm);
+    }
+  };
+
   /** 跳兴趣搜索页 */
   const handleSearchClick = (): void => {
     Taro.navigateTo({ url: '/pages/search/index' });
@@ -250,23 +296,45 @@ const IndexPage: React.FC = () => {
       {/* ====== 定位卡片 / 授权引导 ====== */}
       {locationDenied ? (
         <View className={styles.guideCard}>
-          <Text className={styles.guideTitle}>请授权位置信息以发现附近同频</Text>
-          <Button
-            type="primary"
-            size="small"
-            shape="round"
-            onClick={handleOpenSetting}
-          >
-            去授权
-          </Button>
+          <Text className={styles.guideTitle}>
+            {process.env.TARO_ENV === 'h5'
+              ? '无法获取定位,可手动选择位置'
+              : '请授权位置信息以发现附近同频'}
+          </Text>
+          {process.env.TARO_ENV === 'h5' ? (
+            <Button
+              size="small"
+              shape="round"
+              onClick={handleChangeLocation}
+            >
+              手动选择位置
+            </Button>
+          ) : (
+            <Button
+              type="primary"
+              size="small"
+              shape="round"
+              onClick={handleOpenSetting}
+            >
+              去授权
+            </Button>
+          )}
         </View>
       ) : (
-        <View className={styles.locationCard} onClick={handleLocationCardClick}>
-          <View className={styles.locationInfo}>
-            <Text className={styles.locationLabel}>当前位置</Text>
+        <View className={styles.locationCard}>
+          <View className={styles.locationInfo} onClick={handleChangeLocation}>
+            <View className={styles.locationLabelRow}>
+              <Text className={styles.locationLabel}>当前位置</Text>
+              <Text className={styles.switchHint}>切换 ›</Text>
+            </View>
             <Text className={styles.locationAddress}>{address}</Text>
           </View>
-          <Text className={styles.locationArrow}>发布 ›</Text>
+          <Text
+            className={styles.locationArrow}
+            onClick={handleLocationCardClick}
+          >
+            发布 ›
+          </Text>
         </View>
       )}
 
@@ -390,6 +458,17 @@ const IndexPage: React.FC = () => {
 
       {/* ====== 底部 TabBar ====== */}
       <CustomTabBar />
+
+      {/* ====== H5 端地图选点弹层(用于切换位置) ====== */}
+      {process.env.TARO_ENV === 'h5' && (
+        <H5LocationPicker
+          visible={pickerVisible}
+          initialLat={latitude}
+          initialLng={longitude}
+          onConfirm={handlePickerConfirm}
+          onClose={() => setPickerVisible(false)}
+        />
+      )}
     </View>
   );
 };

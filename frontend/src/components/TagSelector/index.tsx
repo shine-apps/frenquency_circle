@@ -258,7 +258,7 @@ const TagSelector: React.FC<TagSelectorProps> = ({
         <View className={styles.categoryWrap}>
           <View className={styles.sectionTitle}>
             <Text className={styles.sectionTitleText}>六大类兴趣</Text>
-            <Text className={styles.sectionTitleHint}>点击搜索框查找标签</Text>
+            <Text className={styles.sectionTitleHint}>点击标签快速搜索</Text>
           </View>
           {categories.length === 0 && (
             <View className={styles.empty}>
@@ -281,7 +281,11 @@ const TagSelector: React.FC<TagSelectorProps> = ({
                 {expanded && node.subCategories.length > 0 && (
                   <View className={styles.subCategories}>
                     {node.subCategories.map((sub) => (
-                      <Text key={sub} className={styles.subCategory}>
+                      <Text
+                        key={sub}
+                        className={styles.subCategory}
+                        onClick={() => setQuery(sub)}
+                      >
                         {sub}
                       </Text>
                     ))}

@@ -193,6 +193,11 @@
   background-color: $color-bg-hover;
   border-radius: $radius-xs;
   padding: 4rpx $spacing-sm;
+  cursor: pointer;
+
+  &:active {
+    opacity: 0.7;
+  }
 }
 
 // ====== 空状态 ======

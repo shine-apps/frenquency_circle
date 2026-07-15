@@ -67,10 +67,6 @@
   background-color: $color-bg-card;
   border-radius: $radius-md;
   box-shadow: $shadow-card;
-
-  &:active {
-    background-color: $color-bg-hover;
-  }
 }
 
 .locationInfo {
@@ -79,11 +75,29 @@
   gap: 4rpx;
   min-width: 0;
   flex: 1;
+  padding: $spacing-xs $spacing-xs;
+  margin: -$spacing-xs 0;
+  border-radius: $radius-sm;
+
+  &:active {
+    opacity: 0.7;
+  }
+}
+
+.locationLabelRow {
+  display: flex;
+  align-items: center;
+  gap: $spacing-xs;
 }
 
 .locationLabel {
   font-size: $font-size-xs;
   color: $color-text-tertiary;
+}
+
+.switchHint {
+  font-size: $font-size-xs;
+  color: $color-primary;
 }
 
 .locationAddress {
@@ -97,7 +111,12 @@
   font-size: $font-size-sm;
   color: $color-primary;
   flex-shrink: 0;
-  padding-left: $spacing-sm;
+  padding: $spacing-xs $spacing-xs;
+  border-radius: $radius-sm;
+
+  &:active {
+    opacity: 0.7;
+  }
 }
 
 // ====== 引导卡片(授权 / 选兴趣) ======

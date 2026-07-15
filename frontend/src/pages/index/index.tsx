@@ -6,6 +6,7 @@ import CustomTabBar from '@/components/CustomTabBar';
 import { useUserStore } from '@/store/user';
 import { useMatchStore } from '@/store/match';
 import { matchPeople, matchCircles } from '@/services/locations';
+import { getCurrentLocation } from '@/utils/location';
 import styles from './index.module.scss';
 
 /** 范围 Tab 选项 */
@@ -138,7 +139,7 @@ const IndexPage: React.FC = () => {
   // ====== 进入时获取位置 ======
   Taro.useDidShow(() => {
     if (!latitude || !longitude) {
-      Taro.getLocation({ type: 'gcj02' })
+      getCurrentLocation()
         .then((res) => {
           setLatitude(res.latitude);
           setLongitude(res.longitude);
@@ -146,7 +147,8 @@ const IndexPage: React.FC = () => {
           setLocationDenied(false);
           loadAll(res.latitude, res.longitude, rangeKm);
         })
-        .catch(() => {
+        .catch((err) => {
+          console.warn('[index] getCurrentLocation failed:', err?.message || err);
           setLocationDenied(true);
         });
     } else {
@@ -162,13 +164,14 @@ const IndexPage: React.FC = () => {
   const handleOpenSetting = async (): Promise<void> => {
     try {
       await Taro.openSetting();
-      const res = await Taro.getLocation({ type: 'gcj02' });
+      const res = await getCurrentLocation();
       setLatitude(res.latitude);
       setLongitude(res.longitude);
       setAddress('已定位');
       setLocationDenied(false);
       loadAll(res.latitude, res.longitude, rangeKm);
-    } catch {
+    } catch (err) {
+      console.warn('[index] handleOpenSetting failed:', (err as Error)?.message || err);
       Taro.showToast({ title: '授权失败,请稍后重试', icon: 'none' });
     }
   };

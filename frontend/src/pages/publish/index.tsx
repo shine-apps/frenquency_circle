@@ -8,6 +8,7 @@ import { useMatchStore } from '@/store/match';
 import { publishLocation } from '@/services/locations';
 import MapView from '@/components/MapView';
 import { reverseGeocode } from '@/utils/amap';
+import { getCurrentLocation } from '@/utils/location';
 import styles from './index.module.scss';
 
 /** 可选匹配范围(公里),与后端 LocationPublishInput.rangeKm 一致 */
@@ -53,10 +54,10 @@ const PublishPage: React.FC = () => {
   const hasTags = tagIds.length > 0;
   const hasLocation = latitude !== null && longitude !== null;
 
-  // 进入时若无位置,自动尝试一次 getLocation(静默,失败不打扰)
+  // 进入时若无位置,自动尝试一次定位(静默,失败不打扰)
   useEffect(() => {
     if (latitude === null || longitude === null) {
-      Taro.getLocation({ type: 'gcj02' })
+      getCurrentLocation()
         .then(async (res) => {
           setLatitude(res.latitude);
           setLongitude(res.longitude);
@@ -68,8 +69,8 @@ const PublishPage: React.FC = () => {
             setAddress((prev) => prev ?? '已定位');
           }
         })
-        .catch(() => {
-          // 静默:用户可点"重新定位"按钮手动授权
+        .catch((err) => {
+          console.warn('[publish] getCurrentLocation failed:', err?.message || err);
         });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -87,8 +88,8 @@ const PublishPage: React.FC = () => {
         setLongitude(res.longitude);
         setAddress(res.address || res.name || '已选择位置');
       } else {
-        // H5 端:getLocation 拿经纬度 + 高德逆地理拿真实地址
-        const res = await Taro.getLocation({ type: 'gcj02' });
+        // H5 端:getCurrentLocation(高德定位)拿经纬度 + 高德逆地理拿真实地址
+        const res = await getCurrentLocation();
         setLatitude(res.latitude);
         setLongitude(res.longitude);
         const addr = await reverseGeocode(res.latitude, res.longitude);

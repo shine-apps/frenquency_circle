@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text } from '@tarojs/components';
 import { Popup, Button } from '@nutui/nutui-react-taro';
-import Taro from '@tarojs/taro';
 import { loadAMap, reverseGeocode } from '@/utils/amap';
+import { getCurrentLocation } from '@/utils/location';
 import styles from './index.module.scss';
 
 /**
@@ -65,7 +65,7 @@ const H5LocationPicker: React.FC<H5LocationPickerProps> = ({
         let lng = initialLng;
         if (lat === null || lng === null || lat === undefined || lng === undefined) {
           try {
-            const res = await Taro.getLocation({ type: 'gcj02' });
+            const res = await getCurrentLocation();
             lat = res.latitude;
             lng = res.longitude;
           } catch {

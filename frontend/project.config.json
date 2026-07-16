@@ -1,9 +1,9 @@
 {
   "miniprogramRoot": "dist/",
   "cloudfunctionRoot": "cloudfunctions/",
-  "projectname": "taro_template",
-  "description": "taro_template",
-  "appid": "touristappid",
+  "projectname": "freqency_circle",
+  "description": "freqency_circle",
+  "appid": "wxb4498858afb9d4bc",
   "setting": {
     "urlCheck": true,
     "es6": false,

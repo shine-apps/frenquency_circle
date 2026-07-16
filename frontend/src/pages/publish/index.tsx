@@ -52,6 +52,28 @@ const PublishPage: React.FC = () => {
   const [locating, setLocating] = useState(false);
   // H5 端地图选点弹层显隐
   const [pickerVisible, setPickerVisible] = useState(false);
+  // 发布类型 Tab:location 定位发布 / circle 圈子发布
+  const [publishType, setPublishType] = useState<'location' | 'circle'>('location');
+
+  /** 切换到"发布圈子":TEACHER 直接跳转,USER 弹窗提示需提交认证材料 */
+  const handleSwitchToCircle = (): void => {
+    if (user?.role === 'TEACHER') {
+      Taro.navigateTo({ url: '/pages/create-circle/index' });
+      return;
+    }
+    // USER(或其他非 TEACHER 角色):弹窗提示需要提交认证材料
+    Taro.showModal({
+      title: '教师认证',
+      content:
+        '创建圈子需要提交教师认证材料(证书照片或视频),管理员审核通过后圈子才能上线。是否继续?',
+      confirmText: '去创建',
+      success: (res) => {
+        if (res.confirm) {
+          Taro.navigateTo({ url: '/pages/create-circle/index' });
+        }
+      },
+    });
+  };
 
   const tagIds = (user?.tags || []).map((t) => t.id);
   const hasTags = tagIds.length > 0;
@@ -177,6 +199,30 @@ const PublishPage: React.FC = () => {
 
   return (
     <View className={styles.page}>
+      {/* ====== 0. 发布类型 Tab ====== */}
+      <View className={styles.typeTabs}>
+        <View
+          className={`${styles.typeItem} ${publishType === 'location' ? styles.typeItemActive : ''}`}
+          onClick={() => setPublishType('location')}
+        >
+          <Text
+            className={publishType === 'location' ? styles.typeItemTextActive : styles.typeItemText}
+          >
+            发布定位
+          </Text>
+        </View>
+        <View
+          className={`${styles.typeItem} ${publishType === 'circle' ? styles.typeItemActive : ''}`}
+          onClick={handleSwitchToCircle}
+        >
+          <Text
+            className={publishType === 'circle' ? styles.typeItemTextActive : styles.typeItemText}
+          >
+            发布圈子
+          </Text>
+        </View>
+      </View>
+
       {/* ====== 1. 顶部地图 ====== */}
       <View className={styles.mapWrap}>
         {hasLocation ? (

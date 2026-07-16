@@ -150,7 +150,7 @@ declare interface CircleDTO {
   activityTime: string | null
   maxMembers: number | null
   memberCount: number
-  /** 圈子状态:active / offline / deleted / violated */
+  /** 圈子状态:active / offline / deleted / violated / pending / rejected */
   status: string
   createdAt: string
   updatedAt: string
@@ -173,6 +173,15 @@ declare interface LocationPublishInput {
   rangeKm: 1 | 5 | 10 | 30
 }
 
+/** 认证材料文件项(与后端 CertificationFile 对齐) */
+declare interface CertificationFile {
+  url: string
+  key: string
+  size: number
+  mimeType: string
+  originalName: string
+}
+
 /** 创建圈子请求体 */
 declare interface CreateCircleInput {
   title: string
@@ -185,6 +194,8 @@ declare interface CreateCircleInput {
   wechat?: string
   activityTime?: string
   maxMembers?: number
+  /** 教师认证材料(USER 角色创建圈子时必填,1-5 个文件) */
+  certificationFiles?: CertificationFile[]
 }
 
 /** 更新圈子请求体(全部可选,与后端 PUT schema 对齐:不含 latitude/longitude/address) */

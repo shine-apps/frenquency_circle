@@ -8,6 +8,8 @@ import {
   PowerOffIcon,
   AlertTriangleIcon,
   RotateCcwIcon,
+  CheckIcon,
+  XIcon,
 } from "lucide-react"
 
 import {
@@ -20,11 +22,13 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -34,22 +38,23 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import type { CircleDTO, IResponse } from "@/types/api"
+import type { CircleDTO, CertificationFile, IResponse } from "@/types/api"
 
-/** 圈子列表项(含创建者名称) */
+/** 圈子列表项(含创建者名称和认证材料) */
 type CircleListItem = CircleDTO & {
   creatorName: string
+  certificationFiles?: CertificationFile[] | null
 }
 
 /** 状态筛选 Tab 值 */
-type StatusFilter = "all" | "active" | "offline" | "violated" | "deleted"
+type StatusFilter = "all" | "active" | "offline" | "violated" | "deleted" | "pending" | "rejected"
 
 /** 状态 Badge variant 映射 */
 function statusBadgeVariant(
   status: string
 ): "default" | "secondary" | "destructive" {
   if (status === "active") return "default"
-  if (status === "deleted") return "secondary"
+  if (status === "deleted" || status === "pending") return "secondary"
   return "destructive"
 }
 
@@ -59,6 +64,8 @@ function statusLabel(status: string): string {
   if (status === "offline") return "已下线"
   if (status === "deleted") return "已删除"
   if (status === "violated") return "违规"
+  if (status === "pending") return "待审核"
+  if (status === "rejected") return "未通过"
   return status
 }
 
@@ -67,7 +74,7 @@ function statusLabel(status: string): string {
  */
 async function patchCircle(
   circleId: string,
-  body: { status: "active" | "offline" | "violated" }
+  body: { status: "active" | "offline" | "violated" | "rejected"; reviewNote?: string }
 ): Promise<boolean> {
   const res = await fetch(`/api/admin/circles/${circleId}`, {
     method: "PATCH",
@@ -85,6 +92,9 @@ export function CirclesTable({ items }: { items: CircleListItem[] }) {
   const [filter, setFilter] = useState<StatusFilter>("all")
   const [selected, setSelected] = useState<CircleListItem | null>(null)
   const [pending, setPending] = useState(false)
+  // 驳回弹窗状态
+  const [rejectTarget, setRejectTarget] = useState<CircleListItem | null>(null)
+  const [reviewNote, setReviewNote] = useState("")
 
   const filtered =
     filter === "all" ? items : items.filter((c) => c.status === filter)
@@ -95,6 +105,8 @@ export function CirclesTable({ items }: { items: CircleListItem[] }) {
     offline: items.filter((c) => c.status === "offline").length,
     violated: items.filter((c) => c.status === "violated").length,
     deleted: items.filter((c) => c.status === "deleted").length,
+    pending: items.filter((c) => c.status === "pending").length,
+    rejected: items.filter((c) => c.status === "rejected").length,
   }
 
   function refresh() {
@@ -105,12 +117,27 @@ export function CirclesTable({ items }: { items: CircleListItem[] }) {
 
   async function handleAction(
     circleId: string,
-    status: "active" | "offline" | "violated"
+    status: "active" | "offline" | "violated" | "rejected",
+    note?: string
   ) {
     setPending(true)
-    const ok = await patchCircle(circleId, { status })
+    const ok = await patchCircle(circleId, { status, reviewNote: note })
     setPending(false)
     if (ok) refresh()
+  }
+
+  /** 打开驳回弹窗 */
+  function openRejectDialog(c: CircleListItem) {
+    setRejectTarget(c)
+    setReviewNote("")
+  }
+
+  /** 确认驳回 */
+  async function confirmReject() {
+    if (!rejectTarget) return
+    await handleAction(rejectTarget.id, "rejected", reviewNote || undefined)
+    setRejectTarget(null)
+    setReviewNote("")
   }
 
   return (
@@ -121,7 +148,9 @@ export function CirclesTable({ items }: { items: CircleListItem[] }) {
       >
         <TabsList>
           <TabsTrigger value="all">全部 ({counts.all})</TabsTrigger>
+          <TabsTrigger value="pending">待审核 ({counts.pending})</TabsTrigger>
           <TabsTrigger value="active">活跃 ({counts.active})</TabsTrigger>
+          <TabsTrigger value="rejected">未通过 ({counts.rejected})</TabsTrigger>
           <TabsTrigger value="offline">已下线 ({counts.offline})</TabsTrigger>
           <TabsTrigger value="violated">违规 ({counts.violated})</TabsTrigger>
           <TabsTrigger value="deleted">已删除 ({counts.deleted})</TabsTrigger>
@@ -178,6 +207,24 @@ export function CirclesTable({ items }: { items: CircleListItem[] }) {
                           <EyeIcon />
                           查看
                         </DropdownMenuItem>
+                        {c.status === "pending" ? (
+                          <>
+                            <DropdownMenuItem
+                              onClick={() => handleAction(c.id, "active")}
+                              disabled={pending}
+                            >
+                              <CheckIcon />
+                              审核通过
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => openRejectDialog(c)}
+                              disabled={pending}
+                            >
+                              <XIcon />
+                              驳回
+                            </DropdownMenuItem>
+                          </>
+                        ) : null}
                         {c.status === "active" ? (
                           <>
                             <DropdownMenuItem
@@ -200,7 +247,7 @@ export function CirclesTable({ items }: { items: CircleListItem[] }) {
                             </DropdownMenuItem>
                           </>
                         ) : null}
-                        {c.status === "offline" || c.status === "violated" ? (
+                        {c.status === "offline" || c.status === "violated" || c.status === "rejected" ? (
                           <DropdownMenuItem
                             onClick={() => handleAction(c.id, "active")}
                             disabled={pending}
@@ -229,6 +276,7 @@ export function CirclesTable({ items }: { items: CircleListItem[] }) {
         </Table>
       </div>
 
+      {/* 圈子详情弹窗 */}
       <Dialog
         open={selected !== null}
         onOpenChange={(open) => !open && setSelected(null)}
@@ -269,8 +317,67 @@ export function CirclesTable({ items }: { items: CircleListItem[] }) {
               <dd className="col-span-2">
                 {selected.createdAt.slice(0, 10)}
               </dd>
+              {/* 认证材料展示 */}
+              {selected.certificationFiles && selected.certificationFiles.length > 0 ? (
+                <>
+                  <dt className="text-muted-foreground">认证材料</dt>
+                  <dd className="col-span-2">
+                    <div className="flex flex-wrap gap-2">
+                      {selected.certificationFiles.map((f, i) => (
+                        <a
+                          key={i}
+                          href={f.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs hover:bg-muted"
+                        >
+                          {f.mimeType.startsWith("image/") ? "🖼️" : "🎬"}
+                          {f.originalName}
+                        </a>
+                      ))}
+                    </div>
+                  </dd>
+                </>
+              ) : null}
             </dl>
           ) : null}
+        </DialogContent>
+      </Dialog>
+
+      {/* 驳回弹窗 */}
+      <Dialog
+        open={rejectTarget !== null}
+        onOpenChange={(open) => !open && setRejectTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>驳回圈子</DialogTitle>
+            <DialogDescription>
+              确定驳回「{rejectTarget?.title}」?可填写驳回原因(可选)。
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            placeholder="驳回原因(可选)"
+            value={reviewNote}
+            onChange={(e) => setReviewNote(e.target.value)}
+            maxLength={500}
+          />
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setRejectTarget(null)}
+              disabled={pending}
+            >
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmReject}
+              disabled={pending}
+            >
+              确认驳回
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

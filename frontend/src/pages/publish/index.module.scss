@@ -10,6 +10,43 @@
   gap: $spacing-md;
 }
 
+// ====== 发布类型 Tab ======
+.typeTabs {
+  display: flex;
+  gap: $spacing-sm;
+}
+
+.typeItem {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-sm 0;
+  border-radius: $radius-sm;
+  background-color: $color-bg-hover;
+  border: 2rpx solid transparent;
+
+  &:active {
+    opacity: 0.8;
+  }
+}
+
+.typeItemActive {
+  background-color: rgba(22, 93, 255, 0.08);
+  border-color: $color-primary;
+}
+
+.typeItemText {
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+}
+
+.typeItemTextActive {
+  font-size: $font-size-md;
+  color: $color-primary;
+  font-weight: $font-weight-medium;
+}
+
 // ====== 地图 ======
 .mapWrap {
   position: relative;

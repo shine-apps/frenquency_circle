@@ -242,12 +242,14 @@ export type NewUserTag = typeof userTags.$inferInsert
 
 /**
  * 圈子状态字面量联合:
+ * - `pending` 待审核(新建后默认,管理员审核通过前不可见)
  * - `active` 活跃(可被匹配)
  * - `offline` 创建者手动下线
  * - `deleted` 软删除(不再出现在匹配结果)
  * - `violated` 管理员下线(违规)
+ * - `rejected` 审核未通过
  */
-export const CIRCLE_STATUSES = ["active", "offline", "deleted", "violated"] as const
+export const CIRCLE_STATUSES = ["active", "offline", "deleted", "violated", "pending", "rejected"] as const
 export type CircleStatus = (typeof CIRCLE_STATUSES)[number]
 
 /**
@@ -360,6 +362,58 @@ export const circleMembers = pgTable(
 
 export type CircleMember = typeof circleMembers.$inferSelect
 export type NewCircleMember = typeof circleMembers.$inferInsert
+
+/**
+ * 教师认证申请状态字面量联合:
+ * - `pending` 待审核
+ * - `approved` 已通过(用户已升级为 TEACHER)
+ * - `rejected` 已驳回
+ */
+export const TEACHER_APPLICATION_STATUSES = ["pending", "approved", "rejected"] as const
+export type TeacherApplicationStatus = (typeof TEACHER_APPLICATION_STATUSES)[number]
+
+/**
+ * 教师认证申请表。
+ * USER 角色创建圈子时同步创建一条申请,附带认证材料文件 URL 列表。
+ * 管理员审核圈子时一并处理:通过则升级用户为 TEACHER。
+ */
+export const teacherApplications = pgTable(
+  "teacher_applications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** 触发此次申请的圈子 ID */
+    circleId: uuid("circle_id")
+      .notNull()
+      .references(() => circles.id, { onDelete: "cascade" }),
+    /** 认证材料文件列表(JSONB 数组,每项含 url/key/size/mimeType/originalName) */
+    files: jsonb("files").notNull(),
+    status: text("status").notNull().default("pending"),
+    /** 审核人(可空) */
+    reviewerId: uuid("reviewer_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    /** 审核备注(驳回原因等) */
+    reviewNote: text("review_note"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    userIdx: index("teacher_applications_user_idx").on(table.userId),
+    circleIdx: index("teacher_applications_circle_idx").on(table.circleId),
+    statusIdx: index("teacher_applications_status_idx").on(table.status),
+  })
+)
+
+export type TeacherApplication = typeof teacherApplications.$inferSelect
+export type NewTeacherApplication = typeof teacherApplications.$inferInsert
 
 /**
  * 用户定位发布记录。

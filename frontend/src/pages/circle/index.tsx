@@ -194,6 +194,26 @@ const CirclePage: React.FC = () => {
   return (
     <View className={styles.page}>
       <ScrollView scrollY className={styles.scroll}>
+        {/* ====== 0. 状态横幅(仅 pending / rejected 展示) ====== */}
+        {circle.status === 'pending' && (
+          <View
+            className={`${styles.statusBanner} ${styles.statusBannerWarning}`}
+          >
+            <Text className={styles.statusBannerText}>
+              该圈子正在审核中,暂不对外公开。审核通过后将自动上线。
+            </Text>
+          </View>
+        )}
+        {circle.status === 'rejected' && (
+          <View
+            className={`${styles.statusBanner} ${styles.statusBannerError}`}
+          >
+            <Text className={styles.statusBannerText}>
+              该圈子审核未通过。可修改信息后联系管理员重新审核。
+            </Text>
+          </View>
+        )}
+
         {/* ====== 1. 标题 + 标签 ====== */}
         <View className={styles.header}>
           <Text className={styles.title}>{circle.title}</Text>

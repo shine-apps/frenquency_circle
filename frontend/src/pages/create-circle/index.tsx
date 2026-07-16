@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, ScrollView } from '@tarojs/components';
+import React, { useMemo, useRef, useState } from 'react';
+import { View, Text, ScrollView, Image } from '@tarojs/components';
 import { Input, TextArea, Button } from '@nutui/nutui-react-taro';
 import Taro, { useDidShow, useRouter } from '@tarojs/taro';
 import TagSelector from '@/components/TagSelector';
@@ -9,7 +9,7 @@ import {
   getCircle,
   updateCircle,
 } from '@/services/circles';
-import { updateProfile } from '@/services/auth';
+import { uploadFile } from '@/services/upload';
 import { useUserStore } from '@/store/user';
 import styles from './index.module.scss';
 
@@ -24,6 +24,9 @@ const MAX_MEMBERS_MIN = 1;
 const MAX_MEMBERS_MAX = 999;
 /** 手机号校验(11 位) */
 const PHONE_RE = /^1\d{10}$/;
+/** 教师认证材料数量限制(USER 角色新建圈子时必填) */
+const CERT_FILES_MIN = 1;
+const CERT_FILES_MAX = 5;
 
 /**
  * 创建/编辑圈子页。
@@ -33,11 +36,12 @@ const PHONE_RE = /^1\d{10}$/;
  * - `/pages/create-circle/index?id=xxx` 编辑模式:进入时调 getCircle 预填表单
  *
  * 提交流程:
- * 1. 若 `useUserStore.user.role !== 'TEACHER'`:先调 updateProfile({ role: 'TEACHER' }) 升级
- *    编辑模式理论上不会进入此分支(创建者必然已是 TEACHER),但仍兜底处理
- * 2. 新建模式调 createCircle,编辑模式调 updateCircle
+ * 1. 新建模式调 createCircle,编辑模式调 updateCircle
  *    注意:UpdateCircleInput 不含 latitude/longitude/address(后端 PUT schema 不允许改位置),
  *    提交时排除这三个字段;若用户未重新选位置,使用原值
+ * 2. USER 角色新建时必须上传教师认证材料(1-5 个图片/视频),随 createCircle 一并提交,
+ *    后端同步创建 teacher_application 记录;圈子 status=pending,管理员审核通过后
+ *    自动升级用户为 TEACHER 并把圈子置为 active
  * 3. 成功 Taro.redirectTo 到圈子详情页(避免返回时回到创建页)
  *
  * 简化:
@@ -48,11 +52,12 @@ const PHONE_RE = /^1\d{10}$/;
 const CreateCirclePage: React.FC = () => {
   const router = useRouter();
   const user = useUserStore((s) => s.user);
-  const setProfile = useUserStore((s) => s.setProfile);
 
   // 编辑模式圈子 ID(无则为新建)
   const editId: string = (router?.params?.id as string) || '';
   const isEdit: boolean = !!editId;
+  // 编辑模式 fetch 防重入标志(避免 useDidShow 在 fetch 失败后反复触发)
+  const hasFetchedRef = useRef(false);
 
   // ====== 表单状态 ======
   const [title, setTitle] = useState('');
@@ -72,6 +77,9 @@ const CreateCirclePage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   // H5 端地图选点弹层显隐
   const [pickerVisible, setPickerVisible] = useState(false);
+  // USER 角色认证材料(仅新建模式 + USER 角色使用)
+  const [certificationFiles, setCertificationFiles] = useState<CertificationFile[]>([]);
+  const [uploadingCert, setUploadingCert] = useState(false);
 
   /** 拉取圈子详情用于编辑预填 */
   const fetchForEdit = async (id: string): Promise<void> => {
@@ -105,7 +113,14 @@ const CreateCirclePage: React.FC = () => {
 
   // 进入时若是编辑模式,拉取详情预填
   useDidShow(() => {
-    if (isEdit && !title && !loading) {
+    // 未登录守卫:与 pages/profile 行为对称
+    if (!useUserStore.getState().isLoggedIn) {
+      Taro.reLaunch({ url: '/pages/login/index' });
+      return;
+    }
+    // 编辑模式:仅当未拉取过时触发,避免 useDidShow 反复请求
+    if (isEdit && !hasFetchedRef.current) {
+      hasFetchedRef.current = true;
       void fetchForEdit(editId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -175,6 +190,14 @@ const CreateCirclePage: React.FC = () => {
       (maxMembersNum as number) >= MAX_MEMBERS_MIN &&
       (maxMembersNum as number) <= MAX_MEMBERS_MAX);
 
+  // 教师认证材料(USER 新建模式必填 1-5 个)
+  const isUser: boolean = user?.role === 'USER';
+  const needCert: boolean = isUser && !isEdit;
+  const certValid: boolean =
+    !needCert ||
+    (certificationFiles.length >= CERT_FILES_MIN &&
+      certificationFiles.length <= CERT_FILES_MAX);
+
   // 表单整体可提交
   const canSubmit: boolean =
     titleValid &&
@@ -184,6 +207,7 @@ const CreateCirclePage: React.FC = () => {
     hasContact &&
     phoneValid &&
     maxMembersValid &&
+    certValid &&
     !submitting;
 
   // 错误提示(用于按钮下方展示)
@@ -192,28 +216,86 @@ const CreateCirclePage: React.FC = () => {
   const maxMembersErr: string = !maxMembersValid
     ? `人数上限范围 ${MAX_MEMBERS_MIN}-${MAX_MEMBERS_MAX}`
     : '';
+  const certErr: string =
+    needCert && certificationFiles.length < CERT_FILES_MIN
+      ? `请至少上传 ${CERT_FILES_MIN} 个认证材料`
+      : '';
+
+  /** 选择认证材料(图片或视频),逐个上传 */
+  const handlePickCert = async (): Promise<void> => {
+    if (uploadingCert) return;
+    const remaining = CERT_FILES_MAX - certificationFiles.length;
+    if (remaining <= 0) {
+      Taro.showToast({ title: `最多 ${CERT_FILES_MAX} 个文件`, icon: 'none' });
+      return;
+    }
+    try {
+      const res = await Taro.chooseMedia({
+        count: remaining,
+        mediaType: ['image', 'video'],
+        sourceType: ['album', 'camera'],
+        sizeType: ['compressed'],
+        maxDuration: 60,
+        camera: 'back',
+      });
+      if (!res.tempFiles?.length) return;
+      setUploadingCert(true);
+      // 逐个上传,失败则跳过该文件并提示
+      const uploaded: CertificationFile[] = [];
+      for (const f of res.tempFiles) {
+        try {
+          const file: string | File = f.originalFileObj ?? f.tempFilePath;
+          const name =
+            (f.originalFileObj && f.originalFileObj.name) ||
+            f.tempFilePath ||
+            `cert-${Date.now()}`;
+          const result = await uploadFile({ file, name, purpose: 'generic' });
+          uploaded.push({
+            url: result.url,
+            key: result.key,
+            size: result.size,
+            mimeType: result.mimeType,
+            originalName: result.originalName,
+          });
+        } catch (e) {
+          // 单个文件失败不中断,继续上传其余
+          console.warn('[create-circle] cert upload failed:', e);
+        }
+      }
+      if (uploaded.length === 0) {
+        Taro.showToast({ title: '上传失败,请重试', icon: 'none' });
+        return;
+      }
+      setCertificationFiles((prev) =>
+        [...prev, ...uploaded].slice(0, CERT_FILES_MAX)
+      );
+      Taro.showToast({
+        title: `已上传 ${uploaded.length} 个文件`,
+        icon: 'success',
+      });
+    } catch (e) {
+      const err = e as Error & { errMsg?: string };
+      // 用户取消选择时 chooseMedia 会 reject,这里静默
+      if (err?.errMsg && /cancel/i.test(err.errMsg)) return;
+      Taro.showToast({
+        title: err?.message || '选择文件失败',
+        icon: 'none',
+      });
+    } finally {
+      setUploadingCert(false);
+    }
+  };
+
+  /** 删除指定认证材料 */
+  const handleRemoveCert = (idx: number): void => {
+    setCertificationFiles((prev) => prev.filter((_, i) => i !== idx));
+  };
 
   /** 提交 */
   const handleSubmit = async (): Promise<void> => {
     if (!canSubmit) return;
     setSubmitting(true);
     try {
-      // 1. 若 role 不是 TEACHER,先升级(编辑模式理论不会进此分支)
-      const currentRole = useUserStore.getState().user?.role;
-      if (currentRole !== 'TEACHER') {
-        try {
-          const profile = await updateProfile({ role: 'TEACHER' });
-          setProfile(profile);
-        } catch (e) {
-          Taro.showToast({
-            title: (e as Error).message || '升级传承人失败',
-            icon: 'none',
-          });
-          setSubmitting(false);
-          return;
-        }
-      }
-
       const lat = latitude as number;
       const lng = longitude as number;
       const finalAddress = address || '已定位';
@@ -234,7 +316,7 @@ const CreateCirclePage: React.FC = () => {
         await updateCircle(editId, patch);
         Taro.redirectTo({ url: `/pages/circle/index?id=${editId}` });
       } else {
-        // 新建模式
+        // 新建模式:USER 角色附带认证材料
         const res = await createCircle({
           title: trimmedTitle,
           tagIds,
@@ -246,6 +328,7 @@ const CreateCirclePage: React.FC = () => {
           wechat: trimmedWechat || undefined,
           activityTime: trimmedActivityTime || undefined,
           maxMembers: finalMaxMembers,
+          certificationFiles: needCert ? certificationFiles : undefined,
         });
         Taro.redirectTo({ url: `/pages/circle/index?id=${res.circleId}` });
       }
@@ -267,7 +350,7 @@ const CreateCirclePage: React.FC = () => {
 
   // 表单底部错误提示(取第一个非空)
   const formErr: string =
-    contactErr || phoneErr || maxMembersErr || '';
+    contactErr || phoneErr || maxMembersErr || certErr || '';
 
   // 标题字数提示
   const titleCount = useMemo(
@@ -414,10 +497,63 @@ const CreateCirclePage: React.FC = () => {
             />
           </View>
 
-          {/* 提示:非 TEACHER 升级 */}
-          {user?.role !== 'TEACHER' && !isEdit && (
+          {/* ====== 9. 教师认证材料(仅 USER 新建模式) ====== */}
+          {needCert && (
+            <View className={styles.field}>
+              <View className={styles.fieldHeader}>
+                <Text className={styles.label}>
+                  教师认证材料 <Text className={styles.required}>*</Text>
+                </Text>
+                <Text className={styles.count}>
+                  {certificationFiles.length}/{CERT_FILES_MAX}
+                </Text>
+              </View>
+              <Text className={styles.certHint}>
+                上传证书照片或视频(1-5 个),管理员审核通过后圈子才能上线
+              </Text>
+              <View className={styles.certGrid}>
+                {certificationFiles.map((f, idx) => (
+                  <View key={f.key} className={styles.certItem}>
+                    {f.mimeType.startsWith('image/') ? (
+                      <Image
+                        src={f.url}
+                        className={styles.certThumb}
+                        mode="aspectFill"
+                      />
+                    ) : (
+                      <View className={styles.certVideo}>
+                        <Text className={styles.certVideoIcon}>🎬</Text>
+                      </View>
+                    )}
+                    <View
+                      className={styles.certRemove}
+                      onClick={() => handleRemoveCert(idx)}
+                    >
+                      <Text className={styles.certRemoveIcon}>×</Text>
+                    </View>
+                  </View>
+                ))}
+                {certificationFiles.length < CERT_FILES_MAX && (
+                  <View className={styles.certAdd} onClick={handlePickCert}>
+                    <Text className={styles.certAddIcon}>+</Text>
+                    <Text className={styles.certAddText}>
+                      {uploadingCert ? '上传中...' : '添加'}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
+
+          {/* 提示:审核说明 */}
+          {needCert && (
             <Text className={styles.upgradeHint}>
-              提交后将自动升级为"传承人"身份
+              提交后需管理员审核通过,圈子才能上线;同时将为您提交教师认证申请
+            </Text>
+          )}
+          {!needCert && !isEdit && (
+            <Text className={styles.upgradeHint}>
+              提交后需管理员审核通过,圈子才能上线
             </Text>
           )}
         </ScrollView>

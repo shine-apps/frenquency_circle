@@ -3,19 +3,19 @@ import { z } from "zod"
 import { and, desc, eq, sql } from "drizzle-orm"
 
 import { db } from "@/lib/db"
-import { circles } from "@/db/schema"
+import { circles, teacherApplications } from "@/db/schema"
 import { fail, ok, parsePagination } from "@/lib/api"
 import { requireAdmin } from "@/lib/auth-utils"
-import type { CircleDTO, Paginated } from "@/types/api"
+import type { CircleDTO, CertificationFile, Paginated } from "@/types/api"
 
 /**
  * 管理后台圈子列表查询参数 schema。
- * - status: 可选,按状态筛选(active/offline/deleted/violated)
+ * - status: 可选,按状态筛选(active/offline/deleted/violated/pending/rejected)
  * - creator: 可选,按创建者 userId 筛选
  */
 const listCirclesQuerySchema = z.object({
   status: z
-    .enum(["active", "offline", "deleted", "violated"])
+    .enum(["active", "offline", "deleted", "violated", "pending", "rejected"])
     .optional(),
   creator: z.string().uuid().optional(),
 })
@@ -41,14 +41,21 @@ function toCircleDTO(row: typeof circles.$inferSelect): CircleDTO {
   }
 }
 
+/** 管理后台圈子列表项(含认证材料,用于审核展示) */
+type AdminCircleListItem = CircleDTO & {
+  /** 关联的教师认证材料(若该圈子由 USER 创建并提交了认证申请) */
+  certificationFiles?: CertificationFile[] | null
+}
+
 /**
  * GET /api/admin/circles
  *
  * 管理后台圈子列表(需 ADMIN 权限)。
  * 支持按 status / creator 筛选 + 分页。
  * 默认按 createdAt 倒序(最新创建的在前)。
+ * LEFT JOIN teacher_applications 返回认证材料供审核展示。
  *
- * 响应:`Paginated<CircleDTO>`
+ * 响应:`Paginated<AdminCircleListItem>`
  */
 export async function GET(req: NextRequest) {
   const guard = await requireAdmin()
@@ -78,8 +85,16 @@ export async function GET(req: NextRequest) {
 
   const [rows, [{ count }]] = await Promise.all([
     db
-      .select()
+      .select({
+        circle: circles,
+        appFiles: teacherApplications.files,
+        appStatus: teacherApplications.status,
+      })
       .from(circles)
+      .leftJoin(
+        teacherApplications,
+        eq(teacherApplications.circleId, circles.id)
+      )
       .where(whereClause)
       .orderBy(desc(circles.createdAt))
       .limit(pageSize)
@@ -90,8 +105,16 @@ export async function GET(req: NextRequest) {
       .where(whereClause),
   ])
 
-  const payload: Paginated<CircleDTO> = {
-    list: rows.map(toCircleDTO),
+  const list: AdminCircleListItem[] = rows.map((r) => ({
+    ...toCircleDTO(r.circle),
+    certificationFiles:
+      r.appFiles && Array.isArray(r.appFiles)
+        ? (r.appFiles as CertificationFile[])
+        : null,
+  }))
+
+  const payload: Paginated<AdminCircleListItem> = {
+    list,
     total: Number(count),
     page,
     pageSize,

@@ -13,6 +13,31 @@
   padding-bottom: calc(160rpx + env(safe-area-inset-bottom));
 }
 
+// ====== 状态横幅 ======
+.statusBanner {
+  margin: $spacing-md $spacing-lg 0;
+  padding: $spacing-md;
+  border-radius: $radius-md;
+  display: flex;
+  align-items: flex-start;
+}
+
+.statusBannerWarning {
+  background-color: rgba(255, 153, 0, 0.1);
+  border-left: 6rpx solid $color-warning;
+}
+
+.statusBannerError {
+  background-color: rgba(245, 63, 63, 0.1);
+  border-left: 6rpx solid $color-error;
+}
+
+.statusBannerText {
+  font-size: $font-size-sm;
+  color: $color-text-primary;
+  line-height: $line-height-normal;
+}
+
 // ====== 顶部标题区 ======
 .header {
   padding: $spacing-lg;

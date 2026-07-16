@@ -180,6 +180,31 @@ export type CircleDetailDTO = CircleDTO & {
 }
 
 /**
+ * 认证材料文件项(存储于 teacher_applications.files JSONB)。
+ */
+export type CertificationFile = {
+  url: string
+  key: string
+  size: number
+  mimeType: string
+  originalName: string
+}
+
+/**
+ * 教师认证申请 DTO。
+ */
+export type TeacherApplicationDTO = {
+  id: string
+  userId: string
+  circleId: string
+  files: CertificationFile[]
+  status: "pending" | "approved" | "rejected"
+  reviewNote: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+/**
  * 定位发布请求体。
  */
 export type LocationPublishInput = {

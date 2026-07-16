@@ -53,6 +53,7 @@ export default async function AdminCirclesPage() {
     maxMembers: r.circle.maxMembers,
     memberCount: r.circle.memberCount,
     status: r.circle.status,
+    coverImages: r.circle.coverImages ?? [],
     createdAt: r.circle.createdAt.toISOString(),
     updatedAt: r.circle.updatedAt.toISOString(),
     creatorName: r.creatorName,

@@ -152,6 +152,8 @@ declare interface CircleDTO {
   memberCount: number
   /** 圈子状态:active / offline / deleted / violated / pending / rejected */
   status: string
+  /** 轮播图片 URL 数组(0-9 个,空数组表示无轮播) */
+  coverImages: string[]
   createdAt: string
   updatedAt: string
 }
@@ -196,6 +198,8 @@ declare interface CreateCircleInput {
   maxMembers?: number
   /** 教师认证材料(USER 角色创建圈子时必填,1-5 个文件) */
   certificationFiles?: CertificationFile[]
+  /** 轮播图片 URL 数组(最多 9 个,可省略) */
+  coverImages?: string[]
 }
 
 /** 更新圈子请求体(全部可选,与后端 PUT schema 对齐:不含 latitude/longitude/address) */

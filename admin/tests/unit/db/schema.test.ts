@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   users,
   accounts,
+  circles,
   smsVerificationCodes,
   type UserRole,
 } from "@/db/schema"
@@ -67,6 +68,29 @@ describe("db/schema", () => {
         "expiresAt",
         "consumedAt",
         "createdAt",
+      ])
+    )
+  })
+
+  it("exports circles table", () => {
+    expect(circles).toBeDefined()
+  })
+
+  it("circles table has the expected columns (including coverImages)", () => {
+    const cols = Object.keys(circles)
+    expect(cols).toEqual(
+      expect.arrayContaining([
+        "id",
+        "title",
+        "description",
+        "creatorId",
+        "latitude",
+        "longitude",
+        "address",
+        "status",
+        "coverImages",
+        "createdAt",
+        "updatedAt",
       ])
     )
   })

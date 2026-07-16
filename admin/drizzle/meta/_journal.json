@@ -15,6 +15,13 @@
       "when": 1784189449842,
       "tag": "0001_military_iron_lad",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784192576010,
+      "tag": "0002_clever_psynapse",
+      "breakpoints": true
     }
   ]
 }

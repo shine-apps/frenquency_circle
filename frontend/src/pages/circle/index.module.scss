@@ -13,6 +13,22 @@
   padding-bottom: calc(160rpx + env(safe-area-inset-bottom));
 }
 
+// ====== 轮播 Swiper ======
+.swiperWrap {
+  width: 100%;
+  background-color: #000;
+}
+
+.swiper {
+  width: 100%;
+  height: 480rpx;
+}
+
+.swiperImg {
+  width: 100%;
+  height: 100%;
+}
+
 // ====== 状态横幅 ======
 .statusBanner {
   margin: $spacing-md $spacing-lg 0;

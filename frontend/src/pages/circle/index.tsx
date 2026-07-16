@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView } from '@tarojs/components';
+import { View, Text, ScrollView, Swiper, SwiperItem, Image } from '@tarojs/components';
 import { Avatar, Tag, Button, Popup } from '@nutui/nutui-react-taro';
 import Taro, { useDidShow, useRouter } from '@tarojs/taro';
 import { getCircle, contactCircle } from '@/services/circles';
@@ -194,7 +194,33 @@ const CirclePage: React.FC = () => {
   return (
     <View className={styles.page}>
       <ScrollView scrollY className={styles.scroll}>
-        {/* ====== 0. 状态横幅(仅 pending / rejected 展示) ====== */}
+        {/* ====== 0. 轮播 Swiper(coverImages.length > 0 才渲染) ====== */}
+        {circle.coverImages.length > 0 && (
+          <View className={styles.swiperWrap}>
+            <Swiper
+              className={styles.swiper}
+              indicatorColor="rgba(255,255,255,0.5)"
+              indicatorActiveColor="#fff"
+              indicatorDots
+              autoplay
+              interval={4000}
+              circular
+              duration={500}
+            >
+              {circle.coverImages.map((url, idx) => (
+                <SwiperItem key={`${url}-${idx}`}>
+                  <Image
+                    src={url}
+                    className={styles.swiperImg}
+                    mode="aspectFill"
+                  />
+                </SwiperItem>
+              ))}
+            </Swiper>
+          </View>
+        )}
+
+        {/* ====== 1. 状态横幅(仅 pending / rejected 展示) ====== */}
         {circle.status === 'pending' && (
           <View
             className={`${styles.statusBanner} ${styles.statusBannerWarning}`}
@@ -214,7 +240,7 @@ const CirclePage: React.FC = () => {
           </View>
         )}
 
-        {/* ====== 1. 标题 + 标签 ====== */}
+        {/* ====== 2. 标题 + 标签 ====== */}
         <View className={styles.header}>
           <Text className={styles.title}>{circle.title}</Text>
           {circle.tags.length > 0 && (
@@ -230,7 +256,7 @@ const CirclePage: React.FC = () => {
           )}
         </View>
 
-        {/* ====== 2. 创建者卡片 ====== */}
+        {/* ====== 3. 创建者卡片 ====== */}
         <View className={styles.creatorCard}>
           <Avatar
             size="normal"
@@ -252,13 +278,13 @@ const CirclePage: React.FC = () => {
           </View>
         </View>
 
-        {/* ====== 3. 介绍 ====== */}
+        {/* ====== 4. 介绍 ====== */}
         <View className={styles.section}>
           <Text className={styles.sectionTitle}>圈子介绍</Text>
           <Text className={styles.sectionContent}>{circle.description}</Text>
         </View>
 
-        {/* ====== 4. 活动时间 ====== */}
+        {/* ====== 5. 活动时间 ====== */}
         <View className={styles.section}>
           <Text className={styles.sectionTitle}>活动时间</Text>
           <Text className={styles.sectionContent}>
@@ -266,7 +292,7 @@ const CirclePage: React.FC = () => {
           </Text>
         </View>
 
-        {/* ====== 5. 活动地点(简化:仅展示地址文本,不渲染 Map) ====== */}
+        {/* ====== 6. 活动地点(简化:仅展示地址文本,不渲染 Map) ====== */}
         <View className={styles.section}>
           <Text className={styles.sectionTitle}>活动地点</Text>
           <Text className={styles.sectionContent}>
@@ -274,7 +300,7 @@ const CirclePage: React.FC = () => {
           </Text>
         </View>
 
-        {/* ====== 6. 成员人数 + (创建者额外展示被联系次数) ====== */}
+        {/* ====== 7. 成员人数 + (创建者额外展示被联系次数) ====== */}
         <View className={styles.section}>
           <View className={styles.memberRow}>
             <Text className={styles.sectionTitle}>成员人数</Text>

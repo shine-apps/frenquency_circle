@@ -27,6 +27,8 @@ const PHONE_RE = /^1\d{10}$/;
 /** 教师认证材料数量限制(USER 角色新建圈子时必填) */
 const CERT_FILES_MIN = 1;
 const CERT_FILES_MAX = 5;
+/** 轮播图片最大数量 */
+const COVER_IMAGES_MAX = 9;
 
 /**
  * 创建/编辑圈子页。
@@ -80,6 +82,9 @@ const CreateCirclePage: React.FC = () => {
   // USER 角色认证材料(仅新建模式 + USER 角色使用)
   const [certificationFiles, setCertificationFiles] = useState<CertificationFile[]>([]);
   const [uploadingCert, setUploadingCert] = useState(false);
+  // 轮播图片(0-9 张,首张为默认封面,可选)
+  const [coverImages, setCoverImages] = useState<string[]>([]);
+  const [uploadingCover, setUploadingCover] = useState(false);
 
   /** 拉取圈子详情用于编辑预填 */
   const fetchForEdit = async (id: string): Promise<void> => {
@@ -101,6 +106,7 @@ const CreateCirclePage: React.FC = () => {
           ? String(data.maxMembers)
           : ''
       );
+      setCoverImages(data.coverImages || []);
     } catch (e) {
       Taro.showToast({
         title: (e as Error).message || '加载圈子失败',
@@ -291,6 +297,70 @@ const CreateCirclePage: React.FC = () => {
     setCertificationFiles((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  /** 选择轮播图片(仅图片,1-9 张) */
+  const handlePickCover = async (): Promise<void> => {
+    if (uploadingCover) return;
+    const remaining = COVER_IMAGES_MAX - coverImages.length;
+    if (remaining <= 0) {
+      Taro.showToast({ title: `最多 ${COVER_IMAGES_MAX} 张`, icon: 'none' });
+      return;
+    }
+    try {
+      const res = await Taro.chooseMedia({
+        count: remaining,
+        mediaType: ['image'], // 仅图片
+        sourceType: ['album', 'camera'],
+        sizeType: ['compressed'],
+        maxDuration: 60,
+        camera: 'back',
+      });
+      if (!res.tempFiles?.length) return;
+      setUploadingCover(true);
+      // 逐个上传,失败则跳过该文件并提示
+      const uploaded: string[] = [];
+      for (const f of res.tempFiles) {
+        try {
+          const file: string | File = f.originalFileObj ?? f.tempFilePath;
+          const name =
+            (f.originalFileObj && f.originalFileObj.name) ||
+            f.tempFilePath ||
+            `cover-${Date.now()}`;
+          const result = await uploadFile({ file, name, purpose: 'generic' });
+          uploaded.push(result.url);
+        } catch (e) {
+          // 单个文件失败不中断,继续上传其余
+          console.warn('[create-circle] cover upload failed:', e);
+        }
+      }
+      if (uploaded.length === 0) {
+        Taro.showToast({ title: '上传失败,请重试', icon: 'none' });
+        return;
+      }
+      setCoverImages((prev) =>
+        [...prev, ...uploaded].slice(0, COVER_IMAGES_MAX)
+      );
+      Taro.showToast({
+        title: `已上传 ${uploaded.length} 张`,
+        icon: 'success',
+      });
+    } catch (e) {
+      const err = e as Error & { errMsg?: string };
+      // 用户取消选择时 chooseMedia 会 reject,这里静默
+      if (err?.errMsg && /cancel/i.test(err.errMsg)) return;
+      Taro.showToast({
+        title: err?.message || '选择图片失败',
+        icon: 'none',
+      });
+    } finally {
+      setUploadingCover(false);
+    }
+  };
+
+  /** 删除指定轮播图片 */
+  const handleRemoveCover = (idx: number): void => {
+    setCoverImages((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   /** 提交 */
   const handleSubmit = async (): Promise<void> => {
     if (!canSubmit) return;
@@ -312,6 +382,7 @@ const CreateCirclePage: React.FC = () => {
           wechat: trimmedWechat || undefined,
           activityTime: trimmedActivityTime || undefined,
           maxMembers: finalMaxMembers,
+          coverImages: coverImages,
         };
         await updateCircle(editId, patch);
         Taro.redirectTo({ url: `/pages/circle/index?id=${editId}` });
@@ -329,6 +400,7 @@ const CreateCirclePage: React.FC = () => {
           activityTime: trimmedActivityTime || undefined,
           maxMembers: finalMaxMembers,
           certificationFiles: needCert ? certificationFiles : undefined,
+          coverImages: coverImages,
         });
         Taro.redirectTo({ url: `/pages/circle/index?id=${res.circleId}` });
       }
@@ -421,6 +493,49 @@ const CreateCirclePage: React.FC = () => {
               rows={4}
               className={styles.textarea}
             />
+          </View>
+
+          {/* ====== 3.5 轮播图片(可选,0-9 张) ====== */}
+          <View className={styles.field}>
+            <View className={styles.fieldHeader}>
+              <Text className={styles.label}>轮播图片</Text>
+              <Text className={styles.count}>
+                {coverImages.length}/{COVER_IMAGES_MAX}
+              </Text>
+            </View>
+            <Text className={styles.coverHint}>
+              可上传 0-9 张图片,首张为默认封面,详情页将以轮播展示
+            </Text>
+            <View className={styles.coverGrid}>
+              {coverImages.map((url, idx) => (
+                <View key={`${url}-${idx}`} className={styles.coverItem}>
+                  <Image
+                    src={url}
+                    className={styles.coverThumb}
+                    mode="aspectFill"
+                  />
+                  {idx === 0 && (
+                    <View className={styles.coverBadge}>
+                      <Text className={styles.coverBadgeText}>封面</Text>
+                    </View>
+                  )}
+                  <View
+                    className={styles.coverRemove}
+                    onClick={() => handleRemoveCover(idx)}
+                  >
+                    <Text className={styles.coverRemoveIcon}>×</Text>
+                  </View>
+                </View>
+              ))}
+              {coverImages.length < COVER_IMAGES_MAX && (
+                <View className={styles.coverAdd} onClick={handlePickCover}>
+                  <Text className={styles.coverAddIcon}>+</Text>
+                  <Text className={styles.coverAddText}>
+                    {uploadingCover ? '上传中...' : '添加'}
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
 
           {/* ====== 4. 活动地点 ====== */}

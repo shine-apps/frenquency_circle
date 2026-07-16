@@ -284,6 +284,15 @@ export const circles = pgTable(
     maxMembers: integer("max_members"),
     memberCount: integer("member_count").notNull().default(0),
     status: text("status").notNull().default("active"),
+    /**
+     * 轮播图片 URL 数组(0-9 个,可空数组)。
+     * - 与 locations.tagIds uuid[] 同款 array 列,无需关联表
+     * - 默认空数组(避免 NULL 语义混乱)
+     */
+    coverImages: text("cover_images")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

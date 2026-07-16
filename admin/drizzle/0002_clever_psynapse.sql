@@ -1,0 +1,1 @@
+ALTER TABLE "circles" ADD COLUMN "cover_images" text[] DEFAULT '{}'::text[] NOT NULL;

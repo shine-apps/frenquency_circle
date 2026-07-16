@@ -36,6 +36,7 @@ function toCircleDTO(row: typeof circles.$inferSelect): CircleDTO {
     maxMembers: row.maxMembers,
     memberCount: row.memberCount,
     status: row.status,
+    coverImages: row.coverImages ?? [],
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }

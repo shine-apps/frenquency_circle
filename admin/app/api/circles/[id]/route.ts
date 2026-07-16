@@ -38,6 +38,7 @@ function toCircleDTO(row: typeof circles.$inferSelect): CircleDTO {
     maxMembers: row.maxMembers,
     memberCount: row.memberCount,
     status: row.status,
+    coverImages: row.coverImages ?? [],
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }
@@ -133,6 +134,8 @@ const updateCircleSchema = z
     activityTime: z.string().max(100).optional(),
     maxMembers: z.number().int().min(1).max(999).optional(),
     tagIds: z.array(z.string().uuid()).min(1).max(5).optional(),
+    /** 轮播图片 URL 数组(0-9 个)。空数组表示清空,undefined 表示不变 */
+    coverImages: z.array(z.string().url()).max(9).optional(),
   })
   .refine(
     (data) => {
@@ -186,6 +189,7 @@ export async function PUT(req: Request, context: RouteContext) {
     activityTime,
     maxMembers,
     tagIds: newTagIds,
+    coverImages,
   } = parsed.data
 
   // 4. 更新圈子字段(仅更新已提供的字段)
@@ -196,6 +200,7 @@ export async function PUT(req: Request, context: RouteContext) {
   if (wechat !== undefined) updates.wechat = wechat || null
   if (activityTime !== undefined) updates.activityTime = activityTime || null
   if (maxMembers !== undefined) updates.maxMembers = maxMembers
+  if (coverImages !== undefined) updates.coverImages = coverImages
 
   await db.update(circles).set(updates).where(eq(circles.id, id))
 

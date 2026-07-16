@@ -166,6 +166,8 @@ export type CircleDTO = {
   maxMembers: number | null
   memberCount: number
   status: string
+  /** 轮播图片 URL 数组(0-9 个,空数组表示无轮播) */
+  coverImages: string[]
   createdAt: string
   updatedAt: string
 }

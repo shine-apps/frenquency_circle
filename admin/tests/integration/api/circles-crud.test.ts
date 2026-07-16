@@ -31,6 +31,8 @@ type CircleRow = {
   maxMembers: number | null
   memberCount: number
   status: string
+  /** 轮播图片 URL 数组 */
+  coverImages: string[]
   createdAt: Date
   updatedAt: Date
 }
@@ -245,6 +247,7 @@ function makeCircleRow(overrides: Partial<CircleRow> = {}): CircleRow {
     maxMembers: overrides.maxMembers ?? 20,
     memberCount: overrides.memberCount ?? 8,
     status: overrides.status ?? "active",
+    coverImages: overrides.coverImages ?? [],
     createdAt: overrides.createdAt ?? new Date("2026-07-01T00:00:00Z"),
     updatedAt: overrides.updatedAt ?? new Date("2026-07-01T00:00:00Z"),
   }
@@ -351,15 +354,16 @@ describe("POST /api/circles", () => {
     expect(mockDb.insert).not.toHaveBeenCalled()
   })
 
-  it("returns 403 when role is USER (not TEACHER)", async () => {
+  it("returns 400 when USER role submits without certificationFiles", async () => {
     readUserFromTokenMock.mockResolvedValue(REGULAR_USER)
     const res = await POST(
       makeJsonRequest(VALID_CIRCLE_BODY, "/api/circles")
     )
-    expect(res.status).toBe(403)
+    // USER 角色现已允许创建圈子,但必须附带教师认证材料
+    expect(res.status).toBe(400)
     const body = (await res.json()) as IResponse<null>
-    expect(body.code).toBe(403)
-    expect(body.message).toContain("TEACHER")
+    expect(body.code).toBe(400)
+    expect(body.message).toContain("USER")
     expect(mockDb.insert).not.toHaveBeenCalled()
   })
 
@@ -381,7 +385,7 @@ describe("POST /api/circles", () => {
     }>
     expect(body.code).toBe(201)
     expect(body.data.circleId).toBe(newCircleId)
-    expect(body.data.status).toBe("active")
+    expect(body.data.status).toBe("pending")
     // 验证 insert 链路:circles + circleTags + circleMembers = 3 次
     expect(mockDb.insert).toHaveBeenCalledTimes(3)
     // circles insert 应有 returning
@@ -465,6 +469,63 @@ describe("POST /api/circles", () => {
     void _w
     const res = await POST(makeJsonRequest(rest, "/api/circles"))
     expect(res.status).toBe(201)
+  })
+
+  it("accepts coverImages and persists them on insert", async () => {
+    readUserFromTokenMock.mockResolvedValue(TEACHER_USER)
+    setSelectResultsQueue([[]])
+    insertReturningMock.mockResolvedValue([{ id: "c-with-covers" }])
+    const coverImages = [
+      "https://example.com/a.jpg",
+      "https://example.com/b.jpg",
+    ]
+    const res = await POST(
+      makeJsonRequest(
+        { ...VALID_CIRCLE_BODY, coverImages },
+        "/api/circles"
+      )
+    )
+    expect(res.status).toBe(201)
+    // 验证 circles insert 链路的 values 至少一次传入 coverImages
+    const allValuesCalls = chainInsert.values.mock.calls
+    const persisted = allValuesCalls.some((call) => {
+      const v = call[0] as Record<string, unknown> | undefined
+      return (
+        !!v &&
+        Array.isArray(v.coverImages) &&
+        v.coverImages.length === coverImages.length &&
+        (v.coverImages as string[])[0] === coverImages[0]
+      )
+    })
+    expect(persisted).toBe(true)
+  })
+
+  it("returns 400 when coverImages has more than 9 items", async () => {
+    readUserFromTokenMock.mockResolvedValue(TEACHER_USER)
+    const coverImages = Array.from(
+      { length: 10 },
+      (_, i) => `https://example.com/${i}.jpg`
+    )
+    const res = await POST(
+      makeJsonRequest(
+        { ...VALID_CIRCLE_BODY, coverImages },
+        "/api/circles"
+      )
+    )
+    expect(res.status).toBe(400)
+    expect(mockDb.insert).not.toHaveBeenCalled()
+  })
+
+  it("returns 400 when coverImages item is not a valid URL", async () => {
+    readUserFromTokenMock.mockResolvedValue(TEACHER_USER)
+    const res = await POST(
+      makeJsonRequest(
+        { ...VALID_CIRCLE_BODY, coverImages: ["not-a-url"] },
+        "/api/circles"
+      )
+    )
+    expect(res.status).toBe(400)
+    expect(mockDb.insert).not.toHaveBeenCalled()
   })
 })
 
@@ -646,6 +707,93 @@ describe("PUT /api/circles/:id", () => {
     expect(updateWhereMock).toHaveBeenCalledTimes(1)
     // 不应触发事务(未提供 tagIds)
     expect(transactionSpy).not.toHaveBeenCalled()
+  })
+
+  it("updates coverImages and writes them to db (with full replacement)", async () => {
+    readUserFromTokenMock.mockResolvedValue(TEACHER_USER)
+    const oldCircle = makeCircleRow({
+      coverImages: ["https://old/1.jpg"],
+    })
+    const newCoverImages = [
+      "https://new/1.jpg",
+      "https://new/2.jpg",
+      "https://new/3.jpg",
+    ]
+    const updatedCircle = makeCircleRow({ coverImages: newCoverImages })
+    const creator = {
+      id: TEACHER_USER.id,
+      name: "Teacher",
+      avatarUrl: null,
+    }
+    // 队列:1) creator check 2-5) fetchCircleDetail
+    const queue: Record<string, unknown>[][] = [[oldCircle]]
+    enqueueFetchCircleDetail(queue, updatedCircle, creator, [], 0)
+    setSelectResultsQueue(queue)
+
+    const res = await putCircle(
+      makePutRequest(
+        { coverImages: newCoverImages },
+        "/api/circles/circle-1"
+      ),
+      makeContext("circle-1")
+    )
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as IResponse<CircleDetailDTO>
+    expect(body.data.coverImages).toEqual(newCoverImages)
+    // 验证 update.set 调用包含 coverImages 全量替换
+    expect(chainUpdate.set).toHaveBeenCalledTimes(1)
+    const setArg = chainUpdate.set.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >
+    expect(setArg.coverImages).toEqual(newCoverImages)
+    expect(setArg.updatedAt).toBeInstanceOf(Date)
+  })
+
+  it("can clear coverImages by passing empty array", async () => {
+    readUserFromTokenMock.mockResolvedValue(TEACHER_USER)
+    const oldCircle = makeCircleRow({
+      coverImages: ["https://old/1.jpg", "https://old/2.jpg"],
+    })
+    const clearedCircle = makeCircleRow({ coverImages: [] })
+    const creator = {
+      id: TEACHER_USER.id,
+      name: "Teacher",
+      avatarUrl: null,
+    }
+    const queue: Record<string, unknown>[][] = [[oldCircle]]
+    enqueueFetchCircleDetail(queue, clearedCircle, creator, [], 0)
+    setSelectResultsQueue(queue)
+
+    const res = await putCircle(
+      makePutRequest({ coverImages: [] }, "/api/circles/circle-1"),
+      makeContext("circle-1")
+    )
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as IResponse<CircleDetailDTO>
+    expect(body.data.coverImages).toEqual([])
+    const setArg = chainUpdate.set.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >
+    expect(setArg.coverImages).toEqual([])
+  })
+
+  it("returns 400 when PUT coverImages exceeds 9 items", async () => {
+    readUserFromTokenMock.mockResolvedValue(TEACHER_USER)
+    const circle = makeCircleRow()
+    setSelectResultsQueue([[circle]])
+
+    const coverImages = Array.from(
+      { length: 10 },
+      (_, i) => `https://example.com/${i}.jpg`
+    )
+    const res = await putCircle(
+      makePutRequest({ coverImages }, "/api/circles/circle-1"),
+      makeContext("circle-1")
+    )
+    expect(res.status).toBe(400)
+    expect(mockDb.update).not.toHaveBeenCalled()
   })
 
   it("replaces tagIds via transaction when provided", async () => {

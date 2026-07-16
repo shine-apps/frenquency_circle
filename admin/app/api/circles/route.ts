@@ -14,6 +14,8 @@ const WECHAT_RE = /^[a-zA-Z][-_a-zA-Z0-9]{5,19}$/
 
 /** 24 小时内最多创建圈子数 */
 const DAILY_CREATE_LIMIT = 5
+/** 轮播图片最大数量 */
+const COVER_IMAGES_MAX = 9
 
 /**
  * 创建圈子请求体 schema。
@@ -22,6 +24,7 @@ const DAILY_CREATE_LIMIT = 5
  * - description: 10-1000 字符
  * - contactPhone / wechat: 至少填一种
  * - certificationFiles: USER 角色必填 1-5 项;TEACHER 角色忽略
+ * - coverImages: 0-9 个图片 URL(可选)
  */
 const createCircleSchema = z
   .object({
@@ -56,6 +59,12 @@ const createCircleSchema = z
       )
       .max(5)
       .optional(),
+    /** 轮播图片 URL 数组(0-9 个,可选) */
+    coverImages: z
+      .array(z.string().url())
+      .max(COVER_IMAGES_MAX, `轮播图片最多 ${COVER_IMAGES_MAX} 张`)
+      .optional()
+      .default([]),
   })
   .refine((data) => data.contactPhone || data.wechat, {
     message: "至少填写一种联系方式(电话或微信)",
@@ -141,6 +150,7 @@ export async function POST(req: Request) {
     activityTime,
     maxMembers,
     certificationFiles,
+    coverImages,
   } = parsed.data
 
   const [circleRow] = await db
@@ -158,6 +168,7 @@ export async function POST(req: Request) {
       maxMembers: maxMembers ?? null,
       memberCount: 0,
       status: "pending",
+      coverImages: coverImages ?? [],
     })
     .returning({ id: circles.id })
 

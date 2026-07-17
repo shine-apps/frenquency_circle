@@ -10,6 +10,7 @@ import {
   circles,
   circleTags,
   circleMembers,
+  accounts,
   type UserRole,
   type ActivityLevel,
 } from "@/db/schema"
@@ -315,6 +316,27 @@ async function main() {
     .from(users)
     .where(inArray(users.email, userEmails))
   const userByEmail = new Map(userRows.map((r) => [r.email, r]))
+
+  // === 5.1 绑定 credentials 账号(幂等 upsert) ===
+  // 登录查找走 accounts 表(provider + providerAccountId),seed 仅插入 users 不够,
+  // 必须在 accounts 中插入 (provider='credentials', providerAccountId=email) 才能登录。
+  console.log("→ 绑定 credentials 账号…")
+  for (const u of userSeeds) {
+    const userRow = userByEmail.get(u.email)
+    if (!userRow) continue
+    await db
+      .insert(accounts)
+      .values({
+        userId: userRow.id,
+        provider: "credentials",
+        providerAccountId: u.email,
+        type: "credentials",
+      })
+      .onConflictDoUpdate({
+        target: [accounts.provider, accounts.providerAccountId],
+        set: { updatedAt: new Date() },
+      })
+  }
 
   // === 6. 插入标签(幂等:先查现有,只插入不存在的) ===
   console.log("→ 插入兴趣标签…")

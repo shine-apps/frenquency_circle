@@ -14,16 +14,33 @@ import { logger, LOG_PREFIX } from "@/lib/logger"
 
 type Stage = "code2session" | "token" | "phone"
 
+/** 序列化原始响应到 errmsg 时最多保留的字符数，防止日志爆炸 */
+const RAW_PAYLOAD_LOG_LIMIT = 500
+
+function truncateForLog(s: string): string {
+  return s.length > RAW_PAYLOAD_LOG_LIMIT
+    ? s.slice(0, RAW_PAYLOAD_LOG_LIMIT) + "...<truncated>"
+    : s
+}
+
 export class WechatMpError extends Error {
   readonly errcode: number
   readonly errmsg: string
   readonly stage: Stage
-  constructor(errcode: number, errmsg: string, stage: Stage) {
+  /** 原始响应体（解析后的 JSON 或原始文本），仅用于排障日志，可能含敏感信息 */
+  readonly raw?: unknown
+  constructor(
+    errcode: number,
+    errmsg: string,
+    stage: Stage,
+    raw?: unknown
+  ) {
     super(`WeChat MP ${stage} failed: [${errcode}] ${errmsg}`)
     this.name = "WechatMpError"
     this.errcode = errcode
     this.errmsg = errmsg
     this.stage = stage
+    this.raw = raw
   }
 }
 
@@ -51,12 +68,43 @@ async function wechatFetch(
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const res = await fetch(url, { ...init, signal: controller.signal })
+    // 显式 no-store：避免 Next.js 对 fetch 的默认缓存命中导致拿到陈旧/空响应。
+    // 微信接口都是动态数据，缓存无意义且会破坏排障。
+    const res = await fetch(url, {
+      ...init,
+      signal: controller.signal,
+      cache: "no-store",
+    })
     if (!res.ok) {
       // WeChat 通常在 200 中返回 errcode; 非 200 多为网关层错误
-      throw new WechatMpError(res.status, res.statusText, stage)
+      const bodyText = await res.text().catch(() => "<unreadable>")
+      throw new WechatMpError(
+        res.status,
+        `${res.statusText} | body=${truncateForLog(bodyText)}`,
+        stage,
+        bodyText
+      )
     }
-    return (await res.json()) as unknown
+    // 先拿原始文本再手动 JSON.parse，避免 res.json() 抛错后丢失响应内容
+    const text = await res.text()
+    if (!text || !text.trim()) {
+      throw new WechatMpError(
+        -1,
+        "empty response body",
+        stage,
+        text
+      )
+    }
+    try {
+      return JSON.parse(text) as unknown
+    } catch (parseErr) {
+      throw new WechatMpError(
+        -1,
+        `invalid JSON: ${parseErr instanceof Error ? parseErr.message : String(parseErr)} | body=${truncateForLog(text)}`,
+        stage,
+        text
+      )
+    }
   } catch (err) {
     if (err instanceof WechatMpError) throw err
     if (err instanceof Error && err.name === "AbortError") {
@@ -68,19 +116,42 @@ async function wechatFetch(
   }
 }
 
-function requireErrcodeZero(
+/**
+ * 检查微信响应是否为错误。
+ *
+ * 微信 API 的响应约定存在不一致：
+ * - `/sns/jscode2session`、`/cgi-bin/stable_token`：**成功响应不带 `errcode`**，
+ *   直接返回业务字段（如 `{ openid, session_key }` 或 `{ access_token, expires_in }`）；
+ *   仅在出错时才带 `errcode/errmsg`。
+ * - `/wxa/business/getuserphonenumber`：成功响应**带 `errcode: 0`**。
+ *
+ * 统一判定：响应是对象、且（不含 `errcode` 或 `errcode` 为 0）即视为成功；
+ * `errcode` 为非零数字时按错误处理并透传 `errcode/errmsg`。
+ *
+ * 之前实现要求 `errcode === 0`，会把 `code2session`、`stable_token` 的成功响应当错误抛出。
+ */
+function assertNoWechatError(
   payload: unknown,
   stage: Stage
 ): asserts payload is Record<string, unknown> {
-  if (
-    !payload ||
-    typeof payload !== "object" ||
-    (payload as { errcode?: unknown }).errcode !== 0
-  ) {
-    const errcode = Number((payload as { errcode?: number })?.errcode ?? -1)
+  if (!payload || typeof payload !== "object") {
+    throw new WechatMpError(-1, "non-object response", stage, payload)
+  }
+  const obj = payload as Record<string, unknown>
+  const errcode = obj.errcode
+  if (typeof errcode === "number" && errcode !== 0) {
+    const payloadStr = (() => {
+      try {
+        return JSON.stringify(obj)
+      } catch {
+        return String(obj)
+      }
+    })()
     const errmsg =
-      (payload as { errmsg?: string })?.errmsg ?? "unknown wechat mp error"
-    throw new WechatMpError(errcode, errmsg, stage)
+      typeof obj.errmsg === "string" && obj.errmsg
+        ? obj.errmsg
+        : `unknown wechat mp error | payload=${truncateForLog(payloadStr)}`
+    throw new WechatMpError(errcode, errmsg, stage, payload)
   }
 }
 
@@ -92,6 +163,10 @@ export type Code2SessionResult = {
 
 /**
  * 用 js_code 换 openid / session_key。
+ *
+ * `/sns/jscode2session` 成功响应**不带 `errcode`**（只返回 `{ openid, session_key, unionid? }`），
+ * 由 `assertNoWechatError` 统一兼容；出错时透传 `errcode/errmsg`。
+ *
  * @see https://developers.weixin.qq.com/miniprogram/dev/api-backend/open-api/login/auth.code2Session.html
  */
 export async function code2Session(params: {
@@ -113,17 +188,23 @@ export async function code2Session(params: {
     string,
     unknown
   >
-  requireErrcodeZero(payload, "code2session")
+  assertNoWechatError(payload, "code2session")
 
-  const openid = String(payload.openid ?? "")
-  const session_key = String(payload.session_key ?? "")
+  const openid = typeof payload.openid === "string" ? payload.openid : ""
+  const session_key =
+    typeof payload.session_key === "string" ? payload.session_key : ""
   const unionid =
     typeof payload.unionid === "string" && payload.unionid
       ? payload.unionid
       : undefined
 
   if (!openid || !session_key) {
-    throw new WechatMpError(-2, "missing openid or session_key", "code2session")
+    throw new WechatMpError(
+      -2,
+      `missing openid or session_key | payload=${truncateForLog(JSON.stringify(payload))}`,
+      "code2session",
+      payload
+    )
   }
   return { openid, session_key, unionid }
 }
@@ -155,7 +236,7 @@ export async function getAccessToken(params: {
       secret: appSecret,
     }),
   }, "token")) as Record<string, unknown>
-  requireErrcodeZero(payload, "token")
+  assertNoWechatError(payload, "token")
 
   const accessToken = String(payload.access_token ?? "")
   const expiresIn = Number(payload.expires_in ?? 0)
@@ -195,7 +276,7 @@ export async function getPhoneNumber(params: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ code: phoneCode }),
   }, "phone")) as Record<string, unknown>
-  requireErrcodeZero(payload, "phone")
+  assertNoWechatError(payload, "phone")
 
   const phoneInfo = (payload.phone_info ?? {}) as Record<string, unknown>
   const purePhoneNumber = String(phoneInfo.purePhoneNumber ?? "")

@@ -3,6 +3,7 @@ import { signIn } from "@/auth"
 import { corsOptions, fail, ok, withCors } from "@/lib/api"
 import {
   extractSessionToken,
+  readSessionTokenFromCookies,
   readUserFromToken,
 } from "@/lib/auth/session-token"
 import { logger, LOG_PREFIX } from "@/lib/logger"
@@ -52,8 +53,14 @@ export async function POST(req: Request) {
     return withCors(fail(500, "登录服务异常"), req)
   }
 
-  // 从 signIn 返回的 Response 提取 session token
-  const token = extractSessionToken(res)
+  // Auth.js v5 的 signIn 在不同调用栈下返回形态不一致:
+  //   - 旧路径:返回 NextResponse,Set-Cookie 头在上面;
+  //   - 新路径:返回空对象 `{}`,cookie 通过 next/headers 写入。
+  // 所以优先从 Response 头拿,拿不到再从 cookies() 兜底(与 credentials/phone 路由一致)。
+  let token = extractSessionToken(res)
+  if (!token) {
+    token = await readSessionTokenFromCookies()
+  }
   if (!token) {
     logger.warn(LOG_PREFIX.WECHAT, "Login failed: no session token")
     return withCors(fail(401, "登录失败"), req)

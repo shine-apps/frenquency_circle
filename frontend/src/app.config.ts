@@ -25,5 +25,12 @@ export default defineAppConfig({
     'scope.userLocation': {
       desc: '你的位置信息将用于发现附近的同频圈子和爱好者'
     }
-  }
+  },
+  // 微信合规要求:调用 getLocation / chooseLocation 等隐私接口
+  // 必须在 requiredPrivateInfos 中声明,否则报
+  // "getLocation:fail the api need to be declared in the requiredPrivateInfos field"
+  requiredPrivateInfos: [
+    'getLocation',
+    'chooseLocation'
+  ]
 })

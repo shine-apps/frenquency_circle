@@ -1,11 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const { signInMock, extractSessionTokenMock, readUserFromTokenMock } =
-  vi.hoisted(() => ({
-    signInMock: vi.fn(),
-    extractSessionTokenMock: vi.fn(),
-    readUserFromTokenMock: vi.fn(),
-  }))
+const {
+  signInMock,
+  extractSessionTokenMock,
+  readSessionTokenFromCookiesMock,
+  readUserFromTokenMock,
+} = vi.hoisted(() => ({
+  signInMock: vi.fn(),
+  extractSessionTokenMock: vi.fn(),
+  readSessionTokenFromCookiesMock: vi.fn(),
+  readUserFromTokenMock: vi.fn(),
+}))
 
 vi.mock("@/auth", () => ({
   signIn: signInMock,
@@ -13,6 +18,7 @@ vi.mock("@/auth", () => ({
 
 vi.mock("@/lib/auth/session-token", () => ({
   extractSessionToken: extractSessionTokenMock,
+  readSessionTokenFromCookies: readSessionTokenFromCookiesMock,
   readUserFromToken: readUserFromTokenMock,
 }))
 
@@ -47,10 +53,12 @@ const FAKE_USER = {
 beforeEach(() => {
   signInMock.mockReset()
   extractSessionTokenMock.mockReset()
+  readSessionTokenFromCookiesMock.mockReset()
   readUserFromTokenMock.mockReset()
   // 默认成功路径:signIn 返回任意值(被 extractSessionToken mock 接管)
   signInMock.mockResolvedValue(new Response(null, { status: 200 }))
   extractSessionTokenMock.mockReturnValue(FAKE_TOKEN)
+  readSessionTokenFromCookiesMock.mockResolvedValue(null)
   readUserFromTokenMock.mockResolvedValue(FAKE_USER)
 })
 
@@ -81,6 +89,7 @@ describe("POST /api/auth/wechat-miniprogram/login", () => {
 
   it("returns 401 when signIn yields no session token", async () => {
     extractSessionTokenMock.mockReturnValue(null)
+    readSessionTokenFromCookiesMock.mockResolvedValue(null)
 
     const res = await POST(makeRequest({ code: "js-1", phoneCode: "pc-1" }))
     expect(res.status).toBe(401)
@@ -92,6 +101,25 @@ describe("POST /api/auth/wechat-miniprogram/login", () => {
       phoneCode: "pc-1",
       redirect: false,
     })
+    // 两种方式都被尝试过
+    expect(extractSessionTokenMock).toHaveBeenCalledTimes(1)
+    expect(readSessionTokenFromCookiesMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("returns 200 via cookies() fallback when Set-Cookie header missing", async () => {
+    // Auth.js v5 某些版本下 signIn 返回空对象,cookie 通过 cookies() 写入;
+    // extractSessionToken 拿不到,但 readSessionTokenFromCookies 能拿到
+    extractSessionTokenMock.mockReturnValue(null)
+    readSessionTokenFromCookiesMock.mockResolvedValue(FAKE_TOKEN)
+
+    const res = await POST(makeRequest({ code: "js-1", phoneCode: "pc-1" }))
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as IResponse<AuthLoginResponse>
+    expect(body.code).toBe(200)
+    expect(body.data.token).toBe(FAKE_TOKEN)
+    expect(body.data.user).toEqual(FAKE_USER)
+    expect(extractSessionTokenMock).toHaveBeenCalledTimes(1)
+    expect(readSessionTokenFromCookiesMock).toHaveBeenCalledTimes(1)
   })
 
   it("returns 200 with { token, user } on success", async () => {

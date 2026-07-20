@@ -192,6 +192,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             logger.warn(LOG_PREFIX.WECHAT, "code2Session failed", {
               errcode: err.errcode,
               errmsg: err.errmsg,
+              raw: err.raw,
             })
           } else {
             logger.warn(LOG_PREFIX.WECHAT, "code2Session failed", {
@@ -226,6 +227,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             logger.warn(LOG_PREFIX.WECHAT, "getPhoneNumber failed", {
               errcode: err.errcode,
               errmsg: err.errmsg,
+              raw: err.raw,
             })
           } else {
             logger.warn(LOG_PREFIX.WECHAT, "getPhoneNumber failed", {

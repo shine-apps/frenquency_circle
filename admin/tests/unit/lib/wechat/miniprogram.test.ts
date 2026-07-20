@@ -23,14 +23,17 @@ type FetchResponse = {
   status: number
   statusText: string
   json: () => Promise<unknown>
+  text: () => Promise<string>
 }
 
 function makeJsonResponse(body: unknown, status = 200, statusText = "OK"): FetchResponse {
+  const text = typeof body === "string" ? body : JSON.stringify(body)
   return {
     ok: status >= 200 && status < 300,
     status,
     statusText,
     json: async () => body,
+    text: async () => text,
   }
 }
 
@@ -109,6 +112,30 @@ describe("lib/wechat/miniprogram", () => {
       expect(fetchMock).toHaveBeenCalledTimes(1)
     })
 
+    // 微信 /sns/jscode2session 成功响应不带 errcode（老接口设计不一致）
+    // 必须接受这种响应为成功，而不是当成"unknown wechat mp error"抛出
+    it("accepts success response without errcode field (real WeChat behavior)", async () => {
+      const fetchMock = makeFetchMock(async () => {
+        return makeJsonResponse({
+          session_key: "5BaJIE97uvkt17UvbMT2kQ==",
+          openid: "ohZVG3TNAkh_jqfEVhLw1_tAfbRI",
+        })
+      })
+      vi.stubGlobal("fetch", fetchMock)
+
+      const r = await code2Session({
+        appId: "wx-test-app-id",
+        appSecret: "wx-test-app-secret",
+        code: "js-test",
+      })
+      expect(r).toEqual({
+        openid: "ohZVG3TNAkh_jqfEVhLw1_tAfbRI",
+        session_key: "5BaJIE97uvkt17UvbMT2kQ==",
+        unionid: undefined,
+      })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+
     it("throws WechatMpError when errcode != 0", async () => {
       vi.stubGlobal(
         "fetch",
@@ -144,6 +171,22 @@ describe("lib/wechat/miniprogram", () => {
           code: "x",
         })
       ).rejects.toBeInstanceOf(WechatMpError)
+    })
+
+    it("throws when session_key missing in response (even without errcode)", async () => {
+      vi.stubGlobal(
+        "fetch",
+        makeFetchMock(async () =>
+          makeJsonResponse({ openid: "oXyz" })
+        )
+      )
+      await expect(
+        code2Session({
+          appId: "wx-test-app-id",
+          appSecret: "wx-test-app-secret",
+          code: "x",
+        })
+      ).rejects.toMatchObject({ stage: "code2session", errcode: -2 })
     })
 
     it("throws when HTTP status not ok", async () => {
@@ -222,6 +265,25 @@ describe("lib/wechat/miniprogram", () => {
       expect(t1).toBe("tok-1")
       expect(t2).toBe("tok-1")
       // Only one network call thanks to cache
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+
+    // /cgi-bin/stable_token 成功响应不带 errcode（同 code2session），
+    // 必须接受这种响应为成功，而不是当成错误抛出
+    it("accepts success response without errcode field (real WeChat behavior)", async () => {
+      const fetchMock = makeFetchMock(async () =>
+        makeJsonResponse({
+          access_token: "106_qu0IDzVPtChUwVd04q297nv5PavUSY7-KfBQRqJSeDECgj4",
+          expires_in: 7158,
+        })
+      )
+      vi.stubGlobal("fetch", fetchMock)
+
+      const t = await getAccessToken({
+        appId: "wx-test-app-id",
+        appSecret: "wx-test-app-secret",
+      })
+      expect(t).toBe("106_qu0IDzVPtChUwVd04q297nv5PavUSY7-KfBQRqJSeDECgj4")
       expect(fetchMock).toHaveBeenCalledTimes(1)
     })
 

@@ -197,7 +197,7 @@ const LoginPage: React.FC = () => {
             onGetPhoneNumber={handleGetPhoneNumber}
             loading={submitting}
           >
-            微信一键登录
+            手机号快捷登录
           </Button>
           <View className={styles.divider}>
             <View className={styles.dividerLine} />

@@ -1,9 +1,15 @@
 import React from 'react';
 import { View, Text } from '@tarojs/components';
 import { useRouter, reLaunch, showActionSheet, navigateTo } from '@tarojs/taro';
-import { HomeIcon, ProfileIcon, PublishIcon } from '../Icons';
+import { Home, Plus, User } from '@nutui/icons-react-taro';
 import { useUserStore } from '@/store/user';
 import styles from './index.module.scss';
+
+// 主题色常量（与 styles/theme.scss 保持一致）
+// NutUI Icon 通过 color prop 渲染图标颜色（mask + backgroundColor 机制）
+const COLOR_PRIMARY = '#165dff';
+const COLOR_TEXT_TERTIARY = '#86909c';
+const COLOR_WHITE = '#ffffff';
 
 export interface TabItem {
   /** 唯一标识 */
@@ -12,10 +18,12 @@ export interface TabItem {
   pagePath: string;
   /** 显示文字 */
   text: string;
-  /** 未选中图标 */
-  icon: React.ReactNode;
-  /** 选中图标 */
-  activeIcon: React.ReactNode;
+  /** NutUI 图标组件 */
+  icon: React.ComponentType<{
+    size?: string | number;
+    color?: string;
+    className?: string;
+  }>;
   /** 是否为中间凸起按钮(行为不同:不跳转,触发 ActionSheet) */
   isCenter?: boolean;
 }
@@ -41,23 +49,20 @@ const TABS: TabItem[] = [
     key: 'home',
     pagePath: 'pages/index/index',
     text: '首页',
-    icon: <HomeIcon active={false} />,
-    activeIcon: <HomeIcon active />,
+    icon: Home,
   },
   {
     key: 'publish',
     pagePath: '',
     text: '发布',
-    icon: <PublishIcon active={false} />,
-    activeIcon: <PublishIcon active />,
+    icon: Plus,
     isCenter: true,
   },
   {
     key: 'mine',
     pagePath: 'pages/mine/index',
     text: '我的',
-    icon: <ProfileIcon active={false} />,
-    activeIcon: <ProfileIcon active />,
+    icon: User,
   },
 ];
 
@@ -112,19 +117,32 @@ const CustomTabBar: React.FC<Props> = ({ activeKey }) => {
       {TABS.map((tab) => {
         const isActive = tab.key === currentKey;
         const centerClass = tab.isCenter ? styles.center : '';
+        const activeClass = isActive ? styles.active : '';
+        const IconComp = tab.icon;
+        // 中间凸起按钮图标恒为白色(在主色圆形背景上);
+        // 普通按钮按选中态切换颜色
+        const iconColor = tab.isCenter
+          ? COLOR_WHITE
+          : isActive
+            ? COLOR_PRIMARY
+            : COLOR_TEXT_TERTIARY;
         return (
           <View
             key={tab.key}
-            className={`${styles.item} ${centerClass}`}
+            className={`${styles.item} ${centerClass} ${activeClass}`}
             hoverClass={styles['item-hover']}
             onClick={() => handleClick(tab)}
           >
             <View
               className={`${styles.icon} ${tab.isCenter ? styles.centerIcon : ''}`}
             >
-              {isActive ? tab.activeIcon : tab.icon}
+              <IconComp size="44rpx" color={iconColor} />
             </View>
-            <Text className={styles.text}>{tab.text}</Text>
+            <Text
+              className={styles.text}
+            >
+              {tab.text}
+            </Text>
           </View>
         );
       })}

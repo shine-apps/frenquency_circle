@@ -393,12 +393,16 @@ export const teacherApplications = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    /** 触发此次申请的圈子 ID */
-    circleId: uuid("circle_id")
-      .notNull()
-      .references(() => circles.id, { onDelete: "cascade" }),
+    /** 触发此次申请的圈子 ID(独立认证时可为 null) */
+    circleId: uuid("circle_id").references(() => circles.id, {
+      onDelete: "cascade",
+    }),
     /** 认证材料文件列表(JSONB 数组,每项含 url/key/size/mimeType/originalName) */
     files: jsonb("files").notNull(),
+    /** 身份证人像面(单张图片,必填) */
+    idCardFront: jsonb("id_card_front"),
+    /** 身份证国徽面(单张图片,必填) */
+    idCardBack: jsonb("id_card_back"),
     status: text("status").notNull().default("pending"),
     /** 审核人(可空) */
     reviewerId: uuid("reviewer_id").references(() => users.id, {

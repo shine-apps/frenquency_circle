@@ -7,6 +7,7 @@ export default defineAppConfig({
     'pages/search/index',
     'pages/publish/index',
     'pages/match/index',
+    'pages/teacher-certification/index',
     // Phase 7 新增:圈子与个人中心子页面
     'pages/circle/index',
     'pages/create-circle/index',

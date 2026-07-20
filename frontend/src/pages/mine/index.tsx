@@ -69,6 +69,11 @@ const MinePage: React.FC = () => {
     Taro.navigateTo({ url: '/pages/profile/index' });
   };
 
+  /** 跳教师认证页(USER 角色) */
+  const handleTeacherCert = (): void => {
+    Taro.navigateTo({ url: '/pages/teacher-certification/index' });
+  };
+
   /** 退出登录:showModal 确认后执行 */
   const handleLogout = (): void => {
     Taro.showModal({
@@ -175,6 +180,20 @@ const MinePage: React.FC = () => {
             <View className={styles['cell-main']}>
               <Text className={styles['cell-title']}>我发布的圈子</Text>
               <Text className={styles['cell-desc']}>传承人专属</Text>
+            </View>
+            <Text className={styles['cell-arrow']}>›</Text>
+          </View>
+        )}
+
+        {user?.role === 'USER' && (
+          <View
+            className={styles['cell-item']}
+            onClick={handleTeacherCert}
+            hoverClass={styles['cell-hover']}
+          >
+            <View className={styles['cell-main']}>
+              <Text className={styles['cell-title']}>教师认证</Text>
+              <Text className={styles['cell-desc']}>申请成为认证教师</Text>
             </View>
             <Text className={styles['cell-arrow']}>›</Text>
           </View>

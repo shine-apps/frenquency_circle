@@ -2,7 +2,7 @@ import { z } from "zod"
 import { and, eq, gte } from "drizzle-orm"
 
 import { db } from "@/lib/db"
-import { circles, circleTags, circleMembers, teacherApplications } from "@/db/schema"
+import { circles, circleTags, circleMembers } from "@/db/schema"
 import { corsOptions, fail, ok, withCors } from "@/lib/api"
 import { requireSession } from "@/lib/auth-utils"
 import { logger, LOG_PREFIX } from "@/lib/logger"
@@ -23,7 +23,6 @@ const COVER_IMAGES_MAX = 9
  * - tagIds: 1-5 个 uuid
  * - description: 10-1000 字符
  * - contactPhone / wechat: 至少填一种
- * - certificationFiles: USER 角色必填 1-5 项;TEACHER 角色忽略
  * - coverImages: 0-9 个图片 URL(可选)
  */
 const createCircleSchema = z
@@ -46,19 +45,6 @@ const createCircleSchema = z
       .or(z.literal("").transform(() => undefined)),
     activityTime: z.string().max(100).optional(),
     maxMembers: z.number().int().min(1).max(999).optional(),
-    /** 认证材料文件列表(USER 角色必填 1-5 项;TEACHER 角色忽略) */
-    certificationFiles: z
-      .array(
-        z.object({
-          url: z.string().url(),
-          key: z.string(),
-          size: z.number().int().positive(),
-          mimeType: z.string(),
-          originalName: z.string(),
-        })
-      )
-      .max(5)
-      .optional(),
     /** 轮播图片 URL 数组(0-9 个,可选) */
     coverImages: z
       .array(z.string().url())
@@ -73,11 +59,10 @@ const createCircleSchema = z
 /**
  * POST /api/circles
  *
- * 创建圈子(USER / TEACHER 角色可调)。
- * - USER 角色:必须提交教师认证材料(certificationFiles 1-5 项),圈子创建后 status=pending,
- *   同步创建 teacher_application 记录,管理员审核通过后升级为 TEACHER。
- * - TEACHER 角色:无需认证材料,圈子创建后 status=pending,待管理员审核上线。
- * 24 小时内最多创建 5 个,超限返回 429。
+ * 创建圈子(仅 TEACHER 角色可调)。
+ * - 需先通过教师认证成为 TEACHER 才能创建圈子
+ * - 圈子创建后 status=pending,管理员审核通过后上线
+ * - 24 小时内最多创建 5 个,超限返回 429。
  */
 export async function OPTIONS(req: Request) {
   return corsOptions(req)
@@ -90,9 +75,12 @@ export async function POST(req: Request) {
   const userId = guard.user.id
   const role = guard.user.role
 
-  // 2. 角色门槛(ADMIN 不允许通过此接口创建圈子)
-  if (role !== "USER" && role !== "TEACHER") {
-    return withCors(fail(403, "仅 USER / TEACHER 角色可创建圈子"), req)
+  // 2. 角色门槛(仅 TEACHER 可创建圈子,需先通过教师认证)
+  if (role !== "TEACHER") {
+    return withCors(
+      fail(403, role === "USER" ? "请先完成教师认证再创建圈子" : "仅认证教师可创建圈子"),
+      req
+    )
   }
 
   // 3. 解析请求体
@@ -105,20 +93,7 @@ export async function POST(req: Request) {
     )
   }
 
-  // 4. 角色分流:USER 必须提交认证材料
-  if (role === "USER") {
-    if (
-      !parsed.data.certificationFiles ||
-      parsed.data.certificationFiles.length === 0
-    ) {
-      return withCors(
-        fail(400, "USER 角色创建圈子需提交教师认证材料(1-5 个文件)"),
-        req
-      )
-    }
-  }
-
-  // 5. 24h 配额校验
+  // 4. 24h 配额校验
   const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
   const recentCircles = await db
     .select({ id: circles.id })
@@ -137,7 +112,7 @@ export async function POST(req: Request) {
     )
   }
 
-  // 6. 插入圈子(status=pending,等待管理员审核)
+  // 4. 插入圈子(status=pending,等待管理员审核)
   const {
     title,
     tagIds,
@@ -149,7 +124,6 @@ export async function POST(req: Request) {
     wechat,
     activityTime,
     maxMembers,
-    certificationFiles,
     coverImages,
   } = parsed.data
 
@@ -172,7 +146,7 @@ export async function POST(req: Request) {
     })
     .returning({ id: circles.id })
 
-  // 7. 批量插入 circle_tags
+  // 5. 批量插入 circle_tags
   await db.insert(circleTags).values(
     tagIds.map((tagId) => ({
       circleId: circleRow.id,
@@ -180,28 +154,18 @@ export async function POST(req: Request) {
     }))
   )
 
-  // 8. 插入 circle_members(role=creator)
+  // 6. 插入 circle_members(role=creator)
   await db.insert(circleMembers).values({
     circleId: circleRow.id,
     userId,
     role: "creator",
   })
 
-  // 9. 若 USER 角色,插入 teacher_application(认证申请)
-  if (role === "USER" && certificationFiles) {
-    await db.insert(teacherApplications).values({
-      userId,
-      circleId: circleRow.id,
-      files: certificationFiles,
-      status: "pending",
-    })
-  }
 
   logger.info(LOG_PREFIX.CIRCLE, "Circle created", {
     circleId: circleRow.id,
     creatorId: userId,
     role,
-    hasCertification: role === "USER",
   })
 
   return withCors(

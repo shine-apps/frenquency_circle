@@ -8,6 +8,7 @@ import {
   AudioWaveformIcon,
   TagIcon,
   CircleIcon,
+  FileCheckIcon,
 } from "lucide-react"
 
 import {
@@ -29,6 +30,7 @@ const navItems = [
   { href: "/admin/users", label: "Users", icon: UsersIcon },
   { href: "/admin/tags", label: "标签管理", icon: TagIcon },
   { href: "/admin/circles", label: "圈子审核", icon: CircleIcon },
+  { href: "/admin/teacher-applications", label: "教师认证", icon: FileCheckIcon },
 ]
 
 export function AppSidebar() {

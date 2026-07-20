@@ -184,7 +184,7 @@ declare interface CertificationFile {
   originalName: string
 }
 
-/** 创建圈子请求体 */
+/** 创建圈子请求体(仅 TEACHER 可调用) */
 declare interface CreateCircleInput {
   title: string
   tagIds: string[]
@@ -196,10 +196,14 @@ declare interface CreateCircleInput {
   wechat?: string
   activityTime?: string
   maxMembers?: number
-  /** 教师认证材料(USER 角色创建圈子时必填,1-5 个文件) */
-  certificationFiles?: CertificationFile[]
   /** 轮播图片 URL 数组(最多 9 个,可省略) */
   coverImages?: string[]
+}
+
+/** 教师认证申请结果 */
+declare interface TeacherApplicationResult {
+  applicationId: string
+  status: string
 }
 
 /** 更新圈子请求体(全部可选,与后端 PUT schema 对齐:不含 latitude/longitude/address) */

@@ -198,12 +198,23 @@ export type CertificationFile = {
 export type TeacherApplicationDTO = {
   id: string
   userId: string
-  circleId: string
+  /** 关联的圈子 ID(独立认证时为 null) */
+  circleId: string | null
   files: CertificationFile[]
+  /** 身份证人像面(必填) */
+  idCardFront: CertificationFile | null
+  /** 身份证国徽面(必填) */
+  idCardBack: CertificationFile | null
   status: "pending" | "approved" | "rejected"
   reviewNote: string | null
   createdAt: string
   updatedAt: string
+}
+
+/** 管理员教师认证申请列表项 */
+export type AdminTeacherApplicationItem = TeacherApplicationDTO & {
+  userName: string
+  reviewerName?: string | null
 }
 
 /**

@@ -22,7 +22,10 @@ WORKDIR /build
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
-# 复制源码并构建 H5 产物(输出到 dist/)
+# 复制源码并构建 H5 产物
+# 输出目录由 frontend/config/index.ts 按"环境/平台"自动计算:
+#   taro build --type h5 (生产,NODE_ENV=production) → dist/prod/h5/
+# 复制到运行时镜像时需对应改为 dist/prod/h5/(见下方 Stage 3)
 COPY frontend/ ./
 # 直接调用 taro 二进制,避免 pnpm 11 的 ERR_PNPM_IGNORED_BUILDS 拦截
 #
@@ -83,7 +86,8 @@ COPY --from=admin-builder /build/public ./public
 # ---- 3) frontend H5 静态文件 ----
 # 复制到 public/h5/:Next.js 会把 public/ 下的文件映射到 URL 根路径,
 # 因此 public/h5/index.html → URL /h5/(Taro prod publicPath 已设为 /h5/)
-COPY --from=frontend-builder /build/dist/ ./public/h5/
+# 源路径 dist/prod/h5/ 对应 config/index.ts 中 dist/{env}/{platform} 的生产 H5 产物
+COPY --from=frontend-builder /build/dist/prod/h5/ ./public/h5/
 
 # ---- 4) Drizzle 迁移文件 + 迁移脚本(容器启动时执行) ----
 COPY --from=admin-builder /build/drizzle ./drizzle

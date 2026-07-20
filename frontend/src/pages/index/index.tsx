@@ -81,6 +81,14 @@ const IndexPage: React.FC = () => {
   const [items, setItems] = useState<MixedItem[]>([]);
   // H5 端地图选点弹层显隐(用于切换位置)
   const [pickerVisible, setPickerVisible] = useState(false);
+  // 首页说明卡片是否展示(用户关闭后本地记忆,不再展示)
+  const [showIntro, setShowIntro] = useState<boolean>(() => {
+    try {
+      return Taro.getStorageSync('index_intro_dismissed') !== '1';
+    } catch {
+      return true;
+    }
+  });
 
   const tagIds = (user?.tags || []).map((t) => t.id);
 
@@ -262,6 +270,16 @@ const IndexPage: React.FC = () => {
     Taro.navigateTo({ url: '/pages/publish/index' });
   };
 
+  /** 关闭首页说明卡片(本地记忆,不再展示) */
+  const handleDismissIntro = (): void => {
+    try {
+      Taro.setStorageSync('index_intro_dismissed', '1');
+    } catch {
+      // 静默
+    }
+    setShowIntro(false);
+  };
+
   // 渲染标签(最多 3 个 + "+N")
   const renderTags = (tags: TagDTO[]): React.ReactElement => {
     const visible = tags.slice(0, MAX_TAG_VISIBLE);
@@ -292,6 +310,41 @@ const IndexPage: React.FC = () => {
           <Text className={styles.publishBtnText}>发布</Text>
         </View>
       </View>
+
+      {/* ====== 首页说明卡片(可关闭) ====== */}
+      {showIntro && (
+        <View className={styles.introCard}>
+          <View className={styles.introHead}>
+            <Text className={styles.introTitle}>同频圈是什么</Text>
+            <Text className={styles.introClose} onClick={handleDismissIntro}>
+              ×
+            </Text>
+          </View>
+          <Text className={styles.introDesc}>
+            基于地理位置的传统文化艺术兴趣圈子匹配平台，让同好之人在城市中轻松相遇。
+          </Text>
+          <View className={styles.introList}>
+            <View className={styles.introItem}>
+              <Text className={styles.introDot}>·</Text>
+              <Text className={styles.introItemText}>
+                选择兴趣标签，发现 1~30km 内同频的人与圈子
+              </Text>
+            </View>
+            <View className={styles.introItem}>
+              <Text className={styles.introDot}>·</Text>
+              <Text className={styles.introItemText}>
+                加入圈子，参与太极、书法、民乐、茶道等线下活动
+              </Text>
+            </View>
+            <View className={styles.introItem}>
+              <Text className={styles.introDot}>·</Text>
+              <Text className={styles.introItemText}>
+                完成教师认证，即可创建圈子、传承文化
+              </Text>
+            </View>
+          </View>
+        </View>
+      )}
 
       {/* ====== 定位卡片 / 授权引导 ====== */}
       {locationDenied ? (

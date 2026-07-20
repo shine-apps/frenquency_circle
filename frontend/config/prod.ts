@@ -16,7 +16,7 @@ export default {
   // 浏览器请求为同源,无 CORS preflight。
   // 若部署到不同域(如 m.example.com),把空串换成完整 baseURL 即可。
   defineConstants: {
-    API_BASE_URL: JSON.stringify(''),
+    API_BASE_URL: JSON.stringify('https://fc.shinehe.cn'),
     // 注:AMAP_KEY / AMAP_SECURITY_CODE 不再在此注入,改为运行时由
     // admin 的 GET /api/config/amap.js 端点提供(见 frontend/src/index.html)。
   },

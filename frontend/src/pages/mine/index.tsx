@@ -139,7 +139,7 @@ const MinePage: React.FC = () => {
           </View>
           <Text className={styles.subtitle}>
             {isLoggedIn
-              ? user?.phone ?? '未绑定手机号'
+              ? user?.email ?? '未绑定邮箱'
               : '点击登录体验更多功能'}
           </Text>
         </View>

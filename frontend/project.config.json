@@ -1,5 +1,5 @@
 {
-  "miniprogramRoot": "dist/",
+  "miniprogramRoot": "dist/dev/weapp/",
   "projectname": "freqency_circle",
   "description": "freqency_circle",
   "appid": "wxb4498858afb9d4bc",

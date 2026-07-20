@@ -18,7 +18,14 @@ export default defineConfig<'webpack5'>(async (merge, { command, mode }) => {
       828: 1.81 / 2,
     },
     sourceRoot: 'src',
-    outputRoot: process.env.TARO_OUTPUT_DIR || 'dist',
+    // 按"环境/平台"分目录输出,例如:
+    //   dist/dev/weapp、dist/dev/tt、dist/dev/h5
+    //   dist/prod/weapp、dist/prod/tt、dist/prod/h5
+    // 避免不同环境与不同平台产物互相覆盖。
+    // 仍可用 TARO_OUTPUT_DIR 环境变量强制覆盖整个输出路径。
+    outputRoot:
+      process.env.TARO_OUTPUT_DIR ||
+      `dist/${process.env.NODE_ENV === 'development' ? 'dev' : 'prod'}/${process.env.TARO_ENV || 'unknown'}`,
     plugins: ['@tarojs/plugin-html'],
     defineConstants: {},
     // 注:不再使用 sass.resource 自动注入 NutUI 变量,

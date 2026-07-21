@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, Swiper, SwiperItem, Image } from '@tarojs/components';
 import { Avatar, Tag, Button, Popup } from '@nutui/nutui-react-taro';
-import Taro, { useDidShow, useRouter } from '@tarojs/taro';
+import Taro, {
+  useDidShow,
+  useRouter,
+  useShareAppMessage,
+  useShareTimeline,
+} from '@tarojs/taro';
 import { getCircle, contactCircle } from '@/services/circles';
 import { useUserStore } from '@/store/user';
 import styles from './index.module.scss';
@@ -157,6 +162,36 @@ const CirclePage: React.FC = () => {
       Taro.reLaunch({ url: '/pages/index/index' });
     });
   };
+
+  // ====== 微信分享:分享给好友 / 朋友圈 ======
+  // 圈子标题 + 简介(截断 40 字)拼接为分享标题;path 带 circleId,
+  // 接收者打开后走 useDidShow → getCircle 流程(需登录,401 自动跳登录页)
+  useShareAppMessage(() => {
+    const title = circle
+      ? `${circle.title}｜${circle.description.slice(0, 40)}`
+      : '同频圈子';
+    return {
+      title,
+      path: `/pages/circle/index?id=${circleId}`,
+      ...(circle?.coverImages?.[0]
+        ? { imageUrl: circle.coverImages[0] }
+        : {}),
+    };
+  });
+
+  // 朋友圈用 query 而非 path(微信限制)
+  useShareTimeline(() => {
+    const title = circle
+      ? `${circle.title}｜${circle.description.slice(0, 40)}`
+      : '同频圈子';
+    return {
+      title,
+      query: `id=${circleId}`,
+      ...(circle?.coverImages?.[0]
+        ? { imageUrl: circle.coverImages[0] }
+        : {}),
+    };
+  });
 
   // ====== 边界态:加载中 ======
   if (loading && !circle) {
@@ -321,28 +356,27 @@ const CirclePage: React.FC = () => {
 
       {/* ====== 底部固定按钮 ====== */}
       <View className={styles.footer}>
-        {isCreator ? (
+        <View className={styles.footerRow}>
           <Button
             type="primary"
             shape="round"
-            block
             size="large"
-            onClick={handleEdit}
+            loading={!isCreator && contactLoading}
+            onClick={isCreator ? handleEdit : handleContact}
+            className={styles.footerMain}
           >
-            编辑圈子信息
+            {isCreator ? '编辑圈子信息' : '联系老师'}
           </Button>
-        ) : (
           <Button
-            type="primary"
+            type="default"
             shape="round"
-            block
             size="large"
-            loading={contactLoading}
-            onClick={handleContact}
+            openType="share"
+            className={styles.shareBtn}
           >
-            联系老师
+            分享
           </Button>
-        )}
+        </View>
       </View>
 
       {/* ====== 联系方式底部弹层 ====== */}

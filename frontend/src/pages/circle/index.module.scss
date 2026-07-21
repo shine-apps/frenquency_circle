@@ -188,6 +188,22 @@
   z-index: 10;
 }
 
+.footerRow {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+}
+
+.footerMain {
+  flex: 1;
+  min-width: 0;
+}
+
+.shareBtn {
+  flex-shrink: 0;
+  min-width: 160rpx;
+}
+
 // ====== 居中态(加载/404) ======
 .center {
   flex: 1;

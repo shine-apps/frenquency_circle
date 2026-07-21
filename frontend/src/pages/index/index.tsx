@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView } from '@tarojs/components';
 import { Avatar, Tag, Button } from '@nutui/nutui-react-taro';
-import Taro from '@tarojs/taro';
+import Taro, { useShareAppMessage, useShareTimeline } from '@tarojs/taro';
 import CustomTabBar from '@/components/CustomTabBar';
 import H5LocationPicker from '@/components/H5LocationPicker';
 import { useUserStore } from '@/store/user';
@@ -91,6 +91,16 @@ const IndexPage: React.FC = () => {
   });
 
   const tagIds = (user?.tags || []).map((t) => t.id);
+
+  // ====== 微信分享:分享给好友 / 朋友圈 ======
+  useShareAppMessage(() => ({
+    title: '同频圈子',
+    path: '/pages/index/index',
+  }));
+
+  useShareTimeline(() => ({
+    title: '同频圈子',
+  }));
 
   /** 获取位置并拉取匹配 */
   const loadAll = async (lat: number, lng: number, range: number): Promise<void> => {

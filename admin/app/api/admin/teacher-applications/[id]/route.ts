@@ -91,6 +91,8 @@ export async function PATCH(req: Request, context: RouteContext) {
     userId: updated.userId,
     circleId: updated.circleId ?? null,
     files: (updated.files as CertificationFile[]) ?? [],
+    idCardFront: (updated.idCardFront as CertificationFile) ?? null,
+    idCardBack: (updated.idCardBack as CertificationFile) ?? null,
     status: updated.status as "pending" | "approved" | "rejected",
     reviewNote: updated.reviewNote,
     createdAt: updated.createdAt.toISOString(),

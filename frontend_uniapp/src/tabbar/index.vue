@@ -15,15 +15,15 @@ defineOptions({
 /**
  * 中间的鼓包tabbarItem的点击事件
  *
- * - TEACHER / ADMIN 角色:弹 ActionSheet 选择"发布定位 / 创建圈子"
- * - 其他角色:直接跳转发布定位页
+ * - TEACHER / ADMIN 角色:弹 ActionSheet 选择"搜寻同频 / 创建圈子"
+ * - 其他角色:直接跳转搜寻同频页
  */
 function handleClickBulge() {
   const userStore = useUserStore()
   const role = userStore.userInfo?.role
   if (role === 'TEACHER' || role === 'ADMIN') {
     uni.showActionSheet({
-      itemList: ['发布定位', '创建圈子'],
+      itemList: ['搜寻同频', '创建圈子'],
       success(res) {
         if (res.tapIndex === 0) {
           uni.navigateTo({ url: '/pages/publish/publish' })

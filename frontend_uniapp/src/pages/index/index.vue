@@ -204,12 +204,12 @@ function handleSearchClick(): void {
   uni.navigateTo({ url: '/pages/search/search' })
 }
 
-/** 跳发布定位页 */
+/** 跳搜寻同频页 */
 function handlePublishClick(): void {
   const role = user.value?.role
   if (role === 'TEACHER' || role === 'ADMIN') {
     uni.showActionSheet({
-      itemList: ['发布定位', '创建圈子'],
+      itemList: ['搜寻同频', '创建圈子'],
       success(res) {
         if (res.tapIndex === 0) {
           uni.navigateTo({ url: '/pages/publish/publish' })
@@ -237,7 +237,7 @@ function handleRangeChange(range: number): void {
   }
 }
 
-/** 跳发布页(点击定位卡片) */
+/** 跳搜寻同频页(点击定位卡片) */
 function handleLocationCardClick(): void {
   uni.navigateTo({ url: '/pages/publish/publish' })
 }
@@ -316,7 +316,7 @@ onShareTimeline(() => ({
 
 <template>
   <view class="flex min-h-screen flex-col bg-[#f7f8fa] pb-32">
-    <!-- ====== 顶部:搜索栏 + 发布按钮 ====== -->
+    <!-- ====== 顶部:搜索栏 + 搜寻同频按钮 ====== -->
     <view class="bg-white px-4 pb-3 pt-4">
       <view class="flex items-center gap-3">
         <view class="flex h-10 flex-1 items-center rounded-full bg-[#f5f6f7] px-4" @click="handleSearchClick">
@@ -324,7 +324,7 @@ onShareTimeline(() => ({
             搜索兴趣/标签
           </text>
         </view>
-        <wd-button round size="small" @click="handlePublishClick">发布</wd-button>
+        <wd-button round size="small" @click="handlePublishClick">搜寻同频</wd-button>
       </view>
     </view>
 
@@ -404,7 +404,7 @@ onShareTimeline(() => ({
         </text>
       </view>
       <view class="flex items-center text-sm text-[#018d71]" @click="handleLocationCardClick">
-        <text>发布 ›</text>
+        <text>搜寻同频 ›</text>
       </view>
     </view>
 

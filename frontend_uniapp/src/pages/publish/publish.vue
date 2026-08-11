@@ -10,7 +10,7 @@ import { getCurrentLocation } from '@/utils/location'
 
 definePage({
   style: {
-    navigationBarTitleText: '发布定位',
+    navigationBarTitleText: '搜寻同频',
   },
 })
 
@@ -36,7 +36,7 @@ const submitting = ref(false)
 const locating = ref(false)
 // H5 端地图选点弹层显隐
 const pickerVisible = ref(false)
-// 发布类型 Tab:location 定位发布 / circle 圈子发布
+// 发布类型 Tab:location 搜寻同频 / circle 圈子发布
 const publishType = ref<'location' | 'circle'>('location')
 
 /** 切换到"发布圈子":TEACHER / ADMIN 直接跳转,其余角色引导先完成教师认证 */
@@ -130,7 +130,7 @@ function handleEditTags() {
   uni.navigateTo({ url: '/pages/search/search' })
 }
 
-/** 发布并匹配 */
+/** 搜寻同频 */
 async function handlePublish() {
   if (!hasTags.value) {
     uni.showToast({ title: '请先选择兴趣', icon: 'none' })
@@ -164,7 +164,7 @@ async function handlePublish() {
   }
   catch (e) {
     // 含 429 频控,直接展示后端 message
-    uni.showToast({ title: (e as Error).message || '发布失败', icon: 'none' })
+    uni.showToast({ title: (e as Error).message || '搜寻失败', icon: 'none' })
   }
   finally {
     submitting.value = false
@@ -187,7 +187,7 @@ const tagsText = computed(() => {
         :class="publishType === 'location' ? 'font-medium text-[#018d71]' : 'text-[#666]'"
         @click="publishType = 'location'"
       >
-        发布定位
+        搜寻同频
       </view>
       <view
         class="flex-1 py-3 text-center text-sm"
@@ -274,7 +274,7 @@ const tagsText = computed(() => {
       </view>
     </view>
 
-    <!-- ====== 5. 发布按钮 ====== -->
+    <!-- ====== 5. 搜寻按钮 ====== -->
     <view class="mx-4 mt-4">
       <wd-button
         block
@@ -282,7 +282,7 @@ const tagsText = computed(() => {
         :disabled="!hasTags || !hasLocation"
         @click="handlePublish"
       >
-        发布并匹配
+        开始搜寻
       </wd-button>
       <text v-if="!hasTags" class="mt-2 block text-center text-xs text-[#999]">
         请先选择兴趣

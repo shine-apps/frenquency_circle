@@ -49,11 +49,11 @@ export const customTabbarList: CustomTabBarItem[] = [
     icon: '/static/tabbar/home.png',
     iconActive: '/static/tabbar/homeHL.png',
   },
-  // 中间鼓包 tabbarItem：发布按钮
-  // 点击触发业务逻辑：TEACHER 弹 ActionSheet（发布定位/创建圈子），其他角色直接跳发布定位页
+  // 中间鼓包 tabbarItem：搜寻同频按钮
+  // 点击触发业务逻辑：TEACHER 弹 ActionSheet（搜寻同频/创建圈子），其他角色直接跳搜寻同频页
   {
     pagePath: 'pages/index/index',
-    text: '发布',
+    text: '搜寻同频',
     iconType: 'image',
     icon: '/static/tabbar/publish.png',
     iconActive: '/static/tabbar/publish.png',

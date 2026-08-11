@@ -88,7 +88,7 @@ onShow(() => {
   const loc = resolveLocation()
   const tags = resolveTagIds()
   if (!loc) {
-    uni.showToast({ title: '请先发布定位', icon: 'none' })
+    uni.showToast({ title: '请先搜寻同频', icon: 'none' })
     setTimeout(() => uni.navigateBack(), 800)
     return
   }

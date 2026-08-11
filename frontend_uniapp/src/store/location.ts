@@ -3,8 +3,8 @@ import { ref } from 'vue'
 
 /**
  * 当前位置 Store(对应原 Taro 项目 store/location.ts 的 useLocationStore)。
- * 缓存发布页选定的当前位置(经纬度 + 地址),
- * 供发布定位页与首页共享,避免各页面重复获取定位。
+ * 缓存搜寻同频页选定的当前位置(经纬度 + 地址),
+ * 供搜寻同频页与首页共享,避免各页面重复获取定位。
  */
 export const useLocationStore = defineStore('location', () => {
   /** 纬度(未获取为 null) */

@@ -25,7 +25,7 @@ function handleGoHome() {
   uni.reLaunch({ url: '/pages/index/index' })
 }
 
-/** 跳发布定位页(主动匹配) */
+/** 跳搜寻同频页(主动匹配) */
 function handlePublish() {
   uni.navigateTo({ url: '/pages/publish/publish' })
 }
@@ -65,7 +65,7 @@ function renderTags(tags: TagDTO[]): { visible: TagDTO[]; rest: number } {
         最近匹配的圈子
       </text>
       <text class="mt-1 block text-xs text-[#999]">
-        基于最近一次发布定位的匹配结果
+        基于最近一次搜寻同频的匹配结果
       </text>
     </view>
 
@@ -77,7 +77,7 @@ function renderTags(tags: TagDTO[]): { visible: TagDTO[]; rest: number } {
         <wd-button round size="small" @click="handleGoHome">去首页发现</wd-button>
         <view class="rounded-full border border-[#e0e0e0] bg-white px-5 py-2" @click="handlePublish">
           <text class="text-sm text-[#666]">
-            发布定位匹配
+            搜寻同频匹配
           </text>
         </view>
       </view>

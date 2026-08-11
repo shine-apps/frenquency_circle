@@ -1,7 +1,7 @@
 import { http } from '@/http/http'
 import type { LocationPublishInput, MatchCircleDTO, MatchPersonDTO, Paginated } from '@/types'
 
-/** 发布定位返回 */
+/** 搜寻同频返回 */
 export interface PublishLocationResult {
   locationId: string
   publishedAt: string
@@ -17,7 +17,7 @@ export interface MatchQueryParams {
   pageSize?: number
 }
 
-/** 发布当前位置(需登录)。写入 locations 表,同时更新 users 表的最新位置 */
+/** 搜寻同频:发布当前位置(需登录)。写入 locations 表,同时更新 users 表的最新位置 */
 export function publishLocation(input: LocationPublishInput) {
   return http.post<PublishLocationResult>('/api/locations/publish', input as unknown as Record<string, unknown>)
 }

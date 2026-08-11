@@ -16,13 +16,6 @@ CREATE TABLE "circle_members" (
 	"joined_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "circle_tags" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"circle_id" uuid NOT NULL,
-	"tag_id" uuid NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
-);
---> statement-breakpoint
 CREATE TABLE "circles" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"title" text NOT NULL,
@@ -37,6 +30,8 @@ CREATE TABLE "circles" (
 	"max_members" integer,
 	"member_count" integer DEFAULT 0 NOT NULL,
 	"status" text DEFAULT 'active' NOT NULL,
+	"cover_images" text[] DEFAULT '{}'::text[] NOT NULL,
+	"tags" text[] DEFAULT '{}'::text[] NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -49,13 +44,25 @@ CREATE TABLE "contact_logs" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "hobby_tags" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"name" text NOT NULL,
+	"category" text NOT NULL,
+	"pinyin" text,
+	"pinyin_initials" text,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"created_by" uuid,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "locations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" uuid NOT NULL,
 	"latitude" double precision NOT NULL,
 	"longitude" double precision NOT NULL,
 	"address" text NOT NULL,
-	"tag_ids" uuid[],
+	"tag_names" text[],
 	"range_km" integer NOT NULL,
 	"published_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -70,25 +77,19 @@ CREATE TABLE "sms_verification_codes" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "tags" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"name" text NOT NULL,
-	"category" text NOT NULL,
-	"sub_category" text,
-	"pinyin" text,
-	"pinyin_initials" text,
-	"status" text DEFAULT 'pending' NOT NULL,
-	"created_by" uuid,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "user_tags" (
+CREATE TABLE "teacher_applications" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" uuid NOT NULL,
-	"tag_id" uuid NOT NULL,
-	"level" integer DEFAULT 0,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+	"circle_id" uuid,
+	"files" jsonb NOT NULL,
+	"id_card_front" jsonb,
+	"id_card_back" jsonb,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"reviewer_id" uuid,
+	"reviewed_at" timestamp with time zone,
+	"review_note" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "users" (
@@ -107,6 +108,7 @@ CREATE TABLE "users" (
 	"practice_years" integer,
 	"activity_level" text DEFAULT 'medium' NOT NULL,
 	"last_active_at" timestamp with time zone,
+	"tags" text[] DEFAULT '{}'::text[] NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "users_email_unique" UNIQUE("email")
@@ -115,30 +117,32 @@ CREATE TABLE "users" (
 ALTER TABLE "accounts" ADD CONSTRAINT "accounts_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "circle_members" ADD CONSTRAINT "circle_members_circle_id_circles_id_fk" FOREIGN KEY ("circle_id") REFERENCES "public"."circles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "circle_members" ADD CONSTRAINT "circle_members_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "circle_tags" ADD CONSTRAINT "circle_tags_circle_id_circles_id_fk" FOREIGN KEY ("circle_id") REFERENCES "public"."circles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "circle_tags" ADD CONSTRAINT "circle_tags_tag_id_tags_id_fk" FOREIGN KEY ("tag_id") REFERENCES "public"."tags"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "circles" ADD CONSTRAINT "circles_creator_id_users_id_fk" FOREIGN KEY ("creator_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contact_logs" ADD CONSTRAINT "contact_logs_circle_id_circles_id_fk" FOREIGN KEY ("circle_id") REFERENCES "public"."circles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contact_logs" ADD CONSTRAINT "contact_logs_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "hobby_tags" ADD CONSTRAINT "hobby_tags_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "locations" ADD CONSTRAINT "locations_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "tags" ADD CONSTRAINT "tags_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "user_tags" ADD CONSTRAINT "user_tags_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "user_tags" ADD CONSTRAINT "user_tags_tag_id_tags_id_fk" FOREIGN KEY ("tag_id") REFERENCES "public"."tags"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "teacher_applications" ADD CONSTRAINT "teacher_applications_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "teacher_applications" ADD CONSTRAINT "teacher_applications_circle_id_circles_id_fk" FOREIGN KEY ("circle_id") REFERENCES "public"."circles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "teacher_applications" ADD CONSTRAINT "teacher_applications_reviewer_id_users_id_fk" FOREIGN KEY ("reviewer_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "accounts_provider_account_idx" ON "accounts" USING btree ("provider","provider_account_id");--> statement-breakpoint
 CREATE INDEX "accounts_user_idx" ON "accounts" USING btree ("user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "circle_members_circle_user_idx" ON "circle_members" USING btree ("circle_id","user_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "circle_tags_circle_tag_idx" ON "circle_tags" USING btree ("circle_id","tag_id");--> statement-breakpoint
 CREATE INDEX "circles_creator_idx" ON "circles" USING btree ("creator_id");--> statement-breakpoint
 CREATE INDEX "circles_status_idx" ON "circles" USING btree ("status");--> statement-breakpoint
 CREATE INDEX "circles_location_idx" ON "circles" USING btree ("latitude","longitude");--> statement-breakpoint
+CREATE INDEX "circles_tags_gin_idx" ON "circles" USING gin ("tags");--> statement-breakpoint
 CREATE INDEX "contact_logs_circle_idx" ON "contact_logs" USING btree ("circle_id");--> statement-breakpoint
 CREATE INDEX "contact_logs_user_idx" ON "contact_logs" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "hobby_tags_name_idx" ON "hobby_tags" USING btree ("name");--> statement-breakpoint
+CREATE INDEX "hobby_tags_pinyin_idx" ON "hobby_tags" USING btree ("pinyin");--> statement-breakpoint
+CREATE INDEX "hobby_tags_pinyin_initials_idx" ON "hobby_tags" USING btree ("pinyin_initials");--> statement-breakpoint
+CREATE INDEX "hobby_tags_category_name_idx" ON "hobby_tags" USING btree ("category","name");--> statement-breakpoint
+CREATE INDEX "hobby_tags_status_idx" ON "hobby_tags" USING btree ("status");--> statement-breakpoint
 CREATE INDEX "locations_user_idx" ON "locations" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "locations_location_idx" ON "locations" USING btree ("latitude","longitude");--> statement-breakpoint
 CREATE INDEX "sms_verification_codes_phone_idx" ON "sms_verification_codes" USING btree ("phone");--> statement-breakpoint
-CREATE INDEX "tags_name_idx" ON "tags" USING btree ("name");--> statement-breakpoint
-CREATE INDEX "tags_pinyin_idx" ON "tags" USING btree ("pinyin");--> statement-breakpoint
-CREATE INDEX "tags_pinyin_initials_idx" ON "tags" USING btree ("pinyin_initials");--> statement-breakpoint
-CREATE INDEX "tags_category_sub_idx" ON "tags" USING btree ("category","sub_category");--> statement-breakpoint
-CREATE INDEX "tags_status_idx" ON "tags" USING btree ("status");--> statement-breakpoint
-CREATE UNIQUE INDEX "user_tags_user_tag_idx" ON "user_tags" USING btree ("user_id","tag_id");
+CREATE INDEX "teacher_applications_user_idx" ON "teacher_applications" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "teacher_applications_circle_idx" ON "teacher_applications" USING btree ("circle_id");--> statement-breakpoint
+CREATE INDEX "teacher_applications_status_idx" ON "teacher_applications" USING btree ("status");--> statement-breakpoint
+CREATE INDEX "users_tags_gin_idx" ON "users" USING gin ("tags");

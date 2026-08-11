@@ -1,5 +1,5 @@
 {
-  "id": "2f2771b9-1bcf-4c52-9b34-6f50bbf280af",
+  "id": "4ff328cd-6754-4f00-8beb-aec74ed0b2db",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -209,94 +209,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.circle_tags": {
-      "name": "circle_tags",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "circle_id": {
-          "name": "circle_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "tag_id": {
-          "name": "tag_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "circle_tags_circle_tag_idx": {
-          "name": "circle_tags_circle_tag_idx",
-          "columns": [
-            {
-              "expression": "circle_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "tag_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "circle_tags_circle_id_circles_id_fk": {
-          "name": "circle_tags_circle_id_circles_id_fk",
-          "tableFrom": "circle_tags",
-          "tableTo": "circles",
-          "columnsFrom": [
-            "circle_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "circle_tags_tag_id_tags_id_fk": {
-          "name": "circle_tags_tag_id_tags_id_fk",
-          "tableFrom": "circle_tags",
-          "tableTo": "tags",
-          "columnsFrom": [
-            "tag_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.circles": {
       "name": "circles",
       "schema": "",
@@ -382,6 +294,20 @@
           "notNull": true,
           "default": "'active'"
         },
+        "cover_images": {
+          "name": "cover_images",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::text[]"
+        },
+        "tags": {
+          "name": "tags",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::text[]"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -447,6 +373,21 @@
           "isUnique": false,
           "concurrently": false,
           "method": "btree",
+          "with": {}
+        },
+        "circles_tags_gin_idx": {
+          "name": "circles_tags_gin_idx",
+          "columns": [
+            {
+              "expression": "tags",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
           "with": {}
         }
       },
@@ -574,6 +515,173 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.hobby_tags": {
+      "name": "hobby_tags",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pinyin": {
+          "name": "pinyin",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pinyin_initials": {
+          "name": "pinyin_initials",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "hobby_tags_name_idx": {
+          "name": "hobby_tags_name_idx",
+          "columns": [
+            {
+              "expression": "name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "hobby_tags_pinyin_idx": {
+          "name": "hobby_tags_pinyin_idx",
+          "columns": [
+            {
+              "expression": "pinyin",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "hobby_tags_pinyin_initials_idx": {
+          "name": "hobby_tags_pinyin_initials_idx",
+          "columns": [
+            {
+              "expression": "pinyin_initials",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "hobby_tags_category_name_idx": {
+          "name": "hobby_tags_category_name_idx",
+          "columns": [
+            {
+              "expression": "category",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "hobby_tags_status_idx": {
+          "name": "hobby_tags_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "hobby_tags_created_by_users_id_fk": {
+          "name": "hobby_tags_created_by_users_id_fk",
+          "tableFrom": "hobby_tags",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.locations": {
       "name": "locations",
       "schema": "",
@@ -609,9 +717,9 @@
           "primaryKey": false,
           "notNull": true
         },
-        "tag_ids": {
-          "name": "tag_ids",
-          "type": "uuid[]",
+        "tag_names": {
+          "name": "tag_names",
+          "type": "text[]",
           "primaryKey": false,
           "notNull": false
         },
@@ -762,8 +870,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.tags": {
-      "name": "tags",
+    "public.teacher_applications": {
+      "name": "teacher_applications",
       "schema": "",
       "columns": {
         "id": {
@@ -773,33 +881,33 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "name": {
-          "name": "name",
-          "type": "text",
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
-        "category": {
-          "name": "category",
-          "type": "text",
+        "circle_id": {
+          "name": "circle_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "files": {
+          "name": "files",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": true
         },
-        "sub_category": {
-          "name": "sub_category",
-          "type": "text",
+        "id_card_front": {
+          "name": "id_card_front",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },
-        "pinyin": {
-          "name": "pinyin",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "pinyin_initials": {
-          "name": "pinyin_initials",
-          "type": "text",
+        "id_card_back": {
+          "name": "id_card_back",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },
@@ -810,9 +918,21 @@
           "notNull": true,
           "default": "'pending'"
         },
-        "created_by": {
-          "name": "created_by",
+        "reviewer_id": {
+          "name": "reviewer_id",
           "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reviewed_at": {
+          "name": "reviewed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "review_note": {
+          "name": "review_note",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -832,11 +952,11 @@
         }
       },
       "indexes": {
-        "tags_name_idx": {
-          "name": "tags_name_idx",
+        "teacher_applications_user_idx": {
+          "name": "teacher_applications_user_idx",
           "columns": [
             {
-              "expression": "name",
+              "expression": "user_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -847,11 +967,11 @@
           "method": "btree",
           "with": {}
         },
-        "tags_pinyin_idx": {
-          "name": "tags_pinyin_idx",
+        "teacher_applications_circle_idx": {
+          "name": "teacher_applications_circle_idx",
           "columns": [
             {
-              "expression": "pinyin",
+              "expression": "circle_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -862,44 +982,8 @@
           "method": "btree",
           "with": {}
         },
-        "tags_pinyin_initials_idx": {
-          "name": "tags_pinyin_initials_idx",
-          "columns": [
-            {
-              "expression": "pinyin_initials",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "tags_category_sub_idx": {
-          "name": "tags_category_sub_idx",
-          "columns": [
-            {
-              "expression": "category",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "sub_category",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "tags_status_idx": {
-          "name": "tags_status_idx",
+        "teacher_applications_status_idx": {
+          "name": "teacher_applications_status_idx",
           "columns": [
             {
               "expression": "status",
@@ -915,91 +999,9 @@
         }
       },
       "foreignKeys": {
-        "tags_created_by_users_id_fk": {
-          "name": "tags_created_by_users_id_fk",
-          "tableFrom": "tags",
-          "tableTo": "users",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.user_tags": {
-      "name": "user_tags",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "tag_id": {
-          "name": "tag_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "level": {
-          "name": "level",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "default": 0
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "user_tags_user_tag_idx": {
-          "name": "user_tags_user_tag_idx",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "tag_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "user_tags_user_id_users_id_fk": {
-          "name": "user_tags_user_id_users_id_fk",
-          "tableFrom": "user_tags",
+        "teacher_applications_user_id_users_id_fk": {
+          "name": "teacher_applications_user_id_users_id_fk",
+          "tableFrom": "teacher_applications",
           "tableTo": "users",
           "columnsFrom": [
             "user_id"
@@ -1010,17 +1012,30 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "user_tags_tag_id_tags_id_fk": {
-          "name": "user_tags_tag_id_tags_id_fk",
-          "tableFrom": "user_tags",
-          "tableTo": "tags",
+        "teacher_applications_circle_id_circles_id_fk": {
+          "name": "teacher_applications_circle_id_circles_id_fk",
+          "tableFrom": "teacher_applications",
+          "tableTo": "circles",
           "columnsFrom": [
-            "tag_id"
+            "circle_id"
           ],
           "columnsTo": [
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "teacher_applications_reviewer_id_users_id_fk": {
+          "name": "teacher_applications_reviewer_id_users_id_fk",
+          "tableFrom": "teacher_applications",
+          "tableTo": "users",
+          "columnsFrom": [
+            "reviewer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -1128,6 +1143,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "tags": {
+          "name": "tags",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::text[]"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -1143,7 +1165,23 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "users_tags_gin_idx": {
+          "name": "users_tags_gin_idx",
+          "columns": [
+            {
+              "expression": "tags",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
+          "with": {}
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {

@@ -44,27 +44,22 @@ export const customTabbarList: CustomTabBarItem[] = [
   {
     text: '首页',
     pagePath: 'pages/index/index',
-    // 使用 image 模式,避免依赖 unocss 外部图标集加载
-    iconType: 'image',
-    icon: '/static/tabbar/home.png',
-    iconActive: '/static/tabbar/homeHL.png',
+    // unocss 图标:颜色继承 tab 文字色,随高亮自动切换(无需 iconActive)
+    iconType: 'unocss',
+    icon: 'i-carbon-home',
   },
-  // 中间鼓包 tabbarItem：搜寻同频按钮
-  // 点击触发业务逻辑：TEACHER 弹 ActionSheet（搜寻同频/创建圈子），其他角色直接跳搜寻同频页
+  // 中间 tab：发现页入口（普通大小，与左右平齐）
   {
-    pagePath: 'pages/index/index',
-    text: '搜寻同频',
-    iconType: 'image',
-    icon: '/static/tabbar/publish.png',
-    iconActive: '/static/tabbar/publish.png',
-    isBulge: true,
+    pagePath: 'pages/discover/discover',
+    text: '发现',
+    iconType: 'unocss',
+    icon: 'i-carbon-scan',
   },
   {
     pagePath: 'pages/me/me',
     text: '我的',
-    iconType: 'image',
-    icon: '/static/tabbar/personal.png',
-    iconActive: '/static/tabbar/personalHL.png',
+    iconType: 'unocss',
+    icon: 'i-carbon-user',
   },
 ]
 

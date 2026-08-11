@@ -1,8 +1,6 @@
 <script setup lang="ts">
-// i-carbon-code
 import { customTabbarEnable, needHideNativeTabbar, tabbarCacheEnable } from './config'
 import { tabbarList, tabbarStore } from './store'
-import { useUserStore } from '@/store/user'
 import TabbarItem from './TabbarItem.vue'
 
 // #ifdef MP-WEIXIN
@@ -12,49 +10,17 @@ defineOptions({
 })
 // #endif
 
-/**
- * 中间的鼓包tabbarItem的点击事件
- *
- * - TEACHER / ADMIN 角色:弹 ActionSheet 选择"搜寻同频 / 创建圈子"
- * - 其他角色:直接跳转搜寻同频页
- */
-function handleClickBulge() {
-  const userStore = useUserStore()
-  const role = userStore.userInfo?.role
-  if (role === 'TEACHER' || role === 'ADMIN') {
-    uni.showActionSheet({
-      itemList: ['搜寻同频', '创建圈子'],
-      success(res) {
-        if (res.tapIndex === 0) {
-          uni.navigateTo({ url: '/pages/publish/publish' })
-        }
-        else if (res.tapIndex === 1) {
-          uni.navigateTo({ url: '/pages/create-circle/create-circle' })
-        }
-      },
-      fail() {
-        // 用户取消,静默
-      },
-    })
-  }
-  else {
-    uni.navigateTo({ url: '/pages/publish/publish' })
-  }
-}
-
 function handleClick(index: number) {
-  // 当前高亮和真实页面都已经是目标 tab 时，不重复跳转
-  if (index === tabbarStore.curIdx && tabbarStore.isCurrentRouteTabbarItem(index)) {
-    return
-  }
   const list = tabbarList.value
   if (!list[index]) {
     return
   }
-  if (list[index].isBulge) {
-    handleClickBulge()
+
+  // 当前高亮和真实页面都已经是目标 tab 时，不重复跳转
+  if (index === tabbarStore.curIdx && tabbarStore.isCurrentRouteTabbarItem(index)) {
     return
   }
+
   const url = list[index].pagePath
   const prevIdx = tabbarStore.curIdx
   tabbarStore.setCurIdx(index)
@@ -126,13 +92,7 @@ function getColorByIndex(index: number) {
           :style="{ color: getColorByIndex(index) }"
           @click="handleClick(index)"
         >
-          <view v-if="item.isBulge" class="relative">
-            <!-- 中间一个鼓包tabbarItem的处理 -->
-            <view class="bulge">
-              <TabbarItem :item="item" :index="index" class="text-center" is-bulge />
-            </view>
-          </view>
-          <TabbarItem v-else :item="item" :index="index" class="relative px-3 text-center" />
+          <TabbarItem :item="item" :index="index" class="relative px-3 text-center" />
         </view>
       </view>
 
@@ -150,25 +110,5 @@ function getColorByIndex(index: number) {
   z-index: 1000;
   border-top: 1px solid #eee;
   box-sizing: border-box;
-}
-// 中间鼓包的样式
-.bulge {
-  position: absolute;
-  top: -20px;
-  left: 50%;
-  transform-origin: top center;
-  transform: translateX(-50%) scale(0.5) translateY(-33%);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 250rpx;
-  height: 250rpx;
-  border-radius: 50%;
-  background-color: #fff;
-  box-shadow: inset 0 0 0 1px #fefefe;
-
-  &:active {
-    // opacity: 0.8;
-  }
 }
 </style>

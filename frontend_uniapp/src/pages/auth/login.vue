@@ -170,15 +170,13 @@ async function handleGetPhoneNumber(e: any) {
 <template>
   <view class="flex min-h-screen flex-col bg-[#f7f8fa]">
     <!-- 1. Logo 区 -->
-    <view class="flex flex-col items-center pt-20">
-      <view class="flex h-20 w-20 items-center justify-center rounded-2xl bg-[#018d71] text-4xl font-bold text-white">
-        圈
-      </view>
+    <view class="flex flex-col items-center py-5">
+      <image src="/static/images/logo_256_circle.png" class="w-[200px] h-[200px]" />
       <view class="mt-4 text-2xl font-semibold text-[#1a1a1a]">
-        Frequency Circle
+        文艺同频
       </view>
       <view class="mt-2 text-sm text-[#999]">
-        登录开启你的频率社交
+        人与人的连接，让生活更美好
       </view>
     </view>
 
@@ -295,8 +293,8 @@ async function handleGetPhoneNumber(e: any) {
       <!-- 4. 协议勾选 -->
       <view class="mt-6 flex items-center justify-center gap-1">
         <view
-          class="flex h-4 w-4 items-center justify-center rounded-sm border"
-          :class="agreed ? 'border-[#018d71] bg-[#018d71]' : 'border-[#ccc] bg-white'"
+          class="flex h-4 w-4 items-center justify-center rounded-sm border-inset"
+          :class="agreed ? 'border-[#018d71] bg-[#018d71]' : 'border-[#eee] bg-white'"
           @click="agreed = !agreed"
         >
           <text v-if="agreed" class="text-xs text-white">

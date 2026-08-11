@@ -222,8 +222,8 @@ const avatarFallback = computed(() => (user.value?.name ? user.value.name[0] : '
 
     <!-- 3. 底部固定保存按钮 -->
     <view class="px-4 pt-4">
-      <button
-        class="h-12 rounded-full bg-[#018d71] text-base font-medium text-white"
+      <wd-button
+        block
         :loading="submitting"
         @click="handleSave"
       >

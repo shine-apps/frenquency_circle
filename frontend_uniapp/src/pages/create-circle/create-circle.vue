@@ -427,14 +427,14 @@ const tagsCountText = computed(() => `${tagIds.value.length}/${TAGS_MAX}`)
 
       <!-- 底部提交按钮 -->
       <view class="border-t border-[#f0f0f0] bg-white px-4 py-3 pb-safe">
-        <button
-          class="h-12 rounded-full bg-[#018d71] text-base font-medium text-white"
+        <wd-button
+          block
           :loading="submitting"
           :disabled="!canSubmit"
           @click="handleSubmit"
         >
           {{ isEdit ? '保存修改' : '创建圈子' }}
-        </button>
+        </wd-button>
         <text v-if="formErr" class="mt-2 block text-center text-xs text-[#f53f3f]">
           {{ formErr }}
         </text>

@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "wot-ui-unocss-preset-guide": {
+      "source": "wot-ui/open-wot",
+      "sourceType": "github",
+      "skillPath": "skills/wot-ui-unocss-preset-guide/SKILL.md",
+      "computedHash": "76a7e529251c230aa83f6f39678f77782a1797c4bbef081719df223dce13a808"
+    },
+    "wot-ui-v2": {
+      "source": "wot-ui/open-wot",
+      "sourceType": "github",
+      "skillPath": "skills/wot-ui-v2/SKILL.md",
+      "computedHash": "4585202353a8282d5029eb13a1665865ff6b0d4a547466ecade20463fc5c9c8b"
+    }
+  }
+}

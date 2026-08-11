@@ -74,11 +74,7 @@ function renderTags(tags: TagDTO[]): { visible: TagDTO[]; rest: number } {
         暂未匹配到任何圈子,去首页发现同频圈子吧
       </text>
       <view class="mt-4 flex gap-3">
-        <view class="rounded-full bg-[#018d71] px-5 py-2" @click="handleGoHome">
-          <text class="text-sm text-white">
-            去首页发现
-          </text>
-        </view>
+        <wd-button round size="small" @click="handleGoHome">去首页发现</wd-button>
         <view class="rounded-full border border-[#e0e0e0] bg-white px-5 py-2" @click="handlePublish">
           <text class="text-sm text-[#666]">
             发布定位匹配

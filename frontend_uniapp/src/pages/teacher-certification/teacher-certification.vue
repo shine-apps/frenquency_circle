@@ -273,12 +273,12 @@ async function handleGoCreateCircle() {
       <text class="mt-2 block text-sm text-[#666] leading-6">
         您已是认证教师,可以创建和管理圈子
       </text>
-      <button
-        class="mt-4 h-12 rounded-full bg-[#018d71] text-base text-white font-medium"
+      <wd-button
+        block
         @click="handleGoCreateCircle"
       >
         去创建圈子
-      </button>
+      </wd-button>
     </view>
 
     <!-- ====== 已有申请记录 ====== -->
@@ -301,12 +301,12 @@ async function handleGoCreateCircle() {
         <text class="mt-2 block text-sm text-[#666] leading-6">
           恭喜!您的教师认证已通过,现在可以创建圈子了
         </text>
-        <button
-          class="mt-4 h-12 rounded-full bg-[#018d71] text-base text-white font-medium"
+        <wd-button
+          block
           @click="handleGoCreateCircle"
         >
           去创建圈子
-        </button>
+        </wd-button>
       </template>
 
       <!-- 审核中 -->
@@ -319,12 +319,12 @@ async function handleGoCreateCircle() {
         <text class="mt-2 block text-sm text-[#666] leading-6">
           您的认证申请已被驳回{{ application.reviewNote ? `:${application.reviewNote}` : ',请根据要求重新提交' }}
         </text>
-        <button
-          class="mt-4 h-12 rounded-full bg-[#018d71] text-base text-white font-medium"
+        <wd-button
+          block
           @click="handleRetry"
         >
           重新提交
-        </button>
+        </wd-button>
       </template>
 
       <!-- 已提交材料展示 -->
@@ -472,14 +472,14 @@ async function handleGoCreateCircle() {
 
     <!-- ====== 底部提交按钮(仅未申请状态) ====== -->
     <view v-if="!isCertified && !application" class="border-t border-[#f0f0f0] bg-white px-4 py-3 pb-safe">
-      <button
-        class="h-12 rounded-full bg-[#018d71] text-base text-white font-medium"
+      <wd-button
+        block
         :loading="submitting"
         :disabled="!canSubmit"
         @click="handleSubmit"
       >
         提交认证
-      </button>
+      </wd-button>
       <text v-if="!idCardFront || !idCardBack || files.length === 0" class="mt-2 block text-center text-xs text-[#999]">
         请上传身份证正反面及至少 {{ CERT_FILES_MIN }} 个认证材料
       </text>

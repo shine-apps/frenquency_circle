@@ -324,14 +324,7 @@ onShareTimeline(() => ({
             搜索兴趣/标签
           </text>
         </view>
-        <view
-          class="flex h-10 items-center justify-center rounded-full bg-[#018d71] px-5"
-          @click="handlePublishClick"
-        >
-          <text class="text-sm font-medium text-white">
-            发布
-          </text>
-        </view>
+        <wd-button round size="small" @click="handlePublishClick">发布</wd-button>
       </view>
     </view>
 
@@ -389,18 +382,10 @@ onShareTimeline(() => ({
         </text>
       </view>
       <!-- #ifdef H5 -->
-      <view class="rounded-full bg-[#018d71] px-4 py-2" @click="handleChangeLocation">
-        <text class="text-xs text-white">
-          手动选择位置
-        </text>
-      </view>
+      <wd-button round size="small" @click="handleChangeLocation">手动选择位置</wd-button>
       <!-- #endif -->
       <!-- #ifndef H5 -->
-      <view class="rounded-full bg-[#018d71] px-4 py-2" @click="handleOpenSetting">
-        <text class="text-xs text-white">
-          去授权
-        </text>
-      </view>
+      <wd-button round size="small" @click="handleOpenSetting">去授权</wd-button>
       <!-- #endif -->
     </view>
 

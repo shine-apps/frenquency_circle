@@ -213,26 +213,23 @@ const tagsText = computed(() => {
           未获取到位置
         </text>
         <text class="mt-1 text-xs text-[#ccc]">
-          点击右下角"选择位置"
-        </text>
-      </view>
-      <view
-        class="absolute right-4 bottom-4 rounded-full bg-[#018d71] px-4 py-2"
-        @click="handleRelocate"
-      >
-        <text class="text-xs text-white">
-          {{ locating ? '定位中...' : '选择位置' }}
+          点击右下角"手动定位"
         </text>
       </view>
     </view>
 
     <!-- ====== 2. 当前位置卡片 ====== -->
     <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
-      <text class="block text-sm font-medium text-[#333]">
-        当前位置
-      </text>
+      <view class="flex items-center justify-between">
+        <text class="block text-sm font-medium text-[#333]">
+          当前位置
+        </text>
+        <text class="text-sm text-[#018d71]" @click="handleRelocate">
+          {{ locating ? '定位中...' : '手动定位 ›' }}
+        </text>
+      </view>
       <text class="mt-1 block text-base text-[#333]">
-        {{ hasLocation ? (address || '已定位') : '点击地图选择位置' }}
+        {{ hasLocation ? (address || '已定位') : '点击手动定位选择位置' }}
       </text>
       <text v-if="hasLocation" class="mt-1 block text-xs text-[#999]">
         经纬度:{{ Number(latitude).toFixed(6) }}, {{ Number(longitude).toFixed(6) }}
@@ -279,14 +276,14 @@ const tagsText = computed(() => {
 
     <!-- ====== 5. 发布按钮 ====== -->
     <view class="mx-4 mt-4">
-      <button
-        class="h-12 rounded-full bg-[#018d71] text-base font-medium text-white"
+      <wd-button
+        block
         :loading="submitting"
         :disabled="!hasTags || !hasLocation"
         @click="handlePublish"
       >
         发布并匹配
-      </button>
+      </wd-button>
       <text v-if="!hasTags" class="mt-2 block text-center text-xs text-[#999]">
         请先选择兴趣
       </text>
@@ -307,7 +304,3 @@ const tagsText = computed(() => {
     <!-- #endif -->
   </view>
 </template>
-
-<style lang="scss" scoped>
-//
-</style>

@@ -298,14 +298,15 @@ async function handleSubmitCustom() {
             @input="handleCustomNameChange"
           />
         </view>
-        <button
-          class="h-10 rounded-lg bg-[#018d71] px-5 text-sm text-white"
+        <wd-button
+          size="small"
+          :round="false"
           :disabled="!customName.trim() || customSubmitting"
           :loading="customSubmitting"
           @click="handleSubmitCustom"
         >
           添加
-        </button>
+        </wd-button>
       </view>
     </view>
   </view>

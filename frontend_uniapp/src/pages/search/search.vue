@@ -56,14 +56,14 @@ async function handleComplete() {
       <text class="text-sm text-[#999]">
         已选 {{ count }}/{{ MAX_TAGS }}
       </text>
-      <button
-        class="h-9 rounded-full bg-[#018d71] px-5 text-sm text-white"
+      <wd-button
+        size="small"
         :disabled="count === 0 || submitting"
         :loading="submitting"
         @click="handleComplete"
       >
         完成{{ count > 0 ? `(${count})` : '' }}
-      </button>
+      </wd-button>
     </view>
 
     <TagSelector

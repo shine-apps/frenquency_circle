@@ -185,14 +185,15 @@ async function handleGetPhoneNumber(e: any) {
     <!-- 2. 微信快捷登录(仅微信小程序) -->
     <!-- #ifdef MP-WEIXIN -->
     <view class="mt-10 px-8">
-      <button
-        class="flex h-12 items-center justify-center rounded-full bg-[#07c160] text-base font-medium text-white"
+      <wd-button
+        block
+        custom-class="bg-[#07c160]! border-transparent! text-white"
         open-type="getPhoneNumber"
         :loading="submitting"
         @getphonenumber="handleGetPhoneNumber"
       >
         微信一键登录
-      </button>
+      </wd-button>
       <view class="my-6 flex items-center gap-3">
         <view class="h-px flex-1 bg-[#e5e5e5]" />
         <text class="text-xs text-[#999]">
@@ -245,22 +246,22 @@ async function handleGetPhoneNumber(e: any) {
               placeholder-class="text-[#bbb]"
             />
           </view>
-          <button
-            class="h-12 w-28 rounded-lg text-sm"
+          <wd-button
+            size="small"
+            :round="false"
             :disabled="countdown > 0 || sendingCode"
-            :class="countdown > 0 || sendingCode ? 'bg-[#f0f0f0] text-[#999]' : 'bg-[#018d71] text-white'"
             @click="handleSendCode"
           >
             {{ countdown > 0 ? `${countdown}s` : '获取验证码' }}
-          </button>
+          </wd-button>
         </view>
-        <button
-          class="mt-2 flex h-12 items-center justify-center rounded-full bg-[#018d71] text-base font-medium text-white"
+        <wd-button
+          block
           :loading="submitting"
           @click="handlePhoneLogin"
         >
           登录
-        </button>
+        </wd-button>
       </view>
 
       <!-- 邮箱密码登录 -->
@@ -282,13 +283,13 @@ async function handleGetPhoneNumber(e: any) {
             placeholder-class="text-[#bbb]"
           />
         </view>
-        <button
-          class="mt-2 flex h-12 items-center justify-center rounded-full bg-[#018d71] text-base font-medium text-white"
+        <wd-button
+          block
           :loading="submitting"
           @click="handlePasswordLogin"
         >
           登录
-        </button>
+        </wd-button>
       </view>
 
       <!-- 4. 协议勾选 -->

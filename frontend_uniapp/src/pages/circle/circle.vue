@@ -196,11 +196,7 @@ onShareTimeline(() => {
       <text class="text-base font-medium text-[#333]">
         该圈子已不存在
       </text>
-      <view class="mt-4 rounded-full bg-[#018d71] px-6 py-2" @click="handleBack">
-        <text class="text-sm text-white">
-          返回
-        </text>
-      </view>
+      <wd-button class="mt-4" round size="small" @click="handleBack">返回</wd-button>
     </view>
 
     <template v-else>
@@ -327,19 +323,19 @@ onShareTimeline(() => {
       <!-- ====== 底部固定按钮(横排:主按钮 + 分享) ====== -->
       <view class="border-t border-[#f0f0f0] bg-white px-4 py-3 pb-safe">
         <view class="flex items-center gap-3">
-          <button
-            class="flex-1 h-12 rounded-full text-base font-medium bg-[#018d71] text-white"
+          <wd-button
+            block
             :loading="contactLoading"
             @click="isCreator ? handleEdit() : handleContact()"
           >
             {{ isCreator ? '编辑圈子信息' : '联系老师' }}
-          </button>
-          <button
-            class="h-12 shrink-0 min-w-25 rounded-full text-base font-medium border border-[#018d71] bg-white text-[#018d71]"
+          </wd-button>
+          <wd-button
+            plain
             open-type="share"
           >
             分享
-          </button>
+          </wd-button>
         </view>
       </view>
 

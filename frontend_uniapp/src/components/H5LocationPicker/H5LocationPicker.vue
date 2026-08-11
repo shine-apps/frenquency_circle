@@ -352,12 +352,12 @@ function handleConfirm() {
         <text class="text-center text-xs text-[#999]">
           {{ errorMsg }}
         </text>
-        <button
-          class="mt-2 h-9 rounded-full bg-[#018d71] px-6 text-sm font-medium text-white"
+        <wd-button
+          size="small"
           @click="handleRetry"
         >
           重新加载
-        </button>
+        </wd-button>
       </view>
     </view>
   </view>

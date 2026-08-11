@@ -357,12 +357,12 @@ onMounted(() => {
         <text class="text-center text-xs text-[#999]">
           位置 {{ Number(latitude).toFixed(6) }}, {{ Number(longitude).toFixed(6) }}
         </text>
-        <button
-          class="mt-1 h-9 rounded-full bg-[#018d71] px-6 text-sm font-medium text-white"
+        <wd-button
+          size="small"
           @click="handleRetry"
         >
           重新加载
-        </button>
+        </wd-button>
       </view>
     </view>
   </view>

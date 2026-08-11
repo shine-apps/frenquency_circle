@@ -79,6 +79,7 @@ export default defineConfig({
     'i-carbon-user',
     'i-carbon-ibm-watson-language-translator',
     'i-carbon-menu',
+    'i-carbon-pin-filled',
   ],
   rules: [
     [

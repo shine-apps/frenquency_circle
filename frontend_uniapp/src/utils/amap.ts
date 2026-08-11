@@ -140,6 +140,61 @@ export async function reverseGeocode(lat: number, lng: number): Promise<string> 
   }
 }
 
+/** POI 搜索结果条目 */
+export interface PlaceSearchResult {
+  id: string
+  name: string
+  address: string
+  district: string
+  lat: number
+  lng: number
+}
+
+/**
+ * 关键词搜索 POI 地点(使用高德 PlaceSearch 插件)。
+ *
+ * @param keyword 搜索关键词(如 "天安门")
+ * @returns 命中的地点列表(无结果 / 失败时返回空数组)
+ */
+export async function searchPlaces(keyword: string): Promise<PlaceSearchResult[]> {
+  try {
+    const AMap = await loadAMap()
+    return await new Promise<PlaceSearchResult[]>((resolve) => {
+      AMap.plugin('AMap.PlaceSearch', () => {
+        const placeSearch = new AMap.PlaceSearch({
+          pageSize: 10,
+          pageIndex: 1,
+          city: '全国',
+          extensions: 'all',
+        })
+        placeSearch.search(keyword, (status: string, result: any) => {
+          if (status === 'complete' && result?.poiList?.pois) {
+            resolve(
+              result.poiList.pois.map((poi: any) => {
+                const loc = poi.location
+                return {
+                  id: poi.id || '',
+                  name: poi.name || '',
+                  address: poi.address || poi.pname || '',
+                  district: poi.adname || poi.district || '',
+                  lat: typeof loc?.getLat === 'function' ? loc.getLat() : loc?.lat,
+                  lng: typeof loc?.getLng === 'function' ? loc.getLng() : loc?.lng,
+                }
+              }),
+            )
+          }
+          else {
+            resolve([])
+          }
+        })
+      })
+    })
+  }
+  catch {
+    return []
+  }
+}
+
 /**
  * H5 端获取当前定位(使用高德定位插件,返回 GCJ02 坐标)。
  * 高德定位插件原生返回 GCJ02 坐标,无需额外坐标转换。

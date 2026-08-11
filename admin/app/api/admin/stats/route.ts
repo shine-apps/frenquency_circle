@@ -1,7 +1,7 @@
 import { eq, gte, sql } from "drizzle-orm"
 
 import { db } from "@/lib/db"
-import { users, circles, tags, locations } from "@/db/schema"
+import { users, circles, hobbyTags, locations } from "@/db/schema"
 import { ok } from "@/lib/api"
 import { requireAdmin } from "@/lib/auth-utils"
 
@@ -55,8 +55,8 @@ export async function GET() {
       .where(gte(locations.publishedAt, todayStart)),
     db
       .select({ pendingTagCount: sql<number>`count(*)::int` })
-      .from(tags)
-      .where(eq(tags.status, "pending")),
+      .from(hobbyTags)
+      .where(eq(hobbyTags.status, "pending")),
     db
       .select({ pendingCircleCount: sql<number>`count(*)::int` })
       .from(circles)

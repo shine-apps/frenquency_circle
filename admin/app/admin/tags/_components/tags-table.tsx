@@ -51,14 +51,14 @@ function statusLabel(status: TagDTO["status"]): string {
 }
 
 /**
- * 调用 PATCH /api/admin/tags/:id 更新标签状态。
+ * 调用 PATCH /api/admin/hobby-tags/:id 更新标签状态。
  * 成功后触发 router.refresh() 让 server component 重新查询。
  */
 async function patchTag(
   tagId: string,
   body: { status?: "approved" | "rejected" }
 ): Promise<boolean> {
-  const res = await fetch(`/api/admin/tags/${tagId}`, {
+  const res = await fetch(`/api/admin/hobby-tags/${tagId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -127,7 +127,6 @@ export function TagsTable({ items }: { items: TagDTO[] }) {
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Category</TableHead>
-              <TableHead>SubCategory</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Created</TableHead>
               <TableHead className="w-32" />
@@ -139,9 +138,6 @@ export function TagsTable({ items }: { items: TagDTO[] }) {
                 <TableCell className="font-medium">{t.name}</TableCell>
                 <TableCell className="text-muted-foreground">
                   {t.category}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {t.subCategory ?? "-"}
                 </TableCell>
                 <TableCell>
                   <Badge variant={statusBadgeVariant(t.status)}>
@@ -234,8 +230,6 @@ export function TagsTable({ items }: { items: TagDTO[] }) {
             <dl className="grid grid-cols-3 gap-2 text-sm">
               <dt className="text-muted-foreground">Category</dt>
               <dd className="col-span-2">{selected.category}</dd>
-              <dt className="text-muted-foreground">SubCategory</dt>
-              <dd className="col-span-2">{selected.subCategory ?? "-"}</dd>
               <dt className="text-muted-foreground">Pinyin</dt>
               <dd className="col-span-2">{selected.pinyin ?? "-"}</dd>
               <dt className="text-muted-foreground">Initials</dt>

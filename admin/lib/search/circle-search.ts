@@ -1,14 +1,12 @@
-import { and, eq, inArray } from "drizzle-orm"
+import { eq } from "drizzle-orm"
 
 import { db } from "@/lib/db"
-import { circles, circleTags, tags } from "@/db/schema"
-import { toTagDTO } from "@/lib/search/tag-search"
+import { circles } from "@/db/schema"
 import { toPinyin, toPinyinInitials } from "@/lib/search/pinyin"
 import type {
   CircleMatchedField,
   CircleSearchResultDTO,
   Paginated,
-  TagDTO,
 } from "@/types/api"
 
 /**
@@ -21,14 +19,11 @@ import type {
  *   4. 拼音首字母匹配:title 的首字母 === query 的首字母
  *   5. 拼音首字母前缀匹配:title 的首字母以 query 首字母开头
  *
- * 标签维度同规则匹配(圈子绑定的兴趣标签)。
+ * 标签维度同规则匹配(圈子绑定的兴趣标签名称,存于 circles.tags text[])。
  *
  * 状态过滤:仅返回 `status='active'` 的圈子(新建 pending 与软删
  * deleted / offline / violated 均不可被搜索)。
- * 标签过滤:提供 tagIds 时,圈子必须至少拥有其中一个标签。
- *
- * 说明:与用户搜索一样,circles 表未预存拼音列,沿用
- * `circle-matcher.ts` 的 "查询候选 → 应用层打分 → 分页" 模式。
+ * 标签过滤:提供 tags 名称时,圈子必须至少拥有其中一个标签名称。
  */
 
 /**
@@ -58,7 +53,7 @@ function scoreField(
   return 0
 }
 
-/** 圈子搜索结果候选(基础字段,不含标签) */
+/** 圈子搜索结果候选(基础字段,含 tags 名称数组) */
 type CircleCandidate = {
   id: string
   title: string
@@ -67,6 +62,7 @@ type CircleCandidate = {
   activityTime: string | null
   memberCount: number
   maxMembers: number | null
+  tags: string[]
 }
 
 /** 应用层打分后的圈子项 */
@@ -74,14 +70,14 @@ type ScoredCircle = {
   candidate: CircleCandidate
   score: number
   matchedFields: Set<CircleMatchedField>
-  tags: TagDTO[]
+  tags: string[]
 }
 
 export type SearchCirclesParams = {
   /** 搜索关键词(trim 后非空) */
   q: string
-  /** 兴趣标签 ID 过滤(可选) */
-  tagIds?: string[]
+  /** 兴趣标签名称过滤(可选,数组项为 hobby_tags.name) */
+  tags?: string[]
   page: number
   pageSize: number
 }
@@ -94,7 +90,7 @@ export type SearchCirclesParams = {
 export async function searchCircles(
   params: SearchCirclesParams
 ): Promise<Paginated<CircleSearchResultDTO>> {
-  const { q, tagIds = [], page, pageSize } = params
+  const { q, tags = [], page, pageSize } = params
   const trimmed = q.trim()
 
   const emptyResult: Paginated<CircleSearchResultDTO> = {
@@ -109,7 +105,7 @@ export async function searchCircles(
   const queryPinyin = toPinyin(trimmed)
   const queryInitials = toPinyinInitials(trimmed)
 
-  // 1. 查询活跃圈子
+  // 1. 查询活跃圈子(直接取 circles.tags 名称数组)
   const rows = await db
     .select({
       id: circles.id,
@@ -119,6 +115,7 @@ export async function searchCircles(
       activityTime: circles.activityTime,
       memberCount: circles.memberCount,
       maxMembers: circles.maxMembers,
+      tags: circles.tags,
     })
     .from(circles)
     .where(eq(circles.status, "active"))
@@ -126,43 +123,16 @@ export async function searchCircles(
   if (rows.length === 0) return emptyResult
   const candidates: CircleCandidate[] = rows as CircleCandidate[]
 
-  // 2. 批量查询候选圈子标签
-  const candidateIds = candidates.map((c) => c.id)
-  const circleTagRows = await db
-    .select({
-      circleId: circleTags.circleId,
-      id: tags.id,
-      name: tags.name,
-      category: tags.category,
-      subCategory: tags.subCategory,
-      pinyin: tags.pinyin,
-      pinyinInitials: tags.pinyinInitials,
-      status: tags.status,
-      createdBy: tags.createdBy,
-      createdAt: tags.createdAt,
-      updatedAt: tags.updatedAt,
-    })
-    .from(circleTags)
-    .innerJoin(tags, eq(circleTags.tagId, tags.id))
-    .where(inArray(circleTags.circleId, candidateIds))
-
-  const tagsByCircle = new Map<string, TagDTO[]>()
-  for (const row of circleTagRows) {
-    const list = tagsByCircle.get(row.circleId) ?? []
-    list.push(toTagDTO(row as typeof tags.$inferSelect))
-    tagsByCircle.set(row.circleId, list)
-  }
-
-  // 3. 应用层多策略打分 + 标签过滤
-  const tagIdSet = new Set(tagIds)
+  // 2. 应用层多策略打分 + 标签过滤(直接使用 circles.tags 名称数组)
+  const tagNameSet = new Set(tags)
   const scored: ScoredCircle[] = []
 
   for (const candidate of candidates) {
-    const circleTagList = tagsByCircle.get(candidate.id) ?? []
+    const circleTagNames = candidate.tags ?? []
 
-    // 标签过滤:tagIds 提供时,必须至少命中一个
-    if (tagIdSet.size > 0) {
-      const hit = circleTagList.some((t) => tagIdSet.has(t.id))
+    // 标签过滤:tags 提供时,必须至少命中一个名称
+    if (tagNameSet.size > 0) {
+      const hit = circleTagNames.some((t) => tagNameSet.has(t))
       if (!hit) continue
     }
 
@@ -172,8 +142,8 @@ export async function searchCircles(
       scoreField(candidate.description, trimmed, queryPinyin, queryInitials) * 0.7
     )
     let tagScore = 0
-    for (const tag of circleTagList) {
-      const s = scoreField(tag.name, trimmed, queryPinyin, queryInitials)
+    for (const tagName of circleTagNames) {
+      const s = scoreField(tagName, trimmed, queryPinyin, queryInitials)
       if (s > tagScore) tagScore = s
     }
 
@@ -193,19 +163,19 @@ export async function searchCircles(
       candidate,
       score: maxFieldScore + activityBonus,
       matchedFields,
-      tags: circleTagList,
+      tags: circleTagNames,
     })
   }
 
-  // 4. 排序:分数降序,同分时按创建时间升序(先创建的在前)
+  // 3. 排序:分数降序
   scored.sort((a, b) => b.score - a.score)
 
-  // 5. 分页
+  // 4. 分页
   const total = scored.length
   const start = (page - 1) * pageSize
   const pageItems = scored.slice(start, start + pageSize)
 
-  // 6. 组装 DTO
+  // 5. 组装 DTO
   const list: CircleSearchResultDTO[] = pageItems.map((item) => ({
     circleId: item.candidate.id,
     title: item.candidate.title,

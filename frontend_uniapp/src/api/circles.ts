@@ -35,7 +35,7 @@ export function getCircle(id: string) {
   return http.get<CircleDetailDTO>(`/api/circles/${encodeURIComponent(id)}`)
 }
 
-/** 更新圈子信息(仅创建者可调)。tagIds 提供时全量替换 */
+/** 更新圈子信息(仅创建者可调)。tags 提供时全量替换 */
 export function updateCircle(id: string, patch: UpdateCircleInput) {
   return http.put<CircleDetailDTO>(`/api/circles/${encodeURIComponent(id)}`, patch as unknown as Record<string, unknown>)
 }

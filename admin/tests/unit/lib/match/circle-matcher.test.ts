@@ -10,7 +10,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
  * - 空结果
  * - 按加权总分降序(距离 30% + 重合度 50% + 活跃度 20%)
  * - 分页
- * - DTO 形状
+ * - DTO 形状(tags 为 string[] 名称数组)
+ *
+ * 注意:circles.tags 为 text[] 数组列,候选行直接携带 tags 名称数组,
+ * 不再需要第二次 SELECT 关联标签。
  */
 
 type CandidateCircle = {
@@ -22,20 +25,7 @@ type CandidateCircle = {
   activityTime: string | null
   memberCount: number
   maxMembers: number | null
-}
-
-type CircleTagJoinRow = {
-  circleId: string
-  id: string
-  name: string
-  category: string
-  subCategory: string | null
-  pinyin: string | null
-  pinyinInitials: string | null
-  status: string
-  createdBy: string | null
-  createdAt: Date
-  updatedAt: Date
+  tags: string[]
 }
 
 const { mockDb, setSelectResultsQueue, setSelectResults } = vi.hoisted(() => {
@@ -45,7 +35,6 @@ const { mockDb, setSelectResultsQueue, setSelectResults } = vi.hoisted(() => {
     const chain = {
       from: vi.fn(() => chain),
       where: vi.fn(() => chain),
-      innerJoin: vi.fn(() => chain),
       orderBy: vi.fn(() => chain),
       limit: vi.fn(() => chain),
       offset: vi.fn(() => chain),
@@ -98,26 +87,6 @@ import type { MatchCircleDTO } from "@/types/api"
 const REF_LAT = 39.908
 const REF_LNG = 116.397
 
-function makeTagRow(
-  circleId: string,
-  tagId: string,
-  name: string
-): CircleTagJoinRow {
-  return {
-    circleId,
-    id: tagId,
-    name,
-    category: "武术养生",
-    subCategory: "太极拳",
-    pinyin: "taijiquan",
-    pinyinInitials: "tjq",
-    status: "approved",
-    createdBy: null,
-    createdAt: new Date("2026-01-01T00:00:00Z"),
-    updatedAt: new Date("2026-01-01T00:00:00Z"),
-  }
-}
-
 function makeCandidate(overrides: Partial<CandidateCircle>): CandidateCircle {
   return {
     id: overrides.id ?? "circle-1",
@@ -128,6 +97,7 @@ function makeCandidate(overrides: Partial<CandidateCircle>): CandidateCircle {
     activityTime: overrides.activityTime ?? null,
     memberCount: overrides.memberCount ?? 0,
     maxMembers: overrides.maxMembers === undefined ? 10 : overrides.maxMembers,
+    tags: overrides.tags ?? [],
   }
 }
 
@@ -143,7 +113,7 @@ describe("lib/match/circle-matcher - matchCircles", () => {
     const result = await matchCircles({
       lat: REF_LAT,
       lng: REF_LNG,
-      tagIds: ["tag-1"],
+      tags: ["太极拳"],
       rangeKm: 5,
       page: 1,
       pageSize: 20,
@@ -162,6 +132,7 @@ describe("lib/match/circle-matcher - matchCircles", () => {
       longitude: 116.40,
       memberCount: 8,
       maxMembers: 10,
+      tags: ["太极拳", "气功功法", "站桩"],
     })
     // Circle B: 中距离 + 部分重合 + 中活跃度
     const circleB = makeCandidate({
@@ -171,6 +142,7 @@ describe("lib/match/circle-matcher - matchCircles", () => {
       longitude: 116.45,
       memberCount: 3,
       maxMembers: 10,
+      tags: ["太极拳"],
     })
     // Circle C: 远 + 无重合 + 低活跃度
     const circleC = makeCandidate({
@@ -180,22 +152,15 @@ describe("lib/match/circle-matcher - matchCircles", () => {
       longitude: 116.48,
       memberCount: 0,
       maxMembers: 10,
+      tags: ["书法"],
     })
 
-    setSelectResultsQueue([
-      [circleA, circleB, circleC],
-      [
-        makeTagRow("circle-a", "tag-1", "陈氏太极拳"),
-        makeTagRow("circle-a", "tag-2", "八段锦"),
-        makeTagRow("circle-a", "tag-3", "站桩"),
-        makeTagRow("circle-b", "tag-1", "陈氏太极拳"),
-      ],
-    ])
+    setSelectResultsQueue([[circleA, circleB, circleC]])
 
     const result = await matchCircles({
       lat: REF_LAT,
       lng: REF_LNG,
-      tagIds: ["tag-1", "tag-2", "tag-3"],
+      tags: ["太极拳", "气功功法", "站桩"],
       rangeKm: 10,
       page: 1,
       pageSize: 20,
@@ -216,15 +181,16 @@ describe("lib/match/circle-matcher - matchCircles", () => {
         longitude: 116.397 + i * 0.01,
         memberCount: 5,
         maxMembers: 10,
+        tags: [],
       })
     )
 
-    setSelectResultsQueue([circles, []])
+    setSelectResultsQueue([circles])
 
     const result = await matchCircles({
       lat: REF_LAT,
       lng: REF_LNG,
-      tagIds: [],
+      tags: [],
       rangeKm: 30,
       page: 1,
       pageSize: 2,
@@ -236,7 +202,7 @@ describe("lib/match/circle-matcher - matchCircles", () => {
     expect(result.pageSize).toBe(2)
   })
 
-  it("returns correct DTO shape", async () => {
+  it("returns correct DTO shape with tags as string array", async () => {
     const circle = makeCandidate({
       id: "circle-dto",
       title: "太极拳晨练班",
@@ -246,17 +212,15 @@ describe("lib/match/circle-matcher - matchCircles", () => {
       activityTime: "每周六早 7:00-8:30",
       memberCount: 5,
       maxMembers: 15,
+      tags: ["太极拳"],
     })
 
-    setSelectResultsQueue([
-      [circle],
-      [makeTagRow("circle-dto", "tag-1", "陈氏太极拳")],
-    ])
+    setSelectResultsQueue([[circle]])
 
     const result = await matchCircles({
       lat: REF_LAT,
       lng: REF_LNG,
-      tagIds: ["tag-1"],
+      tags: ["太极拳"],
       rangeKm: 10,
       page: 1,
       pageSize: 20,
@@ -269,8 +233,7 @@ describe("lib/match/circle-matcher - matchCircles", () => {
     expect(dto.activityTime).toBe("每周六早 7:00-8:30")
     expect(dto.memberCount).toBe(5)
     expect(dto.maxMembers).toBe(15)
-    expect(dto.tags).toHaveLength(1)
-    expect(dto.tags[0]!.id).toBe("tag-1")
+    expect(dto.tags).toEqual(["太极拳"])
     expect(typeof dto.distanceKm).toBe("number")
   })
 
@@ -282,14 +245,15 @@ describe("lib/match/circle-matcher - matchCircles", () => {
       longitude: 116.40,
       memberCount: 3,
       maxMembers: null,
+      tags: [],
     })
 
-    setSelectResultsQueue([[circle], []])
+    setSelectResultsQueue([[circle]])
 
     const result = await matchCircles({
       lat: REF_LAT,
       lng: REF_LNG,
-      tagIds: [],
+      tags: [],
       rangeKm: 10,
       page: 1,
       pageSize: 20,

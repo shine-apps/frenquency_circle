@@ -78,20 +78,19 @@ export type UserDTO = {
  * 用户档案 DTO(含兴趣标签),用于 /api/auth/me 与 /api/users/me/profile 响应。
  */
 export type UserProfileDTO = UserDTO & {
-  /** 用户已绑定的兴趣标签列表 */
-  tags: TagDTO[]
+  /** 用户已绑定的兴趣标签名称数组(存 hobby_tags.name) */
+  tags: string[]
 }
 
 /**
- * 兴趣标签 DTO。
+ * 兴趣标签 DTO(二级分类体系:category 一级大类 + name 二级分类名称)。
  */
 export type TagDTO = {
   id: string
+  /** 二级分类名称(如"太极拳""书法") */
   name: string
-  /** 一级大类 */
+  /** 一级大类(如"武术养生") */
   category: string
-  /** 二级分类(可空) */
-  subCategory?: string | null
   /** 拼音全拼(可空) */
   pinyin?: string | null
   /** 拼音首字母(可空) */
@@ -130,7 +129,7 @@ export type MatchPersonDTO = {
   name: string
   avatarUrl: string | null
   distanceKm: number
-  tags: TagDTO[]
+  tags: string[]
   activityLevel: ActivityLevel
   practiceYears: number | null
 }
@@ -142,7 +141,7 @@ export type MatchCircleDTO = {
   circleId: string
   title: string
   distanceKm: number
-  tags: TagDTO[]
+  tags: string[]
   activityTime: string | null
   memberCount: number
   maxMembers: number | null
@@ -162,7 +161,7 @@ export type UserSearchResultDTO = {
   userId: string
   name: string
   avatarUrl: string | null
-  tags: TagDTO[]
+  tags: string[]
   activityLevel: ActivityLevel
   practiceYears: number | null
   /** 命中的匹配字段,前端据此高亮 */
@@ -181,7 +180,7 @@ export type CircleSearchResultDTO = {
   circleId: string
   title: string
   description: string
-  tags: TagDTO[]
+  tags: string[]
   memberCount: number
   maxMembers: number | null
   address: string
@@ -196,8 +195,8 @@ export type CircleSearchResultDTO = {
 export type SearchQueryParams = {
   /** 搜索关键词(必填,trim 后 1-100 字符) */
   q: string
-  /** 兴趣标签 ID 过滤(可选,最多 50 个) */
-  tagIds?: string[]
+  /** 兴趣标签名称过滤(可选,最多 50 个) */
+  tags?: string[]
   page: number
   pageSize: number
 }
@@ -210,7 +209,7 @@ export type PublicUserProfileDTO = {
   id: string
   name: string
   avatarUrl: string | null
-  tags: TagDTO[]
+  tags: string[]
   activityLevel: ActivityLevel
   practiceYears: number | null
   address: string | null
@@ -245,7 +244,7 @@ export type CircleDTO = {
  */
 export type CircleDetailDTO = CircleDTO & {
   creator: { id: string; name: string; avatarUrl: string | null }
-  tags: TagDTO[]
+  tags: string[]
   contactCount: number
 }
 
@@ -292,6 +291,6 @@ export type LocationPublishInput = {
   latitude: number
   longitude: number
   address: string
-  tagIds: string[]
+  tagNames: string[]
   rangeKm: 1 | 5 | 10 | 30
 }

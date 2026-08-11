@@ -5,7 +5,7 @@
 | 子项目 | 技术栈 | 说明 |
 | --- | --- | --- |
 | [`admin/`](./admin) | Next.js 16 · React 19 · Drizzle ORM · PostgreSQL · Auth.js v5 | 后端 API + 管理后台(邮箱/密码、手机短信验证码、微信小程序登录) |
-| [`frontend/`](./frontend) | Taro 4 · React 18 · NutUI React Taro · Zustand | 跨端客户端(微信小程序 / H5 / 抖音小程序),对接 `admin/` 提供的 REST API |
+| [`frontend_uniapp/`](./frontend_uniapp) | uni-app · Vue 3 · TypeScript · wot-ui · UnoCSS | 跨端客户端(微信小程序 / H5 / 抖音小程序),对接 `admin/` 提供的 REST API |
 
 > 两个子项目之间**不共享** `node_modules` / lockfile / pnpm workspace,需要分别安装、运行、构建与测试。
 
@@ -24,31 +24,31 @@ pnpm db:generate && pnpm db:migrate && pnpm db:seed
 pnpm dev
 
 # 4. 另开终端,安装并启动客户端(微信小程序 / H5 / 抖音)
-cd ../frontend
+cd ../frontend_uniapp
 pnpm install
-pnpm dev:weapp    # 或 dev:h5 / dev:tt
+pnpm dev:mp    # 或 dev:h5 / dev:mp-toutiao
 ```
 
-> **pnpm 10+ 提示:** 首次安装若出现 `[ERR_PNPM_IGNORED_BUILDS]`,可在各自子项目内运行 `pnpm approve-builds` 放行 `@alicloud/openapi-core`、`@nutui/nutui-react-taro`、`@tarojs/cli` 等构建依赖。
+> **pnpm 10+ 提示:** 首次安装若出现 `[ERR_PNPM_IGNORED_BUILDS]`,可在各自子项目内运行 `pnpm approve-builds` 放行 `@alicloud/openapi-core`、`@wot-ui/ui` 等构建依赖。
 
 ## 仓库结构
 
 ```
 root/
 ├── admin/                # Next.js 后端 + 管理后台(独立项目)
-├── frontend/             # Taro 跨端客户端(独立项目)
+├── frontend_uniapp/      # uni-app 跨端客户端(独立项目)
 ├── docs/                 # 产品 PRD 与功能设计文档(共用)
 ├── nginx.conf            # 生产环境反向代理参考配置(共用)
 ├── .gitignore            # 覆盖两个子项目的忽略规则
 └── README.md             # 本文件
 ```
 
-> 已移除的内容:根 `pnpm-workspace.yaml` / 共享 `pnpm-lock.yaml` / `Dockerfile` / `.dockerignore` / `.github/workflows/`。两个子项目独立维护各自的部署脚本。
+> 已移除的内容:根 `pnpm-workspace.yaml` / 共享 `pnpm-lock.yaml` / `.github/workflows/`。两个子项目独立维护各自的部署脚本。
 
 ## 子项目文档
 
 - 后端 / 管理后台 → [admin/README.md](./admin/README.md) · [admin/AGENTS.md](./admin/AGENTS.md)
-- 客户端 → [frontend/README.md](./frontend/README.md) · [frontend/AGENTS.md](./frontend/AGENTS.md)
+- 客户端 → [frontend_uniapp/README.md](./frontend_uniapp/README.md)
 
 ## 主要特性
 
@@ -58,29 +58,29 @@ root/
 - **统一 API 信封** — 后端 `IResponse<T>` + 前端 `request<T>()` 自动解析,业务码非 2xx 统一抛错
 - **测试基线** — Vitest + happy-dom + MSW(单元/集成) + Playwright(E2E,后端)
 - **结构化日志** — `admin/lib/logger.ts` 统一 info/warn/error 事件记录
-- **样式分层** — 后端走 Tailwind v4 + shadcn/ui(`@base-ui/react` 基底);客户端走 SCSS Modules + 全局主题变量
+- **样式分层** — 后端走 Tailwind v4 + shadcn/ui(`@base-ui/react` 基底);客户端走 wot-ui + UnoCSS
 
 ## 常用命令速查
 
 | 任务 | 命令 |
 | --- | --- |
 | 安装后端依赖 | `cd admin && pnpm install` |
-| 安装客户端依赖 | `cd frontend && pnpm install` |
+| 安装客户端依赖 | `cd frontend_uniapp && pnpm install` |
 | 启动后端开发服务器 | `cd admin && pnpm dev` |
-| 启动客户端(weapp/h5/tt) | `cd frontend && pnpm dev:weapp` |
+| 启动客户端(mp/h5/tt) | `cd frontend_uniapp && pnpm dev:mp` |
 | 后端类型检查 | `cd admin && pnpm exec tsc --noEmit` |
 | 后端单元/集成测试 | `cd admin && pnpm test` |
 | 后端 E2E | `cd admin && pnpm test:e2e` |
 | 数据库相关 | `cd admin && pnpm db:up / db:down / db:generate / db:migrate / db:seed / db:reset / db:studio` |
 | 代码检查 | `cd admin && pnpm lint` |
-| 客户端类型检查 | `cd frontend && pnpm exec tsc --noEmit` |
+| 客户端类型检查 | `cd frontend_uniapp && pnpm type-check` |
 
 ## 部署
 
 本仓库已不再提供统一的 Docker 镜像与 CI 工作流。两个子项目需独立构建与部署:
 
 - `admin/`:Next.js 16 standalone 产物在 `admin/.next/standalone/`,部署时复制 standalone/ + `.next/static/` + `public/` 即可启动。
-- `frontend/`:Taro 跨端产物按目标平台走 `pnpm build:<plat>`,具体见 [frontend/README.md](./frontend/README.md)。
+- `frontend_uniapp/`:uni-app 跨端产物按目标平台走 `pnpm build:<plat>`,具体见 [frontend_uniapp/README.md](./frontend_uniapp/README.md)。
 
 ### 反向代理参考
 

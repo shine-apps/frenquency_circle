@@ -1,8 +1,8 @@
 import { z } from "zod"
-import { and, eq, gte } from "drizzle-orm"
+import { and, eq, gte, inArray } from "drizzle-orm"
 
 import { db } from "@/lib/db"
-import { circles, circleTags, circleMembers } from "@/db/schema"
+import { circles, circleMembers, hobbyTags } from "@/db/schema"
 import { corsOptions, fail, ok, withCors } from "@/lib/api"
 import { requireSession } from "@/lib/auth-utils"
 import { logger, LOG_PREFIX } from "@/lib/logger"
@@ -20,7 +20,7 @@ const COVER_IMAGES_MAX = 9
 /**
  * 创建圈子请求体 schema。
  * - title: 2-50 字符(trim)
- * - tagIds: 1-5 个 uuid
+ * - tags: 1-5 个标签名称(1-30 字符)
  * - description: 10-1000 字符
  * - contactPhone / wechat: 至少填一种
  * - coverImages: 0-9 个图片 URL(可选)
@@ -28,7 +28,7 @@ const COVER_IMAGES_MAX = 9
 const createCircleSchema = z
   .object({
     title: z.string().trim().min(2).max(50),
-    tagIds: z.array(z.string().uuid()).min(1).max(5),
+    tags: z.array(z.string().trim().min(1).max(30)).min(1).max(5),
     description: z.string().min(10).max(1000),
     latitude: z.number().min(-90).max(90),
     longitude: z.number().min(-180).max(180),
@@ -112,10 +112,29 @@ export async function POST(req: Request) {
     )
   }
 
-  // 4. 插入圈子(status=pending,等待管理员审核)
+  // 4.1 校验标签名称存在且通过审核(去重)
+  const uniqueTags = Array.from(new Set(parsed.data.tags))
+  const existingTags = await db
+    .select({ name: hobbyTags.name })
+    .from(hobbyTags)
+    .where(
+      and(
+        inArray(hobbyTags.name, uniqueTags),
+        eq(hobbyTags.status, "approved")
+      )
+    )
+  const existingNames = new Set(existingTags.map((t) => t.name))
+  const missing = uniqueTags.filter((name) => !existingNames.has(name))
+  if (missing.length > 0) {
+    return withCors(
+      fail(400, "部分标签不存在或未通过审核", { missingTags: missing }),
+      req
+    )
+  }
+
+  // 5. 插入圈子(status=pending,等待管理员审核,tags 直接写数组列)
   const {
     title,
-    tagIds,
     description,
     latitude,
     longitude,
@@ -143,16 +162,9 @@ export async function POST(req: Request) {
       memberCount: 0,
       status: "pending",
       coverImages: coverImages ?? [],
+      tags: uniqueTags,
     })
     .returning({ id: circles.id })
-
-  // 5. 批量插入 circle_tags
-  await db.insert(circleTags).values(
-    tagIds.map((tagId) => ({
-      circleId: circleRow.id,
-      tagId,
-    }))
-  )
 
   // 6. 插入 circle_members(role=creator)
   await db.insert(circleMembers).values({
@@ -160,7 +172,6 @@ export async function POST(req: Request) {
     userId,
     role: "creator",
   })
-
 
   logger.info(LOG_PREFIX.CIRCLE, "Circle created", {
     circleId: circleRow.id,

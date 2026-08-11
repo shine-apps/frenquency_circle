@@ -2,7 +2,7 @@
 
 Guidance for AI coding agents working in `admin/`, the Next.js 16 backend & admin dashboard sub-project of the `frenqency_circle` repository. All paths are relative to the **project root** (the directory containing this file, i.e. `admin/`).
 
-> `admin/` is a **standalone** project: it has its own `package.json` / `pnpm-lock.yaml` / `node_modules/`, and does **not** share dependencies with the sibling `frontend/` sub-project. Run `pnpm install` inside `admin/` only.
+> `admin/` is a **standalone** project: it has its own `package.json` / `pnpm-lock.yaml` / `node_modules/`, and does **not** share dependencies with the sibling `frontend_uniapp/` sub-project. Run `pnpm install` inside `admin/` only.
 
 ## Project overview
 
@@ -155,7 +155,7 @@ All commands run from the project root with no `cd` needed.
   - `users` — id, email (unique), name, passwordHash, role, avatarUrl, createdAt, updatedAt. **Phase 1 扩展字段:** `phone` / `wechatOpenid` / `latitude` / `longitude`(lat/lng 双列方案替代 PostGIS Point)/ `address` / `privacySettings`(JSONB)/ `practiceYears` / `activityLevel` / `lastActiveAt`;`role` 类型扩展为 `'ADMIN' | 'USER' | 'TEACHER'`。
   - `accounts` — id, userId (FK → users, cascade delete), provider, providerAccountId, type, createdAt, updatedAt. Unique index on `(provider, providerAccountId)`; index on `userId`.
   - `smsVerificationCodes` — id, phone, codeHash (bcrypt), attempts, expiresAt, consumedAt, createdAt. Index on `phone`.
-  - `tags` — id, name, category, subCategory, pinyin, pinyinInitials, status(`'pending' | 'approved' | 'rejected'`), createdBy, createdAt, updatedAt. 索引:name ILIKE、pinyin、pinyinInitials、(category+subCategory)、status。六大类兴趣标签(太极 / 书法 / 古琴 / 茶道 / 国画 / 民乐)。
+  - `hobby_tags` — id, name(二级分类名称), category(一级大类), pinyin, pinyinInitials, status(`'pending' | 'approved' | 'rejected'`), createdBy, createdAt, updatedAt. 索引:name ILIKE、pinyin、pinyinInitials、(category+name)、status。六大类兴趣标签(太极 / 书法 / 古琴 / 茶道 / 国画 / 民乐)。users.tags / circles.tags 为 text[] 名称数组(存 hobby_tags.name),有 GIN 索引。
   - `userTags` — id, userId (FK → users), tagId (FK → tags), level int, createdAt. 唯一索引 `(userId, tagId)`。每个用户最多 10 个标签。
   - `circles` — id, title, description, creatorId (FK → users), latitude, longitude(lat/lng 双列), address, contactPhone, wechat, activityTime, maxMembers int, memberCount int default 0, status(`'active' | 'offline' | 'deleted' | 'violated'`), createdAt, updatedAt. 复合 btree 索引 (latitude, longitude)。TEACHER 创建,普通用户联系老师。
   - `circleTags` — id, circleId (FK → circles), tagId (FK → tags). 唯一索引 `(circleId, tagId)`。圈子与标签多对多。

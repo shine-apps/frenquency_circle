@@ -8,12 +8,12 @@ import { logger, LOG_PREFIX } from "@/lib/logger"
 /**
  * GET /api/locations/match-circles
  *
- * 查询参数同 match-people,返回 Paginated<MatchCircleDTO>。
+ * 查询参数同 match-people(tags 为逗号分隔的标签名称),返回 Paginated<MatchCircleDTO>。
  */
 const matchQuerySchema = z.object({
   latitude: z.coerce.number().min(-90).max(90),
   longitude: z.coerce.number().min(-180).max(180),
-  tagIds: z
+  tags: z
     .string()
     .min(1)
     .transform((s) => s.split(",").map((t) => t.trim()).filter(Boolean)),
@@ -45,7 +45,7 @@ export async function GET(req: Request) {
   const parsed = matchQuerySchema.safeParse({
     latitude: url.searchParams.get("latitude") ?? undefined,
     longitude: url.searchParams.get("longitude") ?? undefined,
-    tagIds: url.searchParams.get("tagIds") ?? undefined,
+    tags: url.searchParams.get("tags") ?? undefined,
     rangeKm: url.searchParams.get("rangeKm") ?? undefined,
   })
   if (!parsed.success) {
@@ -55,13 +55,13 @@ export async function GET(req: Request) {
     )
   }
 
-  const { latitude, longitude, tagIds, rangeKm } = parsed.data
+  const { latitude, longitude, tags, rangeKm } = parsed.data
 
   // 4. 调用匹配引擎
   const result = await matchCircles({
     lat: latitude,
     lng: longitude,
-    tagIds,
+    tags,
     rangeKm,
     page: pagination.page,
     pageSize: pagination.pageSize,

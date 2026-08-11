@@ -1,7 +1,6 @@
 <script lang="ts" setup>
 import { computed } from 'vue'
 import { useMatchStore } from '@/store/match'
-import type { TagDTO } from '@/types'
 
 definePage({
   style: {
@@ -51,7 +50,7 @@ function formatDateTime(iso: string | null): string {
 }
 
 /** 渲染标签 */
-function renderTags(tags: TagDTO[]): { visible: TagDTO[]; rest: number } {
+function renderTags(tags: string[]): { visible: string[]; rest: number } {
   const visible = tags.slice(0, MAX_TAG_VISIBLE)
   const rest = tags.length - visible.length
   return { visible, rest }
@@ -122,9 +121,9 @@ function renderTags(tags: TagDTO[]): { visible: TagDTO[]; rest: number } {
           </view>
         </view>
         <view v-if="c.tags.length > 0" class="mt-3 flex flex-wrap gap-2">
-          <template v-for="t in renderTags(c.tags).visible" :key="t.id">
+          <template v-for="name in renderTags(c.tags).visible" :key="name">
             <text class="rounded-full bg-[#fdf3e7] px-2.5 py-1 text-xs text-[#e68a00]">
-              {{ t.name }}
+              {{ name }}
             </text>
           </template>
           <text v-if="renderTags(c.tags).rest > 0" class="text-xs text-[#999]">

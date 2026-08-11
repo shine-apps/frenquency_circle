@@ -238,11 +238,11 @@ onShareTimeline(() => {
           <scroll-view v-if="circle.tags.length > 0" scroll-x class="mt-3 whitespace-nowrap">
             <view class="inline-flex gap-2">
               <text
-                v-for="t in circle.tags"
-                :key="t.id"
+                v-for="name in circle.tags"
+                :key="name"
                 class="rounded-full bg-[#e8f5f1] px-3 py-1 text-xs text-[#018d71]"
               >
-                {{ t.name }}
+                {{ name }}
               </text>
             </view>
           </scroll-view>

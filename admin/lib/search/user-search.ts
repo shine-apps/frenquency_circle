@@ -1,13 +1,11 @@
-import { and, eq, inArray, ne, sql } from "drizzle-orm"
+import { and, ne, sql } from "drizzle-orm"
 
 import { db } from "@/lib/db"
-import { users, userTags, tags } from "@/db/schema"
-import { toTagDTO } from "@/lib/search/tag-search"
+import { users } from "@/db/schema"
 import { toPinyin, toPinyinInitials } from "@/lib/search/pinyin"
 import type {
   ActivityLevel,
   Paginated,
-  TagDTO,
   UserMatchedField,
   UserSearchResultDTO,
 } from "@/types/api"
@@ -22,16 +20,16 @@ import type {
  *   4. 拼音首字母匹配:name 的首字母 === query 的首字母
  *   5. 拼音首字母前缀匹配:name 的首字母以 query 首字母开头
  *
- * 标签维度同规则匹配(用户绑定的兴趣标签),命中任一标签即算"同频"。
+ * 标签维度同规则匹配(用户已绑定的兴趣标签名称,存于 users.tags text[]),
+ * 命中任一标签即算"同频"。
  *
  * 隐私控制:仅返回 `privacySettings.allowMatch = true` 的用户。
- * 标签过滤:提供 tagIds 时,用户必须至少拥有其中一个标签。
+ * 标签过滤:提供 tags 名称时,用户必须至少拥有其中一个标签名称。
  *
- * 说明:users 表未预存拼音列(与 tags 表不同),且拼音计算依赖
- * `pinyin-pro` 无法在 SQL 层完成,因此沿用 `people-matcher.ts` 的
+ * 说明:users 表未预存拼音列(与 hobby_tags 表不同),且拼音计算依赖
+ * `pinyin-pro` 无法在 SQL 层完成,因此沿用 people-matcher 的
  * "查询候选 → 应用层打分 → 分页" 模式。候选集先按 SQL 宽松条件
  * 收敛(name/email ILIKE 或 privacy 过滤),再在内存中精确打分。
- * 若后续用户量增大,可考虑为 users.name 新增 pinyin 列 + 数据库索引。
  */
 
 /** 活跃度分数加成(用于同分排序) */
@@ -75,7 +73,7 @@ function scoreField(
   return 0
 }
 
-/** 用户搜索结果候选(基础字段,不含标签) */
+/** 用户搜索结果候选(基础字段,含 tags 名称数组) */
 type UserCandidate = {
   id: string
   name: string
@@ -83,6 +81,7 @@ type UserCandidate = {
   avatarUrl: string | null
   activityLevel: string
   practiceYears: number | null
+  tags: string[]
 }
 
 /** 应用层打分后的用户项 */
@@ -90,14 +89,14 @@ type ScoredUser = {
   candidate: UserCandidate
   score: number
   matchedFields: Set<UserMatchedField>
-  tags: TagDTO[]
+  tags: string[]
 }
 
 export type SearchUsersParams = {
   /** 搜索关键词(trim 后非空) */
   q: string
-  /** 兴趣标签 ID 过滤(可选) */
-  tagIds?: string[]
+  /** 兴趣标签名称过滤(可选,数组项为 hobby_tags.name) */
+  tags?: string[]
   /** 排除的当前用户 ID */
   currentUserId?: string
   page: number
@@ -112,7 +111,7 @@ export type SearchUsersParams = {
 export async function searchUsers(
   params: SearchUsersParams
 ): Promise<Paginated<UserSearchResultDTO>> {
-  const { q, tagIds = [], currentUserId, page, pageSize } = params
+  const { q, tags = [], currentUserId, page, pageSize } = params
   const trimmed = q.trim()
 
   const emptyResult: Paginated<UserSearchResultDTO> = {
@@ -143,6 +142,7 @@ export async function searchUsers(
       avatarUrl: users.avatarUrl,
       activityLevel: users.activityLevel,
       practiceYears: users.practiceYears,
+      tags: users.tags,
     })
     .from(users)
     .where(and(...conditions))
@@ -150,43 +150,16 @@ export async function searchUsers(
   if (rows.length === 0) return emptyResult
   const candidates: UserCandidate[] = rows as UserCandidate[]
 
-  // 2. 批量查询候选用户标签
-  const candidateIds = candidates.map((c) => c.id)
-  const userTagRows = await db
-    .select({
-      userId: userTags.userId,
-      id: tags.id,
-      name: tags.name,
-      category: tags.category,
-      subCategory: tags.subCategory,
-      pinyin: tags.pinyin,
-      pinyinInitials: tags.pinyinInitials,
-      status: tags.status,
-      createdBy: tags.createdBy,
-      createdAt: tags.createdAt,
-      updatedAt: tags.updatedAt,
-    })
-    .from(userTags)
-    .innerJoin(tags, eq(userTags.tagId, tags.id))
-    .where(inArray(userTags.userId, candidateIds))
-
-  const tagsByUser = new Map<string, TagDTO[]>()
-  for (const row of userTagRows) {
-    const list = tagsByUser.get(row.userId) ?? []
-    list.push(toTagDTO(row as typeof tags.$inferSelect))
-    tagsByUser.set(row.userId, list)
-  }
-
-  // 3. 应用层 5 策略打分 + 标签过滤
-  const tagIdSet = new Set(tagIds)
+  // 2. 应用层 5 策略打分 + 标签过滤(直接使用 users.tags 名称数组)
+  const tagNameSet = new Set(tags)
   const scored: ScoredUser[] = []
 
   for (const candidate of candidates) {
-    const userTagList = tagsByUser.get(candidate.id) ?? []
+    const userTagNames = candidate.tags ?? []
 
-    // 标签过滤:tagIds 提供时,必须至少命中一个
-    if (tagIdSet.size > 0) {
-      const hit = userTagList.some((t) => tagIdSet.has(t.id))
+    // 标签过滤:tags 提供时,必须至少命中一个名称
+    if (tagNameSet.size > 0) {
+      const hit = userTagNames.some((t) => tagNameSet.has(t))
       if (!hit) continue
     }
 
@@ -194,8 +167,8 @@ export async function searchUsers(
     const nameScore = scoreField(candidate.name, trimmed, queryPinyin, queryInitials)
     const emailScore = scoreField(candidate.email, trimmed, queryPinyin, queryInitials)
     let tagScore = 0
-    for (const tag of userTagList) {
-      const s = scoreField(tag.name, trimmed, queryPinyin, queryInitials)
+    for (const tagName of userTagNames) {
+      const s = scoreField(tagName, trimmed, queryPinyin, queryInitials)
       if (s > tagScore) tagScore = s
     }
 
@@ -210,10 +183,10 @@ export async function searchUsers(
     const totalScore =
       maxFieldScore + (ACTIVITY_BONUS[candidate.activityLevel] ?? 0)
 
-    scored.push({ candidate, score: totalScore, matchedFields, tags: userTagList })
+    scored.push({ candidate, score: totalScore, matchedFields, tags: userTagNames })
   }
 
-  // 4. 排序:分数降序,同分时高活跃度优先
+  // 3. 排序:分数降序,同分时高活跃度优先
   scored.sort(
     (a, b) =>
       b.score - a.score ||
@@ -221,12 +194,12 @@ export async function searchUsers(
         (ACTIVITY_BONUS[a.candidate.activityLevel] ?? 0)
   )
 
-  // 5. 分页
+  // 4. 分页
   const total = scored.length
   const start = (page - 1) * pageSize
   const pageItems = scored.slice(start, start + pageSize)
 
-  // 6. 组装 DTO
+  // 5. 组装 DTO
   const list: UserSearchResultDTO[] = pageItems.map((item) => ({
     userId: item.candidate.id,
     name: item.candidate.name,

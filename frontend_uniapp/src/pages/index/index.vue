@@ -4,7 +4,7 @@ import { useUserStore } from '@/store/user'
 import { useMatchStore } from '@/store/match'
 import { matchPeople, matchCircles } from '@/api/locations'
 import { getCurrentLocation } from '@/utils/location'
-import type { MatchCircleDTO, MatchPersonDTO, TagDTO } from '@/types'
+import type { MatchCircleDTO, MatchPersonDTO } from '@/types'
 
 defineOptions({
   name: 'Home',
@@ -41,7 +41,7 @@ interface MixedItem {
 const userStore = useUserStore()
 const matchStore = useMatchStore()
 const user = computed(() => userStore.userInfo)
-const tagIds = computed(() => (user.value?.tags || []).map(t => t.id))
+const userTags = computed(() => user.value?.tags || [])
 
 const latitude = ref<number | null>(matchStore.location?.latitude ?? user.value?.location?.latitude ?? null)
 const longitude = ref<number | null>(matchStore.location?.longitude ?? user.value?.location?.longitude ?? null)
@@ -66,14 +66,14 @@ function getInitialShowIntro(): boolean {
 
 /** 获取位置并拉取匹配 */
 async function loadAll(lat: number, lng: number, range: number): Promise<void> {
-  if (tagIds.value.length === 0) return
+  if (userTags.value.length === 0) return
   loading.value = true
   try {
     const [peopleRes, circlesRes] = await Promise.all([
       matchPeople({
         latitude: lat,
         longitude: lng,
-        tagIds: tagIds.value,
+        tags: userTags.value,
         rangeKm: range,
         page: 1,
         pageSize: 20,
@@ -81,7 +81,7 @@ async function loadAll(lat: number, lng: number, range: number): Promise<void> {
       matchCircles({
         latitude: lat,
         longitude: lng,
-        tagIds: tagIds.value,
+        tags: userTags.value,
         rangeKm: range,
         page: 1,
         pageSize: 20,
@@ -108,7 +108,7 @@ async function loadAll(lat: number, lng: number, range: number): Promise<void> {
       circles: circlesRes.list || [],
       rangeKm: range,
       location: { latitude: lat, longitude: lng },
-      tagIds: tagIds.value,
+      tags: userTags.value,
       totalPeople: peopleRes.total,
       totalCircles: circlesRes.total,
     })
@@ -139,7 +139,7 @@ onShow(() => {
   }
   else {
     // 已有位置,若列表为空则拉取
-    if (items.value.length === 0 && tagIds.value.length > 0) {
+    if (items.value.length === 0 && userTags.value.length > 0) {
       loadAll(latitude.value, longitude.value, rangeKm.value)
     }
   }
@@ -174,7 +174,7 @@ async function handleChangeLocation(): Promise<void> {
     longitude.value = res.longitude
     address.value = res.address || res.name || '已选择位置'
     locationDenied.value = false
-    if (tagIds.value.length > 0) {
+    if (userTags.value.length > 0) {
       loadAll(res.latitude, res.longitude, rangeKm.value)
     }
     // #endif
@@ -194,7 +194,7 @@ function handlePickerConfirm(loc: { latitude: number; longitude: number; address
   address.value = loc.address
   pickerVisible.value = false
   locationDenied.value = false
-  if (tagIds.value.length > 0) {
+  if (userTags.value.length > 0) {
     loadAll(loc.latitude, loc.longitude, rangeKm.value)
   }
 }
@@ -232,7 +232,7 @@ function handlePublishClick(): void {
 function handleRangeChange(range: number): void {
   if (range === rangeKm.value) return
   rangeKm.value = range
-  if (latitude.value !== null && longitude.value !== null && tagIds.value.length > 0) {
+  if (latitude.value !== null && longitude.value !== null && userTags.value.length > 0) {
     loadAll(latitude.value, longitude.value, range)
   }
 }
@@ -273,7 +273,7 @@ function formatDateTime(iso: string | null): string {
 }
 
 /** 渲染标签(最多 3 个 + "+N") */
-function renderTags(tags: TagDTO[]): { visible: TagDTO[]; rest: number } {
+function renderTags(tags: string[]): { visible: string[]; rest: number } {
   const visible = tags.slice(0, MAX_TAG_VISIBLE)
   const rest = tags.length - visible.length
   return { visible, rest }
@@ -298,7 +298,7 @@ function handleDismissIntro(): void {
 }
 
 // 是否展示"未选兴趣"引导
-const noTags = computed(() => tagIds.value.length === 0)
+const noTags = computed(() => userTags.value.length === 0)
 
 // ====== 微信分享:分享给好友 ======
 onShareAppMessage(() => ({
@@ -484,9 +484,9 @@ onShareTimeline(() => ({
             </view>
           </view>
           <view v-if="item.person.tags.length > 0" class="mt-3 flex flex-wrap gap-2">
-            <template v-for="t in renderTags(item.person.tags).visible" :key="t.id">
+            <template v-for="name in renderTags(item.person.tags).visible" :key="name">
               <text class="rounded-full bg-[#e8f5f1] px-2.5 py-1 text-xs text-[#018d71]">
-                {{ t.name }}
+                {{ name }}
               </text>
             </template>
             <text v-if="renderTags(item.person.tags).rest > 0" class="text-xs text-[#999]">
@@ -520,9 +520,9 @@ onShareTimeline(() => ({
             </view>
           </view>
           <view v-if="item.circle.tags.length > 0" class="mt-3 flex flex-wrap gap-2">
-            <template v-for="t in renderTags(item.circle.tags).visible" :key="t.id">
+            <template v-for="name in renderTags(item.circle.tags).visible" :key="name">
               <text class="rounded-full bg-[#fdf3e7] px-2.5 py-1 text-xs text-[#e68a00]">
-                {{ t.name }}
+                {{ name }}
               </text>
             </template>
             <text v-if="renderTags(item.circle.tags).rest > 0" class="text-xs text-[#999]">

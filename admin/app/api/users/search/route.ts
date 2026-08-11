@@ -8,16 +8,16 @@ import { logger } from "@/lib/logger"
 /**
  * 查询参数 schema。
  * - `q`:必填,搜索关键词,trim 后 1-100 字符
- * - `tagIds`:可选,逗号分隔的标签 ID(uuid),最多 50 个
+ * - `tags`:可选,逗号分隔的标签名称(hobby_tags.name),最多 50 个
  * - `page` / `pageSize`:分页(由 parsePagination 处理)
  */
 const searchQuerySchema = z.object({
   q: z.string().trim().min(1).max(100),
-  tagIds: z
+  tags: z
     .string()
     .optional()
     .transform((s) => (s ? s.split(",").map((t) => t.trim()).filter(Boolean) : []))
-    .pipe(z.array(z.string().uuid()).max(50)),
+    .pipe(z.array(z.string().min(1).max(30)).max(50)),
 })
 
 /**
@@ -27,7 +27,7 @@ const searchQuerySchema = z.object({
  *
  * - 鉴权:任意登录用户
  * - 关键词支持 5 策略模糊匹配(精确 → ILIKE → 拼音全拼 → 拼音首字母 → 拼音首字母前缀)
- * - tagIds 提供时,仅返回拥有至少一个指定标签的用户
+ * - tags 提供时,仅返回拥有至少一个指定标签名称的用户
  * - 仅返回 `privacySettings.allowMatch = true` 的用户,并排除当前用户自身
  *
  * 响应:`IResponse<Paginated<UserSearchResultDTO>>`
@@ -52,7 +52,7 @@ export async function GET(req: Request) {
   // 3. 解析并校验查询参数
   const parsed = searchQuerySchema.safeParse({
     q: url.searchParams.get("q") ?? undefined,
-    tagIds: url.searchParams.get("tagIds") ?? undefined,
+    tags: url.searchParams.get("tags") ?? undefined,
   })
   if (!parsed.success) {
     return withCors(
@@ -61,12 +61,12 @@ export async function GET(req: Request) {
     )
   }
 
-  const { q, tagIds } = parsed.data
+  const { q, tags } = parsed.data
 
   // 4. 调用用户搜索引擎
   const result = await searchUsers({
     q,
-    tagIds,
+    tags,
     currentUserId,
     page: pagination.page,
     pageSize: pagination.pageSize,
@@ -75,7 +75,7 @@ export async function GET(req: Request) {
   logger.info("SEARCH", "Users searched", {
     userId: currentUserId,
     q,
-    tagCount: tagIds.length,
+    tagCount: tags.length,
     total: result.total,
   })
 

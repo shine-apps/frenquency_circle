@@ -4,7 +4,7 @@ import { useMatchStore } from '@/store/match'
 import { useLocationStore } from '@/store/location'
 import { useUserStore } from '@/store/user'
 import { matchPeople, matchCircles } from '@/api/locations'
-import type { LocationPoint, MatchCircleDTO, MatchPersonDTO, TagDTO } from '@/types'
+import type { LocationPoint, MatchCircleDTO, MatchPersonDTO } from '@/types'
 
 definePage({
   style: {
@@ -47,10 +47,10 @@ function resolveLocation(): LocationPoint | null {
   return null
 }
 
-/** 解析当前可用标签 ID */
-function resolveTagIds(): string[] {
-  if (matchStore.tagIds.length > 0) return matchStore.tagIds
-  if (userStore.userInfo?.tags && userStore.userInfo.tags.length > 0) return userStore.userInfo.tags.map(t => t.id)
+/** 解析当前可用标签名称 */
+function resolveTagNames(): string[] {
+  if (matchStore.tags.length > 0) return matchStore.tags
+  if (userStore.userInfo?.tags && userStore.userInfo.tags.length > 0) return userStore.userInfo.tags
   return []
 }
 
@@ -59,8 +59,8 @@ async function fetchMatch(loc: LocationPoint, tags: string[], range: number) {
   loading.value = true
   try {
     const [peopleRes, circlesRes] = await Promise.all([
-      matchPeople({ latitude: loc.latitude, longitude: loc.longitude, tagIds: tags, rangeKm: range, page: 1, pageSize: 20 }),
-      matchCircles({ latitude: loc.latitude, longitude: loc.longitude, tagIds: tags, rangeKm: range, page: 1, pageSize: 20 }),
+      matchPeople({ latitude: loc.latitude, longitude: loc.longitude, tags, rangeKm: range, page: 1, pageSize: 20 }),
+      matchCircles({ latitude: loc.latitude, longitude: loc.longitude, tags, rangeKm: range, page: 1, pageSize: 20 }),
     ])
     people.value = peopleRes.list || []
     circles.value = circlesRes.list || []
@@ -70,7 +70,7 @@ async function fetchMatch(loc: LocationPoint, tags: string[], range: number) {
       circles: circlesRes.list || [],
       rangeKm: range,
       location: loc,
-      tagIds: tags,
+      tags,
       totalPeople: peopleRes.total,
       totalCircles: circlesRes.total,
     })
@@ -86,7 +86,7 @@ async function fetchMatch(loc: LocationPoint, tags: string[], range: number) {
 // ====== 进入时拉取 ======
 onShow(() => {
   const loc = resolveLocation()
-  const tags = resolveTagIds()
+  const tags = resolveTagNames()
   if (!loc) {
     uni.showToast({ title: '请先搜寻同频', icon: 'none' })
     setTimeout(() => uni.navigateBack(), 800)
@@ -105,7 +105,7 @@ function handleRangeChange(range: number) {
   if (range === rangeKm.value) return
   rangeKm.value = range
   const loc = resolveLocation()
-  const tags = resolveTagIds()
+  const tags = resolveTagNames()
   if (loc && tags.length > 0) {
     fetchMatch(loc, tags, range)
   }
@@ -114,7 +114,7 @@ function handleRangeChange(range: number) {
 /** 下拉刷新:重新拉取当前范围 */
 onPullDownRefresh(() => {
   const loc = resolveLocation()
-  const tags = resolveTagIds()
+  const tags = resolveTagNames()
   if (loc && tags.length > 0) {
     fetchMatch(loc, tags, rangeKm.value).finally(() => {
       uni.stopPullDownRefresh()
@@ -169,7 +169,7 @@ function formatDateTime(iso: string | null): string {
 }
 
 /** 渲染标签(最多 3 个 + "+N") */
-function renderTags(tags: TagDTO[]): { visible: TagDTO[]; rest: number } {
+function renderTags(tags: string[]): { visible: string[]; rest: number } {
   const visible = tags.slice(0, MAX_TAG_VISIBLE)
   const rest = tags.length - visible.length
   return { visible, rest }
@@ -266,9 +266,9 @@ function renderTags(tags: TagDTO[]): { visible: TagDTO[]; rest: number } {
             </view>
           </view>
           <view v-if="p.tags.length > 0" class="mt-3 flex flex-wrap gap-2">
-            <template v-for="t in renderTags(p.tags).visible" :key="t.id">
+            <template v-for="name in renderTags(p.tags).visible" :key="name">
               <text class="rounded-full bg-[#e8f5f1] px-2.5 py-1 text-xs text-[#018d71]">
-                {{ t.name }}
+                {{ name }}
               </text>
             </template>
             <text v-if="renderTags(p.tags).rest > 0" class="text-xs text-[#999]">
@@ -325,9 +325,9 @@ function renderTags(tags: TagDTO[]): { visible: TagDTO[]; rest: number } {
             </view>
           </view>
           <view v-if="c.tags.length > 0" class="mt-3 flex flex-wrap gap-2">
-            <template v-for="t in renderTags(c.tags).visible" :key="t.id">
+            <template v-for="name in renderTags(c.tags).visible" :key="name">
               <text class="rounded-full bg-[#fdf3e7] px-2.5 py-1 text-xs text-[#e68a00]">
-                {{ t.name }}
+                {{ name }}
               </text>
             </template>
             <text v-if="renderTags(c.tags).rest > 0" class="text-xs text-[#999]">

@@ -1,11 +1,11 @@
 import { desc, sql } from "drizzle-orm"
 
 import { db } from "@/lib/db"
-import { tags } from "@/db/schema"
+import { hobbyTags } from "@/db/schema"
 import { TagsTable } from "./_components/tags-table"
 import type { TagDTO } from "@/types/api"
 
-// SSR 标签列表上限,防止全量加载。完整分页可通过 /api/admin/tags 接口消费。
+// SSR 标签列表上限,防止全量加载。完整分页可通过 /api/admin/hobby-tags 接口消费。
 const SSR_TAG_LIMIT = 200
 
 /**
@@ -16,17 +16,16 @@ export default async function AdminTagsPage() {
   const [rows, [{ count }]] = await Promise.all([
     db
       .select()
-      .from(tags)
-      .orderBy(desc(tags.createdAt))
+      .from(hobbyTags)
+      .orderBy(desc(hobbyTags.createdAt))
       .limit(SSR_TAG_LIMIT),
-    db.select({ count: sql<number>`count(*)::int` }).from(tags),
+    db.select({ count: sql<number>`count(*)::int` }).from(hobbyTags),
   ])
 
   const items: TagDTO[] = rows.map((r) => ({
     id: r.id,
     name: r.name,
     category: r.category,
-    subCategory: r.subCategory ?? null,
     pinyin: r.pinyin ?? null,
     pinyinInitials: r.pinyinInitials ?? null,
     status: r.status as "pending" | "approved" | "rejected",

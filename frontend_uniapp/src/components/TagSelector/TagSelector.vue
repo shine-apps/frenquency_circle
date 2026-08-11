@@ -8,24 +8,22 @@ import type { CategoryNode, TagDTO } from '@/types'
  *
  * 结构:顶部搜索框 + 联想列表 + 已选标签区 + 六大类分类骨架 + 自定义添加入口。
  *
- * - 后端 `GET /api/tags/search` 按标签名搜索,无"按 category 浏览"接口;
+ * - 后端 `GET /api/hobby-tags/search` 按标签名搜索,无"按 category 浏览"接口;
  *   六大类仅展示分类树作为视觉骨架,点击子类快速搜索。
- * - 已选 ID 若未传入 selectedTags 且未命中缓存,展示"未知标签"占位。
+ * - 已选值为标签名称数组(存 hobby_tags.name),直接透传给父组件。
  */
 
 const props = withDefaults(defineProps<{
-  /** 已选标签 ID 列表 */
-  selectedIds: string[]
+  /** 已选标签名称列表(存 hobby_tags.name) */
+  selectedTags: string[]
   /** 最大可选数量,默认 10 */
   max?: number
-  /** 可选:父组件传入已选的完整 TagDTO[] */
-  selectedTags?: TagDTO[]
 }>(), {
   max: 10,
 })
 
 const emit = defineEmits<{
-  (e: 'update:selectedIds', ids: string[]): void
+  (e: 'update:selectedTags', tags: string[]): void
 }>()
 
 /** 搜索防抖时长(ms) */
@@ -47,29 +45,14 @@ const customOpen = ref(false)
 const customName = ref('')
 const customSubmitting = ref(false)
 
-// 标签缓存:id -> TagDTO,用于已选区展示
-const cache = ref<Map<string, TagDTO>>(new Map())
-
 // 防抖定时器引用
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
 // ====== 已选区展示数据 ======
-// 优先用父组件传入的 selectedTags,其次用缓存,最后占位"未知标签"
-const selectedTagList = computed<TagDTO[]>(() => {
-  if (props.selectedTags && props.selectedTags.length > 0) {
-    // 同步写入缓存
-    props.selectedTags.forEach((t) => cache.value.set(t.id, t))
-    return props.selectedTags
-  }
-  return props.selectedIds.map((id) => {
-    const cached = cache.value.get(id)
-    if (cached) return cached
-    // 占位:未知标签
-    return { id, name: '未知标签', category: '', status: 'pending' } as TagDTO
-  })
-})
+// 已选值为名称数组,直接展示
+const selectedTagList = computed<string[]>(() => props.selectedTags)
 
-const reachedMax = computed(() => props.selectedIds.length >= props.max)
+const reachedMax = computed(() => props.selectedTags.length >= props.max)
 
 // ====== 拉取分类树(仅 mount 一次) ======
 getCategories()
@@ -87,8 +70,6 @@ async function runSearch(q: string) {
     const res = await searchTags(q, 20)
     const list = res.list || []
     suggestions.value = list
-    // 把搜索结果写入缓存,便于后续已选区展示
-    list.forEach((t) => cache.value.set(t.id, t))
   }
   catch (e) {
     // 搜索失败静默处理,不弹 toast 避免干扰输入
@@ -112,20 +93,19 @@ onBeforeUnmount(() => {
 
 // ====== 选择 / 取消选择 ======
 function handleToggleTag(tag: TagDTO) {
-  if (props.selectedIds.includes(tag.id)) {
-    emit('update:selectedIds', props.selectedIds.filter(id => id !== tag.id))
+  if (props.selectedTags.includes(tag.name)) {
+    emit('update:selectedTags', props.selectedTags.filter(name => name !== tag.name))
     return
   }
   if (reachedMax.value) {
     uni.showToast({ title: `最多选 ${props.max} 个`, icon: 'none' })
     return
   }
-  cache.value.set(tag.id, tag)
-  emit('update:selectedIds', [...props.selectedIds, tag.id])
+  emit('update:selectedTags', [...props.selectedTags, tag.name])
 }
 
-function handleRemoveSelected(id: string) {
-  emit('update:selectedIds', props.selectedIds.filter(x => x !== id))
+function handleRemoveSelected(name: string) {
+  emit('update:selectedTags', props.selectedTags.filter(x => x !== name))
 }
 
 // ====== 分类展开/收起 ======
@@ -144,15 +124,14 @@ async function handleSubmitCustom() {
     uni.showToast({ title: '请输入标签名', icon: 'none' })
     return
   }
-  if (props.selectedIds.length >= props.max) {
+  if (props.selectedTags.length >= props.max) {
     uni.showToast({ title: `最多选 ${props.max} 个`, icon: 'none' })
     return
   }
   customSubmitting.value = true
   try {
     const tag = await createCustomTag(name)
-    cache.value.set(tag.id, tag)
-    emit('update:selectedIds', [...props.selectedIds, tag.id])
+    emit('update:selectedTags', [...props.selectedTags, tag.name])
     customName.value = ''
     customOpen.value = false
     uni.showToast({ title: '已添加', icon: 'success' })
@@ -193,14 +172,14 @@ async function handleSubmitCustom() {
       <scroll-view scroll-x class="whitespace-nowrap">
         <view class="inline-flex gap-2 pr-4">
           <view
-            v-for="tag in selectedTagList"
-            :key="tag.id"
+            v-for="name in selectedTagList"
+            :key="name"
             class="inline-flex items-center gap-1 rounded-full bg-[#e8f5f1] py-1 pl-3 pr-1.5"
           >
             <text class="text-xs text-[#018d71]">
-              {{ tag.name }}
+              {{ name }}
             </text>
-            <view class="flex h-4 w-4 items-center justify-center rounded-full bg-[#cdeae2]" @click="handleRemoveSelected(tag.id)">
+            <view class="flex h-4 w-4 items-center justify-center rounded-full bg-[#cdeae2]" @click="handleRemoveSelected(name)">
               <text class="text-[10px] leading-none text-[#018d71]">
                 ✕
               </text>
@@ -222,7 +201,7 @@ async function handleSubmitCustom() {
           v-for="tag in suggestions"
           :key="tag.id"
           class="flex items-center justify-between border-b border-[#f2f2f2] py-3"
-          @click="!selectedIds.includes(tag.id) && handleToggleTag(tag)"
+          @click="!selectedTags.includes(tag.name) && handleToggleTag(tag)"
         >
           <view class="flex flex-col">
             <text class="text-sm text-[#333]">
@@ -232,10 +211,8 @@ async function handleSubmitCustom() {
               {{ tag.category }}
             </text>
           </view>
-          <text
-            :class="selectedIds.includes(tag.id) ? 'text-xs text-[#018d71]' : 'text-xs text-[#018d71]'"
-          >
-            {{ selectedIds.includes(tag.id) ? '已选' : reachedMax ? `上限${max}` : '选择' }}
+          <text class="text-xs text-[#018d71]">
+            {{ selectedTags.includes(tag.name) ? '已选' : reachedMax ? `上限${max}` : '选择' }}
           </text>
         </view>
       </view>

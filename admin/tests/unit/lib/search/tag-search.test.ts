@@ -19,7 +19,6 @@ type TagRow = {
   id: string
   name: string
   category: string
-  subCategory: string | null
   pinyin: string | null
   pinyinInitials: string | null
   status: string
@@ -31,13 +30,13 @@ type TagRow = {
 function makeTagRow(overrides: Partial<TagRow> = {}): TagRow {
   return {
     id: overrides.id ?? "tag-1",
-    name: overrides.name ?? "陈氏太极拳",
+    name: overrides.name ?? "太极拳",
     category: overrides.category ?? "武术养生",
-    subCategory: overrides.subCategory ?? "太极拳",
-    pinyin: overrides.pinyin ?? "chenshitaijiquan",
-    pinyinInitials: overrides.pinyinInitials ?? "cstjq",
+    pinyin: overrides.pinyin !== undefined ? overrides.pinyin : "taijiquan",
+    pinyinInitials:
+      overrides.pinyinInitials !== undefined ? overrides.pinyinInitials : "tjq",
     status: overrides.status ?? "approved",
-    createdBy: overrides.createdBy ?? null,
+    createdBy: overrides.createdBy !== undefined ? overrides.createdBy : null,
     createdAt: overrides.createdAt ?? new Date("2026-01-01T00:00:00Z"),
     updatedAt: overrides.updatedAt ?? new Date("2026-01-01T00:00:00Z"),
   }
@@ -125,11 +124,10 @@ describe("lib/search/tag-search", () => {
       const dto = toTagDTO(row)
       expect(dto).toEqual({
         id: "tag-1",
-        name: "陈氏太极拳",
+        name: "太极拳",
         category: "武术养生",
-        subCategory: "太极拳",
-        pinyin: "chenshitaijiquan",
-        pinyinInitials: "cstjq",
+        pinyin: "taijiquan",
+        pinyinInitials: "tjq",
         status: "approved",
         createdBy: null,
         createdAt: "2026-01-01T00:00:00.000Z",
@@ -138,11 +136,10 @@ describe("lib/search/tag-search", () => {
     })
 
     it("normalizes null pinyin fields to null in DTO", () => {
-      const row = makeTagRow({ pinyin: null, pinyinInitials: null, subCategory: null, createdBy: null })
+      const row = makeTagRow({ pinyin: null, pinyinInitials: null, createdBy: null })
       const dto = toTagDTO(row)
       expect(dto.pinyin).toBeNull()
       expect(dto.pinyinInitials).toBeNull()
-      expect(dto.subCategory).toBeNull()
       expect(dto.createdBy).toBeNull()
     })
   })
@@ -162,16 +159,16 @@ describe("lib/search/tag-search", () => {
 
     it("returns matching tags for Chinese query and dedupes by id", async () => {
       // 模拟数据库返回包含重复 id(同一标签命中多个搜索分支)
-      const dupRow = makeTagRow({ id: "tag-1", name: "陈氏太极拳养生八式" })
+      const dupRow = makeTagRow({ id: "tag-1", name: "太极拳" })
       const otherRow = makeTagRow({
         id: "tag-2",
-        name: "陈氏太极拳老架一路",
-        pinyin: "chenshitaijiquanlaojiayilu",
-        pinyinInitials: "cstjqljyl",
+        name: "气功功法",
+        pinyin: "qigonggongfa",
+        pinyinInitials: "qggf",
       })
       mockDb._setSelectResult([dupRow, dupRow, otherRow])
 
-      const result = await searchTags("陈氏", 10)
+      const result = await searchTags("太极", 10)
       expect(result).toHaveLength(2)
       expect(result[0]!.id).toBe("tag-1")
       expect(result[1]!.id).toBe("tag-2")
@@ -207,43 +204,43 @@ describe("lib/search/tag-search", () => {
       expect(chainSelect.from).toHaveBeenCalledTimes(1)
     })
 
-    it("handles pinyin full match query (e.g. 'chenshitaijiquan')", async () => {
+    it("handles pinyin full match query (e.g. 'taijiquan')", async () => {
       const row = makeTagRow({
         id: "tag-py",
-        name: "陈氏太极拳",
-        pinyin: "chenshitaijiquan",
-        pinyinInitials: "cstjq",
+        name: "太极拳",
+        pinyin: "taijiquan",
+        pinyinInitials: "tjq",
       })
       mockDb._setSelectResult([row])
 
-      const result = await searchTags("chenshitaijiquan", 10)
+      const result = await searchTags("taijiquan", 10)
       expect(result).toHaveLength(1)
-      expect(result[0]!.name).toBe("陈氏太极拳")
+      expect(result[0]!.name).toBe("太极拳")
     })
 
-    it("handles pinyin initials match query (e.g. 'cstjq')", async () => {
+    it("handles pinyin initials match query (e.g. 'tjq')", async () => {
       const row = makeTagRow({
         id: "tag-init",
-        name: "陈氏太极拳",
-        pinyin: "chenshitaijiquan",
-        pinyinInitials: "cstjq",
+        name: "太极拳",
+        pinyin: "taijiquan",
+        pinyinInitials: "tjq",
       })
       mockDb._setSelectResult([row])
 
-      const result = await searchTags("cstjq", 10)
+      const result = await searchTags("tjq", 10)
       expect(result).toHaveLength(1)
       expect(result[0]!.id).toBe("tag-init")
     })
 
-    it("handles pinyin initials prefix match (e.g. 'cstj' matches 'cstjq')", async () => {
+    it("handles pinyin initials prefix match (e.g. 'tj' matches 'tjq')", async () => {
       const row = makeTagRow({
         id: "tag-prefix",
-        name: "陈氏太极拳",
-        pinyinInitials: "cstjq",
+        name: "太极拳",
+        pinyinInitials: "tjq",
       })
       mockDb._setSelectResult([row])
 
-      const result = await searchTags("cstj", 10)
+      const result = await searchTags("tj", 10)
       expect(result).toHaveLength(1)
       expect(result[0]!.id).toBe("tag-prefix")
     })

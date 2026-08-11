@@ -169,7 +169,7 @@ function formatActivityTime(iso: string | null): string {
 }
 
 /** 渲染标签(最多 MAX_TAG_VISIBLE + "+N") */
-function renderTags(tags: TagDTO[]): { visible: TagDTO[]; rest: number } {
+function renderTags(tags: string[]): { visible: string[]; rest: number } {
   const visible = tags.slice(0, MAX_TAG_VISIBLE)
   return { visible, rest: tags.length - visible.length }
 }
@@ -324,12 +324,12 @@ onHide(() => {
               </view>
               <!-- 标签 -->
               <view v-if="(item as UserSearchResultDTO).tags.length > 0" class="mt-3 flex flex-wrap gap-2">
-                <template v-for="t in renderTags((item as UserSearchResultDTO).tags).visible" :key="t.id">
+                <template v-for="name in renderTags((item as UserSearchResultDTO).tags).visible" :key="name">
                   <text
                     class="rounded-full bg-[#e8f5f1] px-2.5 py-1 text-xs"
                     :class="isFieldMatched((item as UserSearchResultDTO).matchedFields, 'tag') ? 'font-medium text-[#018d71]' : 'text-[#018d71]'"
                   >
-                    <template v-for="(seg, si) in highlightText(t.name, keyword)" :key="si">
+                    <template v-for="(seg, si) in highlightText(name, keyword)" :key="si">
                       <text v-if="seg.highlight" class="font-semibold">{{ seg.text }}</text>
                       <text v-else>{{ seg.text }}</text>
                     </template>
@@ -391,9 +391,9 @@ onHide(() => {
               </view>
               <!-- 标签 -->
               <view v-if="(item as CircleSearchResultDTO).tags.length > 0" class="mt-3 flex flex-wrap gap-2">
-                <template v-for="t in renderTags((item as CircleSearchResultDTO).tags).visible" :key="t.id">
+                <template v-for="name in renderTags((item as CircleSearchResultDTO).tags).visible" :key="name">
                   <text class="rounded-full bg-[#fdf3e7] px-2.5 py-1 text-xs text-[#e68a00]">
-                    <template v-for="(seg, si) in highlightText(t.name, keyword)" :key="si">
+                    <template v-for="(seg, si) in highlightText(name, keyword)" :key="si">
                       <text v-if="seg.highlight" class="font-semibold">{{ seg.text }}</text>
                       <text v-else>{{ seg.text }}</text>
                     </template>

@@ -1,6 +1,6 @@
 # admin
 
-Next.js 16 后端 + 管理后台,为 `frenqency_circle` 仓库的 `frontend/` 提供 REST API。
+Next.js 16 后端 + 管理后台,为 `frenqency_circle` 仓库的 `frontend_uniapp/` 提供 REST API。
 
 ## 技术栈
 
@@ -15,7 +15,7 @@ Next.js 16 后端 + 管理后台,为 `frenqency_circle` 仓库的 `frontend/` �
 
 ## 快速开始
 
-> 本子项目是**独立项目**,依赖与 `frontend/` 不共享,`pnpm install` 仅作用于 `admin/` 目录。
+> 本子项目是**独立项目**,依赖与 `frontend_uniapp/` 不共享,`pnpm install` 仅作用于 `admin/` 目录。
 
 ```bash
 # 1. 启动 PostgreSQL(走 docker-compose)

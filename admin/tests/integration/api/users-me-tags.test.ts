@@ -1,19 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 /**
- * PUT /api/users/me/tags 集成测试。
+ * PUT /api/users/me/hobby-tags 集成测试。
  *
  * 覆盖:
  * - 未登录返回 401
- * - 全量替换成功(删旧+插新+返回 TagDTO[])
- * - tagIds 超过 10 个返回 400
- * - tagIds 中包含不存在的 tag 返回 400
- * - tagIds 为空数组返回 400
- * - tagIds 中包含非 uuid 字符串返回 400
+ * - 全量替换成功(直接 UPDATE users.tags,返回 string[] 名称数组)
+ * - 重复名称去重后仍成功
+ * - tags 超过 10 个返回 400
+ * - tags 为空数组返回 400
+ * - tags 中包含不存在的名称返回 400
  *
  * mock 层级:
- * - @/lib/db:支持 select().from().where().limit() / transaction() / delete().where() / insert().values()
- *   每次 select 返回新的 chain(用队列控制不同 select 的结果)
+ * - @/lib/db:支持 select().from().where().limit() / update().set().where() 链式调用
  * - @/lib/auth/session-token:控制 readUserFromToken 返回值
  * - @/lib/logger:避免输出噪音
  *
@@ -24,7 +23,6 @@ type TagRow = {
   id: string
   name: string
   category: string
-  subCategory: string | null
   pinyin: string | null
   pinyinInitials: string | null
   status: string
@@ -35,80 +33,52 @@ type TagRow = {
 
 const {
   mockDb,
+  selectResults,
+  chainUpdate,
   readUserFromTokenMock,
-  setSelectResultsQueue,
-  txDeleteWhereSpy,
-  txInsertValuesSpy,
-  transactionSpy,
 } = vi.hoisted(() => {
-  // select 队列:每次 db.select() 调用取出队首结果
-  // 队列元素类型为 Record<string, unknown>[],因为不同 select 返回不同形状:
-  // - existence check: {id: string}[]
-  // - user_tags lookup: {tagId: string}[]
-  // - tag details: TagRow[]
-  const selectResultsQueue: Record<string, unknown>[][] = []
+  const selectResults: { value: Record<string, unknown>[] } = { value: [] }
 
-  // 构造一个 thenable chain,可被 await 解析为 result
-  function makeChain(result: Record<string, unknown>[]) {
-    const chain = {
-      from: vi.fn(() => chain),
-      where: vi.fn(() => chain),
-      orderBy: vi.fn(() => chain),
+  function makeSelectChain(result: Record<string, unknown>[]) {
+    return {
+      from: vi.fn(function (this: unknown) { return this }),
+      where: vi.fn(function (this: unknown) { return this }),
+      orderBy: vi.fn(function (this: unknown) { return this }),
       limit: vi.fn(async () => result),
       then: (
         resolve: (value: Record<string, unknown>[]) => unknown,
         reject?: (reason: unknown) => unknown
       ) => Promise.resolve(result).then(resolve, reject),
     }
-    return chain
   }
 
-  // 事务 tx mock:tx.delete(...).where() 与 tx.insert(...).values()
-  const txDeleteWhereSpy = vi.fn(async () => undefined)
-  const txDeleteChain = {
-    where: txDeleteWhereSpy,
-  }
-  const txInsertValuesSpy = vi.fn(async () => undefined)
-  const txInsertChain = {
-    values: txInsertValuesSpy,
-  }
-  const transactionTx = {
-    delete: vi.fn(() => txDeleteChain),
-    insert: vi.fn(() => txInsertChain),
+  const chainUpdate = {
+    set: vi.fn(function () { return chainUpdate }),
+    where: vi.fn(async () => undefined),
   }
 
   const mockDb = {
-    select: vi.fn(() => makeChain(selectResultsQueue.shift() ?? [])),
-    insert: vi.fn(() => txInsertChain),
-    delete: vi.fn(() => txDeleteChain),
-    transaction: vi.fn(async (cb: (tx: typeof transactionTx) => Promise<unknown>) => {
-      return cb(transactionTx)
-    }),
+    select: vi.fn(() => makeSelectChain(selectResults.value)),
+    update: vi.fn(() => chainUpdate),
   }
 
   return {
     mockDb,
+    selectResults,
+    chainUpdate,
     readUserFromTokenMock: vi.fn(),
-    setSelectResultsQueue: (results: Record<string, unknown>[][]) => {
-      selectResultsQueue.length = 0
-      selectResultsQueue.push(...results)
-    },
-    txDeleteWhereSpy,
-    txInsertValuesSpy,
-    transactionSpy: mockDb.transaction,
   }
 }) as {
   mockDb: {
     select: ReturnType<typeof vi.fn>
-    insert: ReturnType<typeof vi.fn>
-    delete: ReturnType<typeof vi.fn>
-    transaction: ReturnType<typeof vi.fn>
+    update: ReturnType<typeof vi.fn>
+  }
+  selectResults: { value: Record<string, unknown>[] }
+  chainUpdate: {
+    set: ReturnType<typeof vi.fn>
+    where: ReturnType<typeof vi.fn>
   }
   readUserFromTokenMock: ReturnType<typeof vi.fn>
-  setSelectResultsQueue: (results: Record<string, unknown>[][]) => void
-  txDeleteWhereSpy: ReturnType<typeof vi.fn>
-  txInsertValuesSpy: ReturnType<typeof vi.fn>
-  transactionSpy: ReturnType<typeof vi.fn>
 }
 
 vi.mock("@/lib/db", () => ({ db: mockDb }))
@@ -126,8 +96,8 @@ vi.mock("@/lib/logger", () => ({
   },
 }))
 
-import { PUT } from "@/app/api/users/me/tags/route"
-import type { IResponse, TagDTO } from "@/types/api"
+import { PUT } from "@/app/api/users/me/hobby-tags/route"
+import type { IResponse } from "@/types/api"
 
 const FAKE_USER = {
   id: "11111111-1111-1111-1111-111111111111",
@@ -139,11 +109,10 @@ const FAKE_USER = {
 function makeTagRow(overrides: Partial<TagRow> = {}): TagRow {
   return {
     id: overrides.id ?? "tag-1",
-    name: overrides.name ?? "陈氏太极拳",
+    name: overrides.name ?? "太极拳",
     category: overrides.category ?? "武术养生",
-    subCategory: overrides.subCategory ?? "太极拳",
-    pinyin: overrides.pinyin ?? "chenshitaijiquan",
-    pinyinInitials: overrides.pinyinInitials ?? "cstjq",
+    pinyin: overrides.pinyin ?? "taijiquan",
+    pinyinInitials: overrides.pinyinInitials ?? "tjq",
     status: overrides.status ?? "approved",
     createdBy: overrides.createdBy ?? null,
     createdAt: overrides.createdAt ?? new Date("2026-01-01T00:00:00Z"),
@@ -152,7 +121,7 @@ function makeTagRow(overrides: Partial<TagRow> = {}): TagRow {
 }
 
 function makeJsonRequest(body: unknown): Request {
-  return new Request("http://localhost/api/users/me/tags", {
+  return new Request("http://localhost/api/users/me/hobby-tags", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: typeof body === "string" ? body : JSON.stringify(body),
@@ -161,114 +130,97 @@ function makeJsonRequest(body: unknown): Request {
 
 beforeEach(() => {
   mockDb.select.mockClear()
-  mockDb.insert.mockClear()
-  mockDb.delete.mockClear()
-  mockDb.transaction.mockClear()
-  txDeleteWhereSpy.mockClear()
-  txInsertValuesSpy.mockClear()
+  mockDb.update.mockClear()
+  chainUpdate.set.mockClear()
+  chainUpdate.where.mockClear()
   readUserFromTokenMock.mockReset()
-  setSelectResultsQueue([])
+  selectResults.value = []
 })
 
-describe("PUT /api/users/me/tags", () => {
+describe("PUT /api/users/me/hobby-tags", () => {
   it("returns 401 when not logged in", async () => {
     readUserFromTokenMock.mockResolvedValue(null)
-    const res = await PUT(
-      makeJsonRequest({ tagIds: ["00000000-0000-4000-8000-000000000001"] })
-    )
+    const res = await PUT(makeJsonRequest({ tags: ["太极拳"] }))
     expect(res.status).toBe(401)
     const body = (await res.json()) as IResponse<null>
     expect(body.code).toBe(401)
     expect(body.message).toBe("未登录或登录已过期")
   })
 
-  it("replaces user tags successfully and returns updated TagDTO list", async () => {
+  it("replaces user tags successfully and returns updated name array", async () => {
     readUserFromTokenMock.mockResolvedValue(FAKE_USER)
 
-    const tagId1 = "00000000-0000-4000-8000-000000000001"
-    const tagId2 = "00000000-0000-4000-8000-000000000002"
+    // 存在性校验:返回 2 个 approved 标签
+    selectResults.value = [
+      makeTagRow({ name: "太极拳" }),
+      makeTagRow({ id: "tag-2", name: "书法", pinyin: "shufa", pinyinInitials: "sf" }),
+    ] as unknown as Record<string, unknown>[]
 
-    // select 队列:
-    // 1) 校验 tagIds 存在性:返回 2 行(都存在)
-    // 2) 查询更新后的 user_tags(拿 tagId 列表):返回 2 行
-    // 3) 查询 tags 表(拿 tag 详情):返回 2 行 tag 数据
-    setSelectResultsQueue([
-      [{ id: tagId1 }, { id: tagId2 }], // existence check
-      [{ tagId: tagId1 }, { tagId: tagId2 }], // user_tags lookup
-      [
-        makeTagRow({ id: tagId1, name: "陈氏太极拳" }),
-        makeTagRow({ id: tagId2, name: "八段锦", pinyin: "baduanjin", pinyinInitials: "bdj" }),
-      ], // tag details
-    ])
-
-    const res = await PUT(makeJsonRequest({ tagIds: [tagId1, tagId2] }))
+    const res = await PUT(makeJsonRequest({ tags: ["太极拳", "书法"] }))
     expect(res.status).toBe(200)
-    const body = (await res.json()) as IResponse<{ tags: TagDTO[] }>
+    const body = (await res.json()) as IResponse<{ tags: string[] }>
     expect(body.code).toBe(200)
-    expect(body.data.tags).toHaveLength(2)
-    // 按 tagIds 入参顺序返回
-    expect(body.data.tags[0]!.id).toBe(tagId1)
-    expect(body.data.tags[0]!.name).toBe("陈氏太极拳")
-    expect(body.data.tags[1]!.id).toBe(tagId2)
-    expect(body.data.tags[1]!.name).toBe("八段锦")
-    // 事务应被调用一次(包含 delete + insert)
-    expect(transactionSpy).toHaveBeenCalledTimes(1)
-    expect(txDeleteWhereSpy).toHaveBeenCalledTimes(1)
-    expect(txInsertValuesSpy).toHaveBeenCalledTimes(1)
+    expect(body.data.tags).toEqual(["太极拳", "书法"])
+    // 直接 UPDATE users.tags(无事务、无桥接表)
+    expect(mockDb.update).toHaveBeenCalledTimes(1)
+    const setArg = chainUpdate.set.mock.calls[0]?.[0] as Record<string, unknown>
+    expect(setArg.tags).toEqual(["太极拳", "书法"])
+    expect(chainUpdate.where).toHaveBeenCalledTimes(1)
   })
 
-  it("returns 400 when tagIds array is empty", async () => {
+  it("dedupes duplicate names before persisting", async () => {
     readUserFromTokenMock.mockResolvedValue(FAKE_USER)
-    const res = await PUT(makeJsonRequest({ tagIds: [] }))
+    selectResults.value = [makeTagRow({ name: "太极拳" })] as unknown as Record<string, unknown>[]
+
+    const res = await PUT(makeJsonRequest({ tags: ["太极拳", "太极拳"] }))
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as IResponse<{ tags: string[] }>
+    expect(body.data.tags).toEqual(["太极拳"])
+    const setArg = chainUpdate.set.mock.calls[0]?.[0] as Record<string, unknown>
+    expect(setArg.tags).toEqual(["太极拳"])
+  })
+
+  it("returns 400 when tags array is empty", async () => {
+    readUserFromTokenMock.mockResolvedValue(FAKE_USER)
+    const res = await PUT(makeJsonRequest({ tags: [] }))
     expect(res.status).toBe(400)
     const body = (await res.json()) as IResponse<null>
     expect(body.code).toBe(400)
     expect(body.message).toBe("Invalid request body")
-    expect(transactionSpy).not.toHaveBeenCalled()
+    expect(mockDb.update).not.toHaveBeenCalled()
   })
 
-  it("returns 400 when tagIds has more than 10 items", async () => {
+  it("returns 400 when tags has more than 10 items", async () => {
     readUserFromTokenMock.mockResolvedValue(FAKE_USER)
-    const tagIds = Array.from({ length: 11 }, (_, i) =>
-      `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`
-    )
-    const res = await PUT(makeJsonRequest({ tagIds }))
+    const tags = Array.from({ length: 11 }, (_, i) => `标签${i + 1}`)
+    const res = await PUT(makeJsonRequest({ tags }))
     expect(res.status).toBe(400)
     const body = (await res.json()) as IResponse<null>
     expect(body.code).toBe(400)
-    expect(transactionSpy).not.toHaveBeenCalled()
+    expect(mockDb.update).not.toHaveBeenCalled()
   })
 
-  it("returns 400 when any tagId does not exist", async () => {
+  it("returns 400 when any tag name does not exist", async () => {
     readUserFromTokenMock.mockResolvedValue(FAKE_USER)
+    // 只返回"太极拳",另一个名称校验失败
+    selectResults.value = [makeTagRow({ name: "太极拳" })] as unknown as Record<string, unknown>[]
 
-    const existingId = "00000000-0000-4000-8000-000000000001"
-    const missingId = "00000000-0000-4000-8000-000000000099"
-
-    // existence check 只返回 existingId,missingId 不存在
-    setSelectResultsQueue([[{ id: existingId }]])
-
-    const res = await PUT(
-      makeJsonRequest({ tagIds: [existingId, missingId] })
-    )
+    const res = await PUT(makeJsonRequest({ tags: ["太极拳", "不存在的标签"] }))
     expect(res.status).toBe(400)
     const body = (await res.json()) as IResponse<null>
     expect(body.code).toBe(400)
-    expect(body.message).toBe("部分标签不存在")
-    expect(body.details).toEqual({ missingTagIds: [missingId] })
-    expect(transactionSpy).not.toHaveBeenCalled()
+    expect(body.details).toEqual({ missingTags: ["不存在的标签"] })
+    expect(mockDb.update).not.toHaveBeenCalled()
   })
 
-  it("returns 400 when tagId is not a valid uuid", async () => {
+  it("returns 400 when a tag name is not approved", async () => {
     readUserFromTokenMock.mockResolvedValue(FAKE_USER)
-    const res = await PUT(
-      makeJsonRequest({ tagIds: ["not-a-uuid"] })
-    )
+    // approved 过滤后只返回"太极拳",pending 标签不返回
+    selectResults.value = [makeTagRow({ name: "太极拳" })] as unknown as Record<string, unknown>[]
+
+    const res = await PUT(makeJsonRequest({ tags: ["太极拳", "待审核标签"] }))
     expect(res.status).toBe(400)
-    const body = (await res.json()) as IResponse<null>
-    expect(body.code).toBe(400)
-    expect(body.message).toBe("Invalid request body")
-    expect(transactionSpy).not.toHaveBeenCalled()
+    expect(mockDb.update).not.toHaveBeenCalled()
   })
 
   it("returns 400 on malformed json body", async () => {
@@ -277,7 +229,7 @@ describe("PUT /api/users/me/tags", () => {
     expect(res.status).toBe(400)
   })
 
-  it("returns 400 when tagIds is missing", async () => {
+  it("returns 400 when tags is missing", async () => {
     readUserFromTokenMock.mockResolvedValue(FAKE_USER)
     const res = await PUT(makeJsonRequest({}))
     expect(res.status).toBe(400)

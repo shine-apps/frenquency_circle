@@ -1,7 +1,7 @@
 import { and, eq, ilike, like, or, desc } from "drizzle-orm"
 
 import { db } from "@/lib/db"
-import { tags } from "@/db/schema"
+import { hobbyTags } from "@/db/schema"
 import type { TagDTO } from "@/types/api"
 import { toPinyin, toPinyinInitials } from "@/lib/search/pinyin"
 
@@ -20,14 +20,13 @@ import { toPinyin, toPinyinInitials } from "@/lib/search/pinyin"
  */
 
 /**
- * 将 tags 表行映射为 TagDTO。
+ * 将 hobby_tags 表行映射为 TagDTO。
  */
-export function toTagDTO(row: typeof tags.$inferSelect): TagDTO {
+export function toTagDTO(row: typeof hobbyTags.$inferSelect): TagDTO {
   return {
     id: row.id,
     name: row.name,
     category: row.category,
-    subCategory: row.subCategory ?? null,
     pinyin: row.pinyin ?? null,
     pinyinInitials: row.pinyinInitials ?? null,
     status: row.status as "pending" | "approved" | "rejected",
@@ -58,34 +57,34 @@ export async function searchTags(
   // 5 个搜索分支,通过 OR 合并;每个分支都强制 status='approved'
   const conditions = [
     // 1. 精确匹配 name(忽略大小写,等价于 lower(name) = lower(query))
-    eq(tags.name, trimmed),
+    eq(hobbyTags.name, trimmed),
     // 2. ILIKE '%query%' 模糊匹配 name
-    ilike(tags.name, `%${trimmed}%`),
+    ilike(hobbyTags.name, `%${trimmed}%`),
   ]
   // 3. pinyin 完全匹配
   if (queryPinyin) {
-    conditions.push(eq(tags.pinyin, queryPinyin))
+    conditions.push(eq(hobbyTags.pinyin, queryPinyin))
   }
   // 4. pinyinInitials 完全匹配
   if (queryInitials) {
-    conditions.push(eq(tags.pinyinInitials, queryInitials))
+    conditions.push(eq(hobbyTags.pinyinInitials, queryInitials))
   }
   // 5. pinyinInitials 前缀匹配
   if (queryInitials) {
-    conditions.push(like(tags.pinyinInitials, `${queryInitials}%`))
+    conditions.push(like(hobbyTags.pinyinInitials, `${queryInitials}%`))
   }
 
   const rows = await db
     .select()
-    .from(tags)
-    .where(and(eq(tags.status, "approved"), or(...conditions)))
+    .from(hobbyTags)
+    .where(and(eq(hobbyTags.status, "approved"), or(...conditions)))
     .limit(limit)
 
   // 同一标签可能命中多个分支,SELECT 结果可能有重复行;
   // 但由于 drizzle 的 select 默认不 DISTINCT,这里在内存中按 id 去重。
   // 同时按原始顺序(数据库返回顺序)保留首次出现的项。
   const seen = new Set<string>()
-  const unique: typeof tags.$inferSelect[] = []
+  const unique: typeof hobbyTags.$inferSelect[] = []
   for (const row of rows) {
     if (seen.has(row.id)) continue
     seen.add(row.id)
@@ -105,13 +104,13 @@ export async function listPopularTags(
 ): Promise<TagDTO[]> {
   const rows = await db
     .select()
-    .from(tags)
-    .where(eq(tags.status, "approved"))
-    .orderBy(desc(tags.createdAt))
+    .from(hobbyTags)
+    .where(eq(hobbyTags.status, "approved"))
+    .orderBy(desc(hobbyTags.createdAt))
     .limit(limit)
 
   return rows.map(toTagDTO)
 }
 
-// 重导出搜索辅助函数,便于其他模块(如 /api/tags/custom)复用
+// 重导出搜索辅助函数,便于其他模块(如 /api/hobby-tags/custom)复用
 export { toPinyin, toPinyinInitials }

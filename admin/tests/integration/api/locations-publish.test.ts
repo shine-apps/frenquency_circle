@@ -8,22 +8,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
  * - 发布成功(写入 locations + 更新 users,返回 locationId/publishedAt)
  * - 频率限制(5 分钟内重复)返回 429
  * - latitude 越界返回 400
- * - tagIds 为空数组返回 400
+ * - tagNames 为空数组返回 400
+ * - 标签名称不存在返回 400
  * - rangeKm 非法值返回 400
  * - 缺少必填字段返回 400
  * - 非法 json 返回 400
  *
  * mock 层级:
- * - @/lib/db:支持 insert().values().returning() 与 update().set().where() 链式调用
+ * - @/lib/db:支持 select().from().where().limit() 与 insert().values().returning() 与
+ *   update().set().where() 链式调用
  * - @/lib/auth/session-token:控制 readUserFromToken 返回值
  * - @/lib/rate-limit/publish:控制 checkAndConsumePublish 返回值
  * - @/lib/logger:避免输出噪音
- *
- * 直接调用 route handler(参考 tests/integration/api/users-me-privacy.test.ts 模式)。
  */
 
 const {
   mockDb,
+  chainSelect,
   chainInsert,
   chainUpdate,
   returningMock,
@@ -31,6 +32,25 @@ const {
   readUserFromTokenMock,
   checkAndConsumePublishMock,
 } = vi.hoisted(() => {
+  let selectResult: Record<string, unknown>[] = []
+
+  // select().from().where().limit() 链
+  const chainSelect = {
+    from: vi.fn(function (this: unknown) {
+      return chainSelect
+    }),
+    where: vi.fn(function (this: unknown) {
+      return chainSelect
+    }),
+    limit: vi.fn(async function () {
+      return selectResult
+    }),
+    then: (
+      resolve: (value: Record<string, unknown>[]) => unknown,
+      reject?: (reason: unknown) => unknown
+    ) => Promise.resolve(selectResult).then(resolve, reject),
+  }
+
   // insert().values(...).returning(...) 链
   const returningMock = vi.fn()
   const chainInsert = {
@@ -40,7 +60,7 @@ const {
     returning: returningMock,
   }
 
-  // update().set(...).where(...) 链(where 可被 await)
+  // update().set(...).where(...) 链
   const updateWhereMock = vi.fn(async () => undefined)
   const chainUpdate = {
     set: vi.fn(function (this: unknown) {
@@ -50,16 +70,23 @@ const {
   }
 
   const mockDb = {
+    select: vi.fn(function (this: unknown) {
+      return chainSelect
+    }),
     insert: vi.fn(function (this: unknown) {
       return chainInsert
     }),
     update: vi.fn(function (this: unknown) {
       return chainUpdate
     }),
+    _setSelectResult(rows: Record<string, unknown>[]) {
+      selectResult = rows
+    },
   }
 
   return {
     mockDb,
+    chainSelect,
     chainInsert,
     chainUpdate,
     returningMock,
@@ -69,8 +96,19 @@ const {
   }
 }) as {
   mockDb: {
+    select: ReturnType<typeof vi.fn>
     insert: ReturnType<typeof vi.fn>
     update: ReturnType<typeof vi.fn>
+    _setSelectResult: (rows: Record<string, unknown>[]) => void
+  }
+  chainSelect: {
+    from: ReturnType<typeof vi.fn>
+    where: ReturnType<typeof vi.fn>
+    limit: ReturnType<typeof vi.fn>
+    then: (
+      resolve: (value: Record<string, unknown>[]) => unknown,
+      reject?: (reason: unknown) => unknown
+    ) => Promise<unknown>
   }
   chainInsert: {
     values: ReturnType<typeof vi.fn>
@@ -125,8 +163,17 @@ const VALID_BODY = {
   latitude: 39.9042,
   longitude: 116.4074,
   address: "北京市朝阳区",
-  tagIds: ["00000000-0000-4000-8000-000000000001"],
+  tagNames: ["太极拳"],
   rangeKm: 5 as const,
+}
+
+function makeTagRow(name: string): Record<string, unknown> {
+  return {
+    id: "00000000-0000-4000-8000-000000000001",
+    name,
+    category: "武术养生",
+    status: "approved",
+  }
 }
 
 function makeJsonRequest(body: unknown): Request {
@@ -138,6 +185,10 @@ function makeJsonRequest(body: unknown): Request {
 }
 
 beforeEach(() => {
+  mockDb.select.mockClear()
+  chainSelect.from.mockClear()
+  chainSelect.where.mockClear()
+  chainSelect.limit.mockClear()
   mockDb.insert.mockClear()
   mockDb.update.mockClear()
   chainInsert.values.mockClear()
@@ -148,6 +199,8 @@ beforeEach(() => {
   checkAndConsumePublishMock.mockReset()
   // 默认允许发布
   checkAndConsumePublishMock.mockReturnValue({ ok: true })
+  // 默认标签校验通过
+  mockDb._setSelectResult([makeTagRow("太极拳")])
 })
 
 describe("POST /api/locations/publish", () => {
@@ -184,9 +237,13 @@ describe("POST /api/locations/publish", () => {
     // 频率限制器应被调用一次
     expect(checkAndConsumePublishMock).toHaveBeenCalledTimes(1)
     expect(checkAndConsumePublishMock).toHaveBeenCalledWith(FAKE_USER.id)
-    // insert locations 应被调用
+    // 标签存在性校验 select 被调用
+    expect(mockDb.select).toHaveBeenCalledTimes(1)
+    // insert locations 应被调用(且 values 包含 tagNames 名称数组)
     expect(mockDb.insert).toHaveBeenCalledTimes(1)
     expect(chainInsert.values).toHaveBeenCalledTimes(1)
+    const insertArg = chainInsert.values.mock.calls[0]?.[0] as Record<string, unknown>
+    expect(insertArg.tagNames).toEqual(["太极拳"])
     expect(returningMock).toHaveBeenCalledTimes(1)
     // update users 应被调用(更新最新位置)
     expect(mockDb.update).toHaveBeenCalledTimes(1)
@@ -231,15 +288,29 @@ describe("POST /api/locations/publish", () => {
     expect(checkAndConsumePublishMock).not.toHaveBeenCalled()
   })
 
-  it("returns 400 when tagIds array is empty", async () => {
+  it("returns 400 when tagNames array is empty", async () => {
     readUserFromTokenMock.mockResolvedValue(FAKE_USER)
     const res = await POST(
-      makeJsonRequest({ ...VALID_BODY, tagIds: [] })
+      makeJsonRequest({ ...VALID_BODY, tagNames: [] })
     )
     expect(res.status).toBe(400)
     const body = (await res.json()) as IResponse<null>
     expect(body.code).toBe(400)
     expect(body.message).toBe("Invalid request body")
+    expect(mockDb.insert).not.toHaveBeenCalled()
+  })
+
+  it("returns 400 when tag name does not exist", async () => {
+    readUserFromTokenMock.mockResolvedValue(FAKE_USER)
+    // 标签校验只返回"太极拳",另一个名称校验失败
+    mockDb._setSelectResult([makeTagRow("太极拳")])
+    const res = await POST(
+      makeJsonRequest({ ...VALID_BODY, tagNames: ["太极拳", "不存在的标签"] })
+    )
+    expect(res.status).toBe(400)
+    const body = (await res.json()) as IResponse<null>
+    expect(body.code).toBe(400)
+    expect(body.details).toEqual({ missingTags: ["不存在的标签"] })
     expect(mockDb.insert).not.toHaveBeenCalled()
   })
 
@@ -260,18 +331,6 @@ describe("POST /api/locations/publish", () => {
     const { address: _omit, ...rest } = VALID_BODY
     void _omit
     const res = await POST(makeJsonRequest(rest))
-    expect(res.status).toBe(400)
-    const body = (await res.json()) as IResponse<null>
-    expect(body.code).toBe(400)
-    expect(body.message).toBe("Invalid request body")
-    expect(mockDb.insert).not.toHaveBeenCalled()
-  })
-
-  it("returns 400 when tagId is not a valid uuid", async () => {
-    readUserFromTokenMock.mockResolvedValue(FAKE_USER)
-    const res = await POST(
-      makeJsonRequest({ ...VALID_BODY, tagIds: ["not-a-uuid"] })
-    )
     expect(res.status).toBe(400)
     const body = (await res.json()) as IResponse<null>
     expect(body.code).toBe(400)

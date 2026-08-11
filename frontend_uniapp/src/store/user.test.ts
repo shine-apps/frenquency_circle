@@ -72,9 +72,9 @@ describe('useUserStore', () => {
       role: 'USER',
       tags: [],
     })
-    store.setTags([{ id: 't1', name: '古筝', category: '乐器', status: 'approved' }])
+    store.setTags(['古筝'])
     expect(store.userInfo.tags).toHaveLength(1)
-    expect(store.userInfo.tags[0].name).toBe('古筝')
+    expect(store.userInfo.tags[0]).toBe('古筝')
   })
 
   it('setLocation：更新位置与地址', () => {

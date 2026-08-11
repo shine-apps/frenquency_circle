@@ -4,7 +4,7 @@ import { useUserStore } from '@/store/user'
 import { createCircle, getCircle, updateCircle } from '@/api/circles'
 import { uploadFile } from '@/api/upload'
 import { LOGIN_PAGE } from '@/router/config'
-import type { CircleDetailDTO, TagDTO, UpdateCircleInput } from '@/types'
+import type { CircleDetailDTO, UpdateCircleInput } from '@/types'
 
 definePage({
   style: {
@@ -35,8 +35,7 @@ const loading = ref(false)
 
 // 表单状态
 const title = ref('')
-const tagIds = ref<string[]>([])
-const selectedTags = ref<TagDTO[] | undefined>(undefined)
+const tags = ref<string[]>([])
 const description = ref('')
 const address = ref('')
 const latitude = ref<number | null>(null)
@@ -59,8 +58,7 @@ async function fetchForEdit(id: string) {
   try {
     const data: CircleDetailDTO = await getCircle(id)
     title.value = data.title || ''
-    tagIds.value = data.tags.map(t => t.id)
-    selectedTags.value = data.tags
+    tags.value = data.tags || []
     description.value = data.description || ''
     address.value = data.address || ''
     latitude.value = data.latitude
@@ -103,7 +101,7 @@ onShow(() => {
 // 表单校验
 const trimmedTitle = computed(() => title.value.trim())
 const titleValid = computed(() => trimmedTitle.value.length >= 1 && trimmedTitle.value.length <= TITLE_MAX)
-const tagsValid = computed(() => tagIds.value.length >= 1 && tagIds.value.length <= TAGS_MAX)
+const tagsValid = computed(() => tags.value.length >= 1 && tags.value.length <= TAGS_MAX)
 const locationValid = computed(() => !!address.value && latitude.value !== null && longitude.value !== null)
 const descriptionValid = computed(() => description.value.trim().length >= 1 && description.value.trim().length <= DESCRIPTION_MAX)
 const hasContact = computed(() => contactPhone.value.trim() !== '' || wechat.value.trim() !== '')
@@ -219,7 +217,7 @@ async function handleSubmit() {
     if (isEdit.value) {
       const patch: UpdateCircleInput = {
         title: trimmedTitle.value,
-        tagIds: tagIds.value,
+        tags: tags.value,
         description: description.value.trim(),
         contactPhone: contactPhone.value.trim() || undefined,
         wechat: wechat.value.trim() || undefined,
@@ -233,7 +231,7 @@ async function handleSubmit() {
     else {
       const res = await createCircle({
         title: trimmedTitle.value,
-        tagIds: tagIds.value,
+        tags: tags.value,
         description: description.value.trim(),
         latitude: lat,
         longitude: lng,
@@ -257,7 +255,7 @@ async function handleSubmit() {
 
 const titleCount = computed(() => `${title.value.length}/${TITLE_MAX}`)
 const descCount = computed(() => `${description.value.length}/${DESCRIPTION_MAX}`)
-const tagsCountText = computed(() => `${tagIds.value.length}/${TAGS_MAX}`)
+const tagsCountText = computed(() => `${tags.value.length}/${TAGS_MAX}`)
 </script>
 
 <template>
@@ -297,10 +295,9 @@ const tagsCountText = computed(() => `${tagIds.value.length}/${TAGS_MAX}`)
           </view>
           <view class="mt-2">
             <TagSelector
-              :selected-ids="tagIds"
+              :selected-tags="tags"
               :max="TAGS_MAX"
-              :selected-tags="selectedTags"
-              @update:selected-ids="tagIds = $event"
+              @update:selected-tags="tags = $event"
             />
           </view>
         </view>

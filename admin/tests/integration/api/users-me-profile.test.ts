@@ -121,7 +121,7 @@ vi.mock("@/lib/logger", () => ({
 }))
 
 import { PATCH } from "@/app/api/users/me/profile/route"
-import type { IResponse, TagDTO, UserProfileDTO } from "@/types/api"
+import type { IResponse, UserProfileDTO } from "@/types/api"
 
 const FAKE_USER = {
   id: "11111111-1111-1111-1111-111111111111",
@@ -193,20 +193,7 @@ describe("PATCH /api/users/me/profile", () => {
     const updatedRow = makeUserRow({ role: "TEACHER" })
     returningMock.mockResolvedValue([updatedRow])
 
-    const sampleTags: TagDTO[] = [
-      {
-        id: "00000000-0000-0000-0000-000000000001",
-        name: "陈氏太极拳",
-        category: "武术养生",
-        subCategory: "太极拳",
-        pinyin: "chenshitaijiquan",
-        pinyinInitials: "cstjq",
-        status: "approved",
-        createdBy: null,
-        createdAt: "2026-01-01T00:00:00.000Z",
-        updatedAt: "2026-01-01T00:00:00.000Z",
-      },
-    ]
+    const sampleTags: string[] = ["太极拳", "书法"]
     fetchUserTagsMock.mockResolvedValue(sampleTags)
 
     const res = await PATCH(makeJsonRequest({ role: "TEACHER" }))
@@ -215,8 +202,8 @@ describe("PATCH /api/users/me/profile", () => {
     expect(body.code).toBe(200)
     expect(body.data.role).toBe("TEACHER")
     expect(body.data.tags).toEqual(sampleTags)
-    expect(body.data.tags).toHaveLength(1)
-    expect(body.data.tags[0]!.name).toBe("陈氏太极拳")
+    expect(body.data.tags).toHaveLength(2)
+    expect(body.data.tags[0]).toBe("太极拳")
     // 验证 update 链路被正确调用
     expect(mockDb.update).toHaveBeenCalledTimes(1)
     expect(chainUpdate.set).toHaveBeenCalledTimes(1)

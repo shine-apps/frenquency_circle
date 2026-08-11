@@ -59,8 +59,8 @@ function handleSwitchToCircle() {
   })
 }
 
-const tagIds = computed(() => (user.value?.tags || []).map(t => t.id))
-const hasTags = computed(() => tagIds.value.length > 0)
+const userTags = computed(() => user.value?.tags || [])
+const hasTags = computed(() => userTags.value.length > 0)
 const hasLocation = computed(() => latitude.value !== null && longitude.value !== null)
 
 // 进入时若无位置,自动尝试一次定位(静默,失败不打扰)
@@ -149,7 +149,7 @@ async function handlePublish() {
       latitude: lat,
       longitude: lng,
       address: address.value || '已定位',
-      tagIds: tagIds.value,
+      tagNames: userTags.value,
       rangeKm: rangeKm.value,
     })
     // 缓存位置到 location store
@@ -158,7 +158,7 @@ async function handlePublish() {
     matchStore.setMatchResult({
       rangeKm: rangeKm.value,
       location: { latitude: lat, longitude: lng },
-      tagIds: tagIds.value,
+      tags: userTags.value,
     })
     uni.navigateTo({ url: '/pages/match/match' })
   }
@@ -173,7 +173,7 @@ async function handlePublish() {
 
 const tagsText = computed(() => {
   return hasTags.value
-    ? (user.value?.tags || []).map(t => t.name).join('、')
+    ? (user.value?.tags || []).join('、')
     : '尚未选择兴趣,点击去选择'
 })
 </script>
@@ -250,7 +250,7 @@ const tagsText = computed(() => {
         {{ tagsText }}
       </text>
       <text class="mt-1 block text-xs text-[#999]">
-        共 {{ tagIds.length }} 个标签
+        共 {{ userTags.length }} 个标签
       </text>
     </view>
 

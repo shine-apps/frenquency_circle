@@ -4,14 +4,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
  * people-matcher 单元测试。
  *
  * mock 层级:
- * - @/lib/db:支持 select().from().where() 和 select().from().innerJoin().where() 链式调用
- *   每次 select 从队列取结果
+ * - @/lib/db:select 队列,每次 select 取队首
  *
  * 测试内容:
  * - 空结果(无候选用户)
  * - 按加权总分降序排序
  * - locationPrecision 脱敏(exact / community / region)
  * - 分页
+ *
+ * 注意:users.tags 为 text[] 数组列,候选行直接携带 tags 名称数组,
+ * 不再需要第二次 SELECT 关联标签。
  */
 
 type CandidateUser = {
@@ -23,20 +25,7 @@ type CandidateUser = {
   activityLevel: string
   practiceYears: number | null
   privacySettings: unknown
-}
-
-type TagJoinRow = {
-  userId: string
-  id: string
-  name: string
-  category: string
-  subCategory: string | null
-  pinyin: string | null
-  pinyinInitials: string | null
-  status: string
-  createdBy: string | null
-  createdAt: Date
-  updatedAt: Date
+  tags: string[]
 }
 
 const { mockDb, setSelectResultsQueue, setSelectResults } = vi.hoisted(() => {
@@ -46,7 +35,6 @@ const { mockDb, setSelectResultsQueue, setSelectResults } = vi.hoisted(() => {
     const chain = {
       from: vi.fn(() => chain),
       where: vi.fn(() => chain),
-      innerJoin: vi.fn(() => chain),
       orderBy: vi.fn(() => chain),
       limit: vi.fn(() => chain),
       offset: vi.fn(() => chain),
@@ -99,26 +87,6 @@ import type { MatchPersonDTO } from "@/types/api"
 const REF_LAT = 39.908
 const REF_LNG = 116.397
 
-function makeTagRow(
-  userId: string,
-  tagId: string,
-  name: string
-): TagJoinRow {
-  return {
-    userId,
-    id: tagId,
-    name,
-    category: "武术养生",
-    subCategory: "太极拳",
-    pinyin: "taijiquan",
-    pinyinInitials: "tjq",
-    status: "approved",
-    createdBy: null,
-    createdAt: new Date("2026-01-01T00:00:00Z"),
-    updatedAt: new Date("2026-01-01T00:00:00Z"),
-  }
-}
-
 function makeCandidate(overrides: Partial<CandidateUser>): CandidateUser {
   return {
     id: overrides.id ?? "user-1",
@@ -134,6 +102,7 @@ function makeCandidate(overrides: Partial<CandidateUser>): CandidateUser {
         publicContact: true,
         locationPrecision: "exact",
       },
+    tags: overrides.tags ?? [],
   }
 }
 
@@ -149,7 +118,7 @@ describe("lib/match/people-matcher - matchPeople", () => {
     const result = await matchPeople({
       lat: REF_LAT,
       lng: REF_LNG,
-      tagIds: ["tag-1"],
+      tags: ["太极拳"],
       rangeKm: 5,
       currentUserId: "me",
       page: 1,
@@ -168,6 +137,7 @@ describe("lib/match/people-matcher - matchPeople", () => {
       latitude: 39.91,
       longitude: 116.40,
       activityLevel: "high",
+      tags: ["太极拳", "气功功法", "站桩"],
       privacySettings: {
         allowMatch: true,
         publicContact: true,
@@ -181,6 +151,7 @@ describe("lib/match/people-matcher - matchPeople", () => {
       latitude: 39.95,
       longitude: 116.45,
       activityLevel: "medium",
+      tags: ["太极拳"],
       privacySettings: {
         allowMatch: true,
         publicContact: true,
@@ -194,6 +165,7 @@ describe("lib/match/people-matcher - matchPeople", () => {
       latitude: 39.98,
       longitude: 116.48,
       activityLevel: "low",
+      tags: ["书法"],
       privacySettings: {
         allowMatch: true,
         publicContact: true,
@@ -201,22 +173,12 @@ describe("lib/match/people-matcher - matchPeople", () => {
       },
     })
 
-    const tagRows = [
-      makeTagRow("user-a", "tag-1", "陈氏太极拳"),
-      makeTagRow("user-a", "tag-2", "八段锦"),
-      makeTagRow("user-a", "tag-3", "站桩"),
-      makeTagRow("user-b", "tag-1", "陈氏太极拳"),
-    ]
-
-    setSelectResultsQueue([
-      [userA, userB, userC], // 候选用户
-      tagRows, // 标签关联
-    ])
+    setSelectResultsQueue([[userA, userB, userC]])
 
     const result = await matchPeople({
       lat: REF_LAT,
       lng: REF_LNG,
-      tagIds: ["tag-1", "tag-2", "tag-3"],
+      tags: ["太极拳", "气功功法", "站桩"],
       rangeKm: 10,
       currentUserId: "me",
       page: 1,
@@ -267,15 +229,12 @@ describe("lib/match/people-matcher - matchPeople", () => {
       },
     })
 
-    setSelectResultsQueue([
-      [userExact, userCommunity, userRegion],
-      [], // 无标签
-    ])
+    setSelectResultsQueue([[userExact, userCommunity, userRegion]])
 
     const result = await matchPeople({
       lat: REF_LAT,
       lng: REF_LNG,
-      tagIds: [],
+      tags: [],
       rangeKm: 30,
       currentUserId: "me",
       page: 1,
@@ -306,12 +265,12 @@ describe("lib/match/people-matcher - matchPeople", () => {
       })
     )
 
-    setSelectResultsQueue([users, []])
+    setSelectResultsQueue([users])
 
     const result = await matchPeople({
       lat: REF_LAT,
       lng: REF_LNG,
-      tagIds: [],
+      tags: [],
       rangeKm: 30,
       currentUserId: "me",
       page: 1,
@@ -327,24 +286,22 @@ describe("lib/match/people-matcher - matchPeople", () => {
     expect(result.list[1]!.userId).toBe("user-1")
   })
 
-  it("returns correct DTO shape", async () => {
+  it("returns correct DTO shape with tags as string array", async () => {
     const user = makeCandidate({
       id: "user-dto",
       name: "DTO User",
       avatarUrl: "http://example.com/avatar.jpg",
       practiceYears: 10,
       activityLevel: "high",
+      tags: ["太极拳"],
     })
 
-    setSelectResultsQueue([
-      [user],
-      [makeTagRow("user-dto", "tag-1", "陈氏太极拳")],
-    ])
+    setSelectResultsQueue([[user]])
 
     const result = await matchPeople({
       lat: REF_LAT,
       lng: REF_LNG,
-      tagIds: ["tag-1"],
+      tags: ["太极拳"],
       rangeKm: 10,
       currentUserId: "me",
       page: 1,
@@ -357,8 +314,7 @@ describe("lib/match/people-matcher - matchPeople", () => {
     expect(dto.avatarUrl).toBe("http://example.com/avatar.jpg")
     expect(dto.activityLevel).toBe("high")
     expect(dto.practiceYears).toBe(10)
-    expect(dto.tags).toHaveLength(1)
-    expect(dto.tags[0]!.id).toBe("tag-1")
+    expect(dto.tags).toEqual(["太极拳"])
     expect(typeof dto.distanceKm).toBe("number")
   })
 })

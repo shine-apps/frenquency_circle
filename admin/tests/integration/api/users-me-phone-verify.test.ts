@@ -147,7 +147,7 @@ vi.mock("@/lib/logger", () => ({
 }))
 
 import { POST } from "@/app/api/users/me/phone/verify/route"
-import type { IResponse, TagDTO, UserProfileDTO } from "@/types/api"
+import type { IResponse, UserProfileDTO } from "@/types/api"
 
 const FAKE_USER = {
   id: "11111111-1111-1111-1111-111111111111",
@@ -358,21 +358,8 @@ describe("POST /api/users/me/phone/verify", () => {
     mockDb.query.accounts.findFirst.mockResolvedValue(undefined)
     // update users.phone 返回更新后的行
     returningMock.mockResolvedValue([makeUserRow({ phone: "13900139000" })])
-    // fetchUserTags 返回示例标签
-    const sampleTags: TagDTO[] = [
-      {
-        id: "00000000-0000-0000-0000-000000000001",
-        name: "陈氏太极拳",
-        category: "武术养生",
-        subCategory: "太极拳",
-        pinyin: "chenshitaijiquan",
-        pinyinInitials: "cstjq",
-        status: "approved",
-        createdBy: null,
-        createdAt: "2026-01-01T00:00:00.000Z",
-        updatedAt: "2026-01-01T00:00:00.000Z",
-      },
-    ]
+    // fetchUserTags 返回示例标签名称数组
+    const sampleTags: string[] = ["太极拳", "书法"]
     fetchUserTagsMock.mockResolvedValue(sampleTags)
 
     const res = await POST(

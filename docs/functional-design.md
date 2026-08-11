@@ -275,7 +275,7 @@ flowchart TD
 
 #### 交互逻辑
 
-页面加载时自动请求 GPS 定位。若用户已有兴趣标签则自动填充，否则提示先选择兴趣。拖拽地图标记时实时更新地址显示。点击"发布并匹配"时将 location（经纬度）、address、tag_ids、range 提交至后端，后端存储定位记录并返回匹配结果。
+页面加载时自动请求 GPS 定位。若用户已有兴趣标签则自动填充，否则提示先选择兴趣。拖拽地图标记时实时更新地址显示。点击"发布并匹配"时将 location（经纬度）、address、tag_names、range 提交至后端，后端存储定位记录并返回匹配结果。
 
 #### 数据提交字段
 
@@ -284,7 +284,7 @@ flowchart TD
 | latitude | float | 是 | 纬度 |
 | longitude | float | 是 | 经度 |
 | address | string | 是 | 逆地理编码地址 |
-| tag_ids | int[] | 是 | 已选兴趣标签 ID 列表 |
+| tag_names | string[] | 是 | 已选兴趣标签名称列表 |
 | range_km | int | 是 | 匹配范围（1/5/10/30） |
 
 #### 边界条件
@@ -340,7 +340,7 @@ flowchart TD
 
 #### 交互逻辑
 
-从发布定位页跳转时携带 location 和 tag_ids 参数，页面加载时调用两个接口分别获取人和圈子匹配结果。Tab 切换不发起新请求，使用已缓存数据。范围筛选为前端过滤。点击人列表项弹出底部弹窗展示简要资料和联系方式。
+从发布定位页跳转时携带 location 和 tags 参数，页面加载时调用两个接口分别获取人和圈子匹配结果。Tab 切换不发起新请求，使用已缓存数据。范围筛选为前端过滤。点击人列表项弹出底部弹窗展示简要资料和联系方式。
 
 #### 边界条件
 
@@ -464,7 +464,7 @@ flowchart TD
 | 字段 | 类型 | 必填 | 验证规则 |
 |------|------|------|----------|
 | title | string | 是 | 2-50 字符，不允许纯符号 |
-| tag_ids | int[] | 是 | 至少 1 个，最多 5 个标签 |
+| tags | string[] | 是 | 至少 1 个，最多 5 个标签名称 |
 | description | text | 是 | 10-1000 字符 |
 | latitude | float | 是 | 纬度，-90 到 90 |
 | longitude | float | 是 | 经度，-180 到 180 |
@@ -678,13 +678,11 @@ flowchart TD
 
 | 表名 | 说明 | 关键字段 |
 |------|------|----------|
-| users | 用户表 | id, nickname, avatar, phone, wechat_openid, location(Point), created_at |
-| user_tags | 用户兴趣标签关联表 | user_id, tag_id, level(标签精度等级) |
-| tags | 兴趣标签表 | id, name, category(一级), sub_category(二级), pinyin, search_count |
-| circles | 圈子表 | id, title, description, location(Point), address, contact_phone, wechat, activity_time, max_members, creator_id, created_at |
-| circle_tags | 圈子兴趣标签关联表 | circle_id, tag_id |
+| users | 用户表 | id, name, avatar, phone, tags(text[],兴趣标签名称), location(Point), created_at |
+| hobby_tags | 兴趣标签表 | id, name(二级分类名称), category(一级大类), pinyin, pinyin_initials, status |
+| circles | 圈子表 | id, title, description, location(Point), address, contact_phone, wechat, activity_time, max_members, creator_id, tags(text[],兴趣标签名称), created_at |
 | circle_members | 圈子成员表 | circle_id, user_id, role, joined_at |
-| locations | 定位发布记录 | id, user_id, location(Point), address, tags, published_at |
+| locations | 定位发布记录 | id, user_id, location(Point), address, tag_names(text[],发布时标签名称快照), published_at |
 | contact_logs | 联系记录表 | id, circle_id, user_id, contact_type, created_at |
 
 #### PostGIS 地理查询
@@ -719,10 +717,10 @@ flowchart TD
 | POST | /api/auth/sms/login | 手机短信验证码登录，换取 token | 否 |
 | GET | /api/users/me | 获取当前用户信息 | 是 |
 | PUT | /api/users/me | 更新用户资料 | 是 |
-| PUT | /api/users/me/tags | 更新用户兴趣标签 | 是 |
+| PUT | /api/users/me/hobby-tags | 更新用户兴趣标签(名称数组) | 是 |
 | PUT | /api/users/me/privacy | 更新隐私设置 | 是 |
-| GET | /api/tags/search | 搜索兴趣标签 | 是 |
-| POST | /api/tags/custom | 创建自定义标签 | 是 |
+| GET | /api/hobby-tags/search | 搜索兴趣标签 | 是 |
+| POST | /api/hobby-tags/custom | 创建自定义标签 | 是 |
 | POST | /api/locations/publish | 发布定位 | 是 |
 | GET | /api/locations/match-people | 匹配同频的人 | 是 |
 | GET | /api/locations/match-circles | 匹配同频的圈子 | 是 |
@@ -743,7 +741,7 @@ flowchart TD
 
 > **请求体**：
 > ```json
-> { "latitude": 39.9342, "longitude": 116.4993, "address": "北京市朝阳区朝阳公园南路1号", "tag_ids": [1, 5], "range_km": 5 }
+> { "latitude": 39.9342, "longitude": 116.4993, "address": "北京市朝阳区朝阳公园南路1号", "tag_names": ["太极拳", "书法"], "range_km": 5 }
 > ```
 >
 > **响应**：
@@ -753,48 +751,48 @@ flowchart TD
 
 #### GET /api/locations/match-people — 匹配同频的人
 
-> **查询参数**：`latitude, longitude, tag_ids (逗号分隔), range_km, page, page_size`
+> **查询参数**：`latitude, longitude, tags (逗号分隔的名称), range_km, page, page_size`
 >
 > **响应**：
 > ```json
-> { "code": 0, "data": { "total": 8, "list": [{ "user_id": 1, "nickname": "李师傅", "avatar": "url", "distance_km": 0.5, "tags": [...], "activity_level": "high", "practice_years": 3 }] } }
+> { "code": 0, "data": { "total": 8, "list": [{ "user_id": 1, "nickname": "李师傅", "avatar": "url", "distance_km": 0.5, "tags": ["太极拳"], "activity_level": "high", "practice_years": 3 }] } }
 > ```
 >
 > 后端使用 PostGIS `ST_DWithin` 查询 range_km 范围内用户，按距离权重(40%)+兴趣重合度(40%)+活跃度(20%) 排序。
 
 #### GET /api/locations/match-circles — 匹配同频的圈子
 
-> **查询参数**：`latitude, longitude, tag_ids (逗号分隔), range_km, page, page_size`
+> **查询参数**：`latitude, longitude, tags (逗号分隔的名称), range_km, page, page_size`
 >
 > **响应**：
 > ```json
 > { "code": 0, "data": { "total": 3, "list": [{ "circle_id": 1, "title": "朝阳公园陈氏太极拳晨练班", "distance_km": 0.8, "tags": [...], "activity_time": "每周六日 07:00", "member_count": 12, "max_members": 20 }] } }
 > ```
 >
-> 后端查询 circles 表中 location 在 range_km 范围内、且 circle_tags 关联的 tag_id 与用户 tag_ids 有交集的圈子，按距离(30%)+兴趣重合度(50%)+活跃度(20%) 排序。
+> 后端查询 circles 表中 location 在 range_km 范围内、且 circles.tags(标签名称数组)与用户 tags 有交集的圈子，按距离(30%)+兴趣重合度(50%)+活跃度(20%) 排序。
 
 #### POST /api/circles — 创建圈子
 
 > **请求体**：
 > ```json
-> { "title": "...", "tag_ids": [...], "description": "...", "latitude": 39.93, "longitude": 116.49, "address": "...", "contact_phone": "...", "wechat": "...", "activity_time": "...", "max_members": 20 }
+> { "title": "...", "tags": ["太极拳", "书法"], "description": "...", "latitude": 39.93, "longitude": 116.49, "address": "...", "contact_phone": "...", "wechat": "...", "activity_time": "...", "max_members": 20 }
 > ```
 >
 > **响应**：
 > ```json
-> { "code": 0, "data": { "circle_id": 1, "status": "active" } }
+> { "code": 0, "data": { "circle_id": 1, "status": "pending" } }
 > ```
 
-#### GET /api/tags/search — 搜索兴趣标签
+#### GET /api/hobby-tags/search — 搜索兴趣标签
 
 > **查询参数**：`q (关键词), limit (默认10)`
 >
 > **响应**：
 > ```json
-> { "code": 0, "data": { "list": [{ "tag_id": 1, "name": "陈氏太极拳养生八式", "category": "武术养生", "sub_category": "太极拳", "pinyin": "cstjysbs" }] } }
+> { "code": 0, "data": { "list": [{ "id": 1, "name": "太极拳", "category": "武术养生", "pinyin": "taijiquan" }] } }
 > ```
 >
-> 后端使用 Jieba/THULAC 分词后查询 tags 表，匹配 name、pinyin 字段。无匹配时返回空列表，前端展示"自定义添加"入口。
+> 后端按多策略(精确/ILIKE/拼音/首字母)查询 hobby_tags 表，匹配 name、pinyin、pinyin_initials 字段。无匹配时返回空列表，前端展示"自定义添加"入口。
 
 ---
 
@@ -866,7 +864,7 @@ sequenceDiagram
 
     U->>API: GET /api/locations/match-circles
     API->>DB: ST_DWithin 查询范围内圈子
-    API->>DB: JOIN circle_tags 计算兴趣交集
+    API->>DB: circles.tags 数组计算兴趣交集
     DB-->>API: 返回匹配圈子列表
     API-->>U: 返回同频的圈子列表
 ```
@@ -882,14 +880,14 @@ sequenceDiagram
     participant API as Next.js API
     participant DB as PostgreSQL+PostGIS
 
-    T->>API: POST /api/circles (圈子信息)
-    API->>DB: INSERT INTO circles + circle_tags
-    API-->>T: 返回 circle_id, status=active
+    T->>API: POST /api/circles (圈子信息,含 tags 名称数组)
+    API->>DB: INSERT INTO circles(tags text[])
+    API-->>T: 返回 circle_id, status=pending
 
     Note over H: 爱好者发布定位并搜索
 
     H->>API: GET /api/locations/match-circles
-    API->>DB: ST_DWithin + circle_tags 交集查询
+    API->>DB: ST_DWithin + circles.tags 数组交集查询
     DB-->>API: 返回匹配圈子(含老师的圈子)
     API-->>H: 返回圈子列表
 

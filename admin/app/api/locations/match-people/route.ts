@@ -10,7 +10,7 @@ import { logger, LOG_PREFIX } from "@/lib/logger"
  *
  * 查询参数:
  * - latitude / longitude: 坐标(数值)
- * - tagIds: 逗号分隔的标签 ID 字符串
+ * - tags: 逗号分隔的标签名称字符串(hobby_tags.name)
  * - rangeKm: 1 / 5 / 10 / 30(默认 5)
  * - page / pageSize: 分页(默认 1 / 20)
  *
@@ -19,7 +19,7 @@ import { logger, LOG_PREFIX } from "@/lib/logger"
 const matchQuerySchema = z.object({
   latitude: z.coerce.number().min(-90).max(90),
   longitude: z.coerce.number().min(-180).max(180),
-  tagIds: z
+  tags: z
     .string()
     .min(1)
     .transform((s) => s.split(",").map((t) => t.trim()).filter(Boolean)),
@@ -52,7 +52,7 @@ export async function GET(req: Request) {
   const parsed = matchQuerySchema.safeParse({
     latitude: url.searchParams.get("latitude") ?? undefined,
     longitude: url.searchParams.get("longitude") ?? undefined,
-    tagIds: url.searchParams.get("tagIds") ?? undefined,
+    tags: url.searchParams.get("tags") ?? undefined,
     rangeKm: url.searchParams.get("rangeKm") ?? undefined,
   })
   if (!parsed.success) {
@@ -62,13 +62,13 @@ export async function GET(req: Request) {
     )
   }
 
-  const { latitude, longitude, tagIds, rangeKm } = parsed.data
+  const { latitude, longitude, tags, rangeKm } = parsed.data
 
   // 4. 调用匹配引擎
   const result = await matchPeople({
     lat: latitude,
     lng: longitude,
-    tagIds,
+    tags,
     rangeKm,
     currentUserId,
     page: pagination.page,

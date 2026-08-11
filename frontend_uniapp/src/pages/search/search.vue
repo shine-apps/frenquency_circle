@@ -14,14 +14,14 @@ const MAX_TAGS = 10
 
 const userStore = useUserStore()
 
-// 预填:store 中已有的标签 ID 列表
-const initialIds = computed(() => (userStore.userInfo.tags ? userStore.userInfo.tags.map(t => t.id) : []))
-// 已选 ID 列表(可变)
-const selectedIds = ref<string[]>(initialIds.value)
+// 预填:store 中已有的标签名称列表
+const initialTags = computed(() => (userStore.userInfo.tags ? userStore.userInfo.tags : []))
+// 已选名称列表(可变,存 hobby_tags.name)
+const selectedTags = ref<string[]>(initialTags.value)
 // 提交中状态(防重复点击)
 const submitting = ref(false)
 
-const count = computed(() => selectedIds.value.length)
+const count = computed(() => selectedTags.value.length)
 
 /** 完成:持久化并返回 */
 async function handleComplete() {
@@ -32,7 +32,7 @@ async function handleComplete() {
   if (submitting.value) return
   submitting.value = true
   try {
-    const tags = await updateMyTags(selectedIds.value)
+    const tags = await updateMyTags(selectedTags.value)
     // 同步到 store
     userStore.setTags(tags)
     uni.showToast({ title: '已保存', icon: 'success' })
@@ -67,10 +67,9 @@ async function handleComplete() {
     </view>
 
     <TagSelector
-      :selected-ids="selectedIds"
+      :selected-tags="selectedTags"
       :max="MAX_TAGS"
-      :selected-tags="userStore.userInfo.tags"
-      @update:selectedIds="selectedIds = $event"
+      @update:selected-tags="selectedTags = $event"
     />
   </view>
 </template>

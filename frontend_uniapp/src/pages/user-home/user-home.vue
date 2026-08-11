@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { ref } from 'vue'
 import { getUserProfile } from '@/api/search'
-import type { PublicUserProfileDTO, TagDTO } from '@/types'
+import type { PublicUserProfileDTO } from '@/types'
 
 definePage({
   style: {
@@ -62,7 +62,7 @@ function practiceYearsText(years: number | null): string {
   return `${years}年`
 }
 
-function renderTags(tags: TagDTO[]): { visible: TagDTO[]; rest: number } {
+function renderTags(tags: string[]): { visible: string[]; rest: number } {
   const visible = tags.slice(0, MAX_TAG_VISIBLE)
   return { visible, rest: tags.length - visible.length }
 }
@@ -154,11 +154,11 @@ function formatDate(iso: string): string {
         <text class="mb-3 block text-sm font-medium text-[#333]">兴趣标签</text>
         <view class="flex flex-wrap gap-2.5">
           <text
-            v-for="t in renderTags(profile.tags).visible"
-            :key="t.id"
+            v-for="name in renderTags(profile.tags).visible"
+            :key="name"
             class="rounded-full bg-[#e8f5f1] px-3.5 py-1.5 text-xs text-[#018d71]"
           >
-            {{ t.name }}
+            {{ name }}
           </text>
           <text
             v-if="renderTags(profile.tags).rest > 0"

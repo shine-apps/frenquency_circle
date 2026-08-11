@@ -1,8 +1,8 @@
 import { z } from "zod"
-import { eq } from "drizzle-orm"
+import { and, eq, inArray } from "drizzle-orm"
 
 import { db } from "@/lib/db"
-import { locations, users } from "@/db/schema"
+import { locations, users, hobbyTags } from "@/db/schema"
 import { corsOptions, fail, ok, withCors } from "@/lib/api"
 import { requireSession } from "@/lib/auth-utils"
 import { publishRateLimiter } from "@/lib/rate-limit/publish"
@@ -13,14 +13,14 @@ import { logger, LOG_PREFIX } from "@/lib/logger"
  * - latitude: -90 到 90
  * - longitude: -180 到 180
  * - address: 1-200 字符
- * - tagIds: 1-10 个 uuid
+ * - tagNames: 1-10 个标签名称(1-30 字符)
  * - rangeKm: 1 / 5 / 10 / 30 四档
  */
 const publishSchema = z.object({
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
   address: z.string().min(1).max(200),
-  tagIds: z.array(z.string().uuid()).min(1).max(10),
+  tagNames: z.array(z.string().trim().min(1).max(30)).min(1).max(10),
   rangeKm: z.union([z.literal(1), z.literal(5), z.literal(10), z.literal(30)]),
 })
 
@@ -28,6 +28,7 @@ const publishSchema = z.object({
  * POST /api/locations/publish
  *
  * 发布当前位置,写入 locations 表并更新 users 表的最新位置。
+ * tagNames 为发布时已选标签名称快照(存 hobby_tags.name)。
  * 同一用户 5 分钟内只能发布 1 次,超限返回 429。
  */
 export async function OPTIONS(req: Request) {
@@ -50,7 +51,27 @@ export async function POST(req: Request) {
     )
   }
 
-  const { latitude, longitude, address, tagIds, rangeKm } = parsed.data
+  const { latitude, longitude, address, tagNames, rangeKm } = parsed.data
+
+  // 2.1 校验标签名称存在且通过审核(去重)
+  const uniqueTagNames = Array.from(new Set(tagNames))
+  const existingTags = await db
+    .select({ name: hobbyTags.name })
+    .from(hobbyTags)
+    .where(
+      and(
+        inArray(hobbyTags.name, uniqueTagNames),
+        eq(hobbyTags.status, "approved")
+      )
+    )
+  const existingNames = new Set(existingTags.map((t) => t.name))
+  const missing = uniqueTagNames.filter((name) => !existingNames.has(name))
+  if (missing.length > 0) {
+    return withCors(
+      fail(400, "部分标签不存在或未通过审核", { missingTags: missing }),
+      req
+    )
+  }
 
   // 3. 频率限制
   const limitResult = publishRateLimiter.checkAndConsumePublish(userId)
@@ -76,7 +97,7 @@ export async function POST(req: Request) {
       latitude,
       longitude,
       address,
-      tagIds,
+      tagNames: uniqueTagNames,
       rangeKm,
     })
     .returning({ id: locations.id, publishedAt: locations.publishedAt })

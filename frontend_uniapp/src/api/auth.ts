@@ -1,6 +1,6 @@
 import type { UpdateMyProfileInput, UpdateProfileInput, UserDTO } from './types/login'
 import { http } from '@/http/http'
-import type { PrivacySettings, TagDTO, UserProfile } from '@/types'
+import type { PrivacySettings, UserProfile } from '@/types'
 import type { UserInfo } from '@/store/user'
 
 /**
@@ -68,15 +68,15 @@ export function getMyProfile() {
 }
 
 /**
- * 全量替换当前用户的兴趣标签关联。
- * - PUT /api/users/me/tags
- * - 后端 zod 校验 `tagIds: string[](1-10 项 uuid)`
+ * 全量替换当前用户的兴趣标签(名称数组)。
+ * - PUT /api/users/me/hobby-tags
+ * - 后端 zod 校验 `tags: string[](1-10 项名称)`
  *
- * @param tagIds 标签 ID 列表(1-10 个)
- * @returns 更新后的标签列表
+ * @param tags 标签名称列表(1-10 个,存 hobby_tags.name)
+ * @returns 更新后的标签名称数组
  */
-export async function updateMyTags(tagIds: string[]): Promise<TagDTO[]> {
-  const res = await http.put<{ tags: TagDTO[] }>('/api/users/me/tags', { tagIds })
+export async function updateMyTags(tags: string[]): Promise<string[]> {
+  const res = await http.put<{ tags: string[] }>('/api/users/me/hobby-tags', { tags })
   return res.tags
 }
 

@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
  * - 未登录返回 401
  * - 成功返回 Paginated<MatchPersonDTO> / Paginated<MatchCircleDTO>
  * - 缺少 latitude 返回 400
- * - 缺少 tagIds 返回 400
+ * - 缺少 tags 返回 400
  * - rangeKm 非法值返回 400
  * - 分页参数非法(page=0)返回 400
  *
@@ -78,7 +78,7 @@ const FAKE_USER = {
   role: "USER" as const,
 }
 
-const TAG_ID = "00000000-0000-0000-0000-000000000001"
+const TAG_NAME = "太极拳"
 
 function makeGetRequest(
   path: string,
@@ -139,7 +139,7 @@ describe("GET /api/locations/match-people", () => {
       makeGetRequest("/api/locations/match-people", {
         latitude: "39.9042",
         longitude: "116.4074",
-        tagIds: TAG_ID,
+        tags: TAG_NAME,
       })
     )
     expect(res.status).toBe(401)
@@ -157,7 +157,7 @@ describe("GET /api/locations/match-people", () => {
       makeGetRequest("/api/locations/match-people", {
         latitude: "39.9042",
         longitude: "116.4074",
-        tagIds: TAG_ID,
+        tags: TAG_NAME,
         rangeKm: "5",
       })
     )
@@ -189,7 +189,7 @@ describe("GET /api/locations/match-people", () => {
       makeGetRequest("/api/locations/match-people", {
         latitude: "39.9042",
         longitude: "116.4074",
-        tagIds: TAG_ID,
+        tags: TAG_NAME,
       })
     )
     expect(res.status).toBe(200)
@@ -202,7 +202,7 @@ describe("GET /api/locations/match-people", () => {
     const res = await matchPeopleGET(
       makeGetRequest("/api/locations/match-people", {
         longitude: "116.4074",
-        tagIds: TAG_ID,
+        tags: TAG_NAME,
       })
     )
     expect(res.status).toBe(400)
@@ -212,7 +212,7 @@ describe("GET /api/locations/match-people", () => {
     expect(matchPeopleMock).not.toHaveBeenCalled()
   })
 
-  it("returns 400 when tagIds is missing", async () => {
+  it("returns 400 when tags is missing", async () => {
     readUserFromTokenMock.mockResolvedValue(FAKE_USER)
     const res = await matchPeopleGET(
       makeGetRequest("/api/locations/match-people", {
@@ -233,7 +233,7 @@ describe("GET /api/locations/match-people", () => {
       makeGetRequest("/api/locations/match-people", {
         latitude: "39.9042",
         longitude: "116.4074",
-        tagIds: TAG_ID,
+        tags: TAG_NAME,
         rangeKm: "7",
       })
     )
@@ -250,7 +250,7 @@ describe("GET /api/locations/match-people", () => {
       makeGetRequest("/api/locations/match-people", {
         latitude: "39.9042",
         longitude: "116.4074",
-        tagIds: TAG_ID,
+        tags: TAG_NAME,
         page: "0",
       })
     )
@@ -261,22 +261,22 @@ describe("GET /api/locations/match-people", () => {
     expect(matchPeopleMock).not.toHaveBeenCalled()
   })
 
-  it("accepts comma-separated tagIds", async () => {
+  it("accepts comma-separated tags (names)", async () => {
     readUserFromTokenMock.mockResolvedValue(FAKE_USER)
     matchPeopleMock.mockResolvedValue(SAMPLE_PEOPLE_RESULT)
 
-    const secondTag = "00000000-0000-0000-0000-000000000002"
+    const secondTag = "书法"
     const res = await matchPeopleGET(
       makeGetRequest("/api/locations/match-people", {
         latitude: "39.9042",
         longitude: "116.4074",
-        tagIds: `${TAG_ID},${secondTag}`,
+        tags: `${TAG_NAME},${secondTag}`,
       })
     )
     expect(res.status).toBe(200)
     expect(matchPeopleMock).toHaveBeenCalledTimes(1)
-    expect(matchPeopleMock.mock.calls[0]?.[0].tagIds).toEqual([
-      TAG_ID,
+    expect(matchPeopleMock.mock.calls[0]?.[0].tags).toEqual([
+      TAG_NAME,
       secondTag,
     ])
   })
@@ -289,7 +289,7 @@ describe("GET /api/locations/match-circles", () => {
       makeGetRequest("/api/locations/match-circles", {
         latitude: "39.9042",
         longitude: "116.4074",
-        tagIds: TAG_ID,
+        tags: TAG_NAME,
       })
     )
     expect(res.status).toBe(401)
@@ -307,7 +307,7 @@ describe("GET /api/locations/match-circles", () => {
       makeGetRequest("/api/locations/match-circles", {
         latitude: "39.9042",
         longitude: "116.4074",
-        tagIds: TAG_ID,
+        tags: TAG_NAME,
         rangeKm: "10",
       })
     )
@@ -335,7 +335,7 @@ describe("GET /api/locations/match-circles", () => {
     const res = await matchCirclesGET(
       makeGetRequest("/api/locations/match-circles", {
         longitude: "116.4074",
-        tagIds: TAG_ID,
+        tags: TAG_NAME,
       })
     )
     expect(res.status).toBe(400)
@@ -345,7 +345,7 @@ describe("GET /api/locations/match-circles", () => {
     expect(matchCirclesMock).not.toHaveBeenCalled()
   })
 
-  it("returns 400 when tagIds is missing", async () => {
+  it("returns 400 when tags is missing", async () => {
     readUserFromTokenMock.mockResolvedValue(FAKE_USER)
     const res = await matchCirclesGET(
       makeGetRequest("/api/locations/match-circles", {
@@ -366,7 +366,7 @@ describe("GET /api/locations/match-circles", () => {
       makeGetRequest("/api/locations/match-circles", {
         latitude: "39.9042",
         longitude: "116.4074",
-        tagIds: TAG_ID,
+        tags: TAG_NAME,
         page: "0",
       })
     )

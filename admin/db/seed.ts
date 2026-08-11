@@ -5,10 +5,8 @@ import { inArray } from "drizzle-orm"
 import { db } from "@/lib/db"
 import {
   users,
-  tags,
-  userTags,
+  hobbyTags,
   circles,
-  circleTags,
   circleMembers,
   accounts,
   type UserRole,
@@ -17,8 +15,8 @@ import {
 
 /**
  * 计算标签的拼音全拼与首字母。
- * - 全拼:无声调连写,如 "陈氏太极拳" → "chenshitaijiquan"
- * - 首字母:如 "陈氏太极拳" → "cstjq"
+ * - 全拼:无声调连写,如 "太极拳" → "taijiquan"
+ * - 首字母:如 "太极拳" → "tjq"
  */
 function computePinyin(name: string): { pinyin: string; pinyinInitials: string } {
   const full = pinyin(name, { toneType: "none", type: "array" }).join("")
@@ -31,92 +29,57 @@ function computePinyin(name: string): { pinyin: string; pinyinInitials: string }
 }
 
 /**
- * 标签定义(category 一级大类,subCategory 二级分类,name 三级具体项目)。
- * 参考_PRD §4.2.4 兴趣标签体系表_与_§4.5 兴趣类别覆盖_。
- * 六大类各 10 条,共 60 条;全部 status='approved'。
+ * 标签定义(二级分类体系:category 一级大类 + name 二级分类名称)。
+ * 由原 60 条三级标签按 (category, subCategory) 去重得到 25 条二级标签,
+ * name 取原 subCategory。参考_PRD §4.2.4 兴趣标签体系表_。
  */
 type TagDefinition = {
   name: string
   category: string
-  subCategory: string
 }
 
 const TAG_DEFINITIONS: TagDefinition[] = [
-  // === 武术养生 (10) ===
-  { name: "陈氏太极拳养生八式", category: "武术养生", subCategory: "太极拳" },
-  { name: "杨氏太极拳85式", category: "武术养生", subCategory: "太极拳" },
-  { name: "吴氏太极拳", category: "武术养生", subCategory: "太极拳" },
-  { name: "孙氏太极拳", category: "武术养生", subCategory: "太极拳" },
-  { name: "陈氏太极拳老架一路", category: "武术养生", subCategory: "太极拳" },
-  { name: "八段锦", category: "武术养生", subCategory: "气功功法" },
-  { name: "五禽戏", category: "武术养生", subCategory: "气功功法" },
-  { name: "易筋经", category: "武术养生", subCategory: "气功功法" },
-  { name: "六字诀", category: "武术养生", subCategory: "气功功法" },
-  { name: "太极剑", category: "武术养生", subCategory: "器械功法" },
+  // === 武术养生 (3) ===
+  { name: "太极拳", category: "武术养生" },
+  { name: "气功功法", category: "武术养生" },
+  { name: "器械功法", category: "武术养生" },
 
-  // === 民族器乐 (10) ===
-  { name: "古筝", category: "民族器乐", subCategory: "弹拨乐器" },
-  { name: "琵琶", category: "民族器乐", subCategory: "弹拨乐器" },
-  { name: "古琴", category: "民族器乐", subCategory: "弹拨乐器" },
-  { name: "二胡", category: "民族器乐", subCategory: "拉弦乐器" },
-  { name: "京胡", category: "民族器乐", subCategory: "拉弦乐器" },
-  { name: "马头琴", category: "民族器乐", subCategory: "拉弦乐器" },
-  { name: "笛子", category: "民族器乐", subCategory: "吹管乐器" },
-  { name: "葫芦丝", category: "民族器乐", subCategory: "吹管乐器" },
-  { name: "洞箫", category: "民族器乐", subCategory: "吹管乐器" },
-  { name: "堂鼓", category: "民族器乐", subCategory: "打击乐器" },
+  // === 民族器乐 (4) ===
+  { name: "弹拨乐器", category: "民族器乐" },
+  { name: "拉弦乐器", category: "民族器乐" },
+  { name: "吹管乐器", category: "民族器乐" },
+  { name: "打击乐器", category: "民族器乐" },
 
-  // === 书画篆刻 (10) ===
-  { name: "颜体楷书临摹", category: "书画篆刻", subCategory: "书法" },
-  { name: "兰亭序行书", category: "书画篆刻", subCategory: "书法" },
-  { name: "曹全碑隶书", category: "书画篆刻", subCategory: "书法" },
-  { name: "峄山碑篆书", category: "书画篆刻", subCategory: "书法" },
-  { name: "工笔花鸟", category: "书画篆刻", subCategory: "国画" },
-  { name: "写意山水", category: "书画篆刻", subCategory: "国画" },
-  { name: "水墨人物", category: "书画篆刻", subCategory: "国画" },
-  { name: "青绿山水", category: "书画篆刻", subCategory: "国画" },
-  { name: "汉印临摹", category: "书画篆刻", subCategory: "篆刻" },
-  { name: "元朱文篆刻", category: "书画篆刻", subCategory: "篆刻" },
+  // === 书画篆刻 (3) ===
+  { name: "书法", category: "书画篆刻" },
+  { name: "国画", category: "书画篆刻" },
+  { name: "篆刻", category: "书画篆刻" },
 
-  // === 茶道花艺 (10) ===
-  { name: "工夫茶冲泡", category: "茶道花艺", subCategory: "茶艺" },
-  { name: "宋代点茶", category: "茶道花艺", subCategory: "茶艺" },
-  { name: "普洱茶品鉴", category: "茶道花艺", subCategory: "茶艺" },
-  { name: "白茶冲泡", category: "茶道花艺", subCategory: "茶艺" },
-  { name: "传统插花", category: "茶道花艺", subCategory: "花道" },
-  { name: "池坊花道", category: "茶道花艺", subCategory: "花道" },
-  { name: "隔火熏香", category: "茶道花艺", subCategory: "香道" },
-  { name: "篆香打拓", category: "茶道花艺", subCategory: "香道" },
-  { name: "紫砂壶", category: "茶道花艺", subCategory: "茶具" },
-  { name: "建盏", category: "茶道花艺", subCategory: "茶具" },
+  // === 茶道花艺 (4) ===
+  { name: "茶艺", category: "茶道花艺" },
+  { name: "花道", category: "茶道花艺" },
+  { name: "香道", category: "茶道花艺" },
+  { name: "茶具", category: "茶道花艺" },
 
-  // === 戏曲曲艺 (10) ===
-  { name: "梅派唱腔", category: "戏曲曲艺", subCategory: "京剧" },
-  { name: "程派水袖", category: "戏曲曲艺", subCategory: "京剧" },
-  { name: "老生唱腔", category: "戏曲曲艺", subCategory: "京剧" },
-  { name: "花脸脸谱绘制", category: "戏曲曲艺", subCategory: "京剧" },
-  { name: "牡丹亭游园", category: "戏曲曲艺", subCategory: "昆曲" },
-  { name: "长生殿", category: "戏曲曲艺", subCategory: "昆曲" },
-  { name: "越剧红楼梦", category: "戏曲曲艺", subCategory: "越剧" },
-  { name: "传统相声", category: "戏曲曲艺", subCategory: "相声" },
-  { name: "三国评书", category: "戏曲曲艺", subCategory: "评书" },
-  { name: "京韵大鼓", category: "戏曲曲艺", subCategory: "鼓曲" },
+  // === 戏曲曲艺 (6) ===
+  { name: "京剧", category: "戏曲曲艺" },
+  { name: "昆曲", category: "戏曲曲艺" },
+  { name: "越剧", category: "戏曲曲艺" },
+  { name: "相声", category: "戏曲曲艺" },
+  { name: "评书", category: "戏曲曲艺" },
+  { name: "鼓曲", category: "戏曲曲艺" },
 
-  // === 传统手工 (10) ===
-  { name: "陕北剪纸", category: "传统手工", subCategory: "剪纸" },
-  { name: "团花剪纸", category: "传统手工", subCategory: "剪纸" },
-  { name: "苏绣", category: "传统手工", subCategory: "刺绣" },
-  { name: "蜀绣", category: "传统手工", subCategory: "刺绣" },
-  { name: "拉坯成型", category: "传统手工", subCategory: "陶艺" },
-  { name: "釉下彩绘", category: "传统手工", subCategory: "陶艺" },
-  { name: "中国结", category: "传统手工", subCategory: "编织" },
-  { name: "竹编", category: "传统手工", subCategory: "编织" },
-  { name: "榫卯结构", category: "传统手工", subCategory: "木作" },
-  { name: "根雕", category: "传统手工", subCategory: "木作" },
+  // === 传统手工 (5) ===
+  { name: "剪纸", category: "传统手工" },
+  { name: "刺绣", category: "传统手工" },
+  { name: "陶艺", category: "传统手工" },
+  { name: "编织", category: "传统手工" },
+  { name: "木作", category: "传统手工" },
 ]
 
 /**
  * 用户定义(保留现有 admin 与 user,新增 2 个 TEACHER 与 3 个 USER)。
+ * tagNames 为该用户绑定的二级标签名(直接写入 users.tags 数组)。
  */
 type UserSeed = {
   email: string
@@ -129,7 +92,7 @@ type UserSeed = {
   latitude?: number
   longitude?: number
   address?: string
-  /** 该用户绑定的标签名列表(用于后续 user_tags 关联) */
+  /** 该用户绑定的二级标签名称列表(直接写入 users.tags) */
   tagNames?: string[]
 }
 
@@ -158,7 +121,7 @@ async function main() {
   const userHash = await bcrypt.hash("user123", 10)
   const teacherHash = await bcrypt.hash("teacher123", 10)
 
-  // === 2. 用户定义 ===
+  // === 2. 用户定义(标签名已从原三级映射为二级,如"陈氏太极拳养生八式"→"太极拳") ===
   const userSeeds: UserSeed[] = [
     // 保留现有 admin 与测试用户
     {
@@ -185,13 +148,7 @@ async function main() {
       latitude: 39.94,
       longitude: 116.49,
       address: "北京市朝阳区朝阳公园南路1号",
-      tagNames: [
-        "陈氏太极拳养生八式",
-        "陈氏太极拳老架一路",
-        "八段锦",
-        "颜体楷书临摹",
-        "兰亭序行书",
-      ],
+      tagNames: ["太极拳", "气功功法", "书法"],
     },
     {
       email: "lilaoshi@example.com",
@@ -204,12 +161,7 @@ async function main() {
       latitude: 39.96,
       longitude: 116.32,
       address: "北京市海淀区中关村大街1号",
-      tagNames: [
-        "颜体楷书临摹",
-        "兰亭序行书",
-        "曹全碑隶书",
-        "工笔花鸟",
-      ],
+      tagNames: ["书法", "国画"],
     },
     // 新增 3 个 USER 用户(爱好者)
     {
@@ -222,7 +174,7 @@ async function main() {
       latitude: 39.93,
       longitude: 116.47,
       address: "北京市朝阳区团结湖路",
-      tagNames: ["陈氏太极拳养生八式", "八段锦"],
+      tagNames: ["太极拳", "气功功法"],
     },
     {
       email: "chentongxue@example.com",
@@ -234,7 +186,7 @@ async function main() {
       latitude: 39.95,
       longitude: 116.35,
       address: "北京市海淀区学院路",
-      tagNames: ["颜体楷书临摹", "兰亭序行书"],
+      tagNames: ["书法"],
     },
     {
       email: "lintongxue@example.com",
@@ -246,11 +198,11 @@ async function main() {
       latitude: 39.92,
       longitude: 116.45,
       address: "北京市朝阳区建国门外大街",
-      tagNames: ["古筝", "琵琶"],
+      tagNames: ["弹拨乐器"],
     },
   ]
 
-  // === 3. 圈子定义(均为王师傅创建) ===
+  // === 3. 圈子定义(均为王师傅创建,标签为二级名称) ===
   const circleSeeds: CircleSeed[] = [
     {
       title: "朝阳公园陈氏太极拳晨练班",
@@ -264,7 +216,7 @@ async function main() {
       wechat: "wangshifu_taiji",
       activityTime: "每周六、日 07:00-08:30",
       maxMembers: 20,
-      tagNames: ["陈氏太极拳养生八式", "陈氏太极拳老架一路", "八段锦"],
+      tagNames: ["太极拳", "气功功法"],
     },
     {
       title: "同频书法交流圈",
@@ -278,11 +230,11 @@ async function main() {
       wechat: "wangshifu_taiji",
       activityTime: "每周三 19:00-21:00",
       maxMembers: 15,
-      tagNames: ["颜体楷书临摹", "兰亭序行书"],
+      tagNames: ["书法"],
     },
   ]
 
-  // === 4. 插入用户(幂等:email 冲突时跳过) ===
+  // === 4. 插入用户(幂等:email 冲突时跳过,tags 直接写入数组列) ===
   console.log("→ 插入用户…")
   await Promise.all(
     userSeeds.map((u) =>
@@ -299,6 +251,7 @@ async function main() {
           latitude: u.latitude,
           longitude: u.longitude,
           address: u.address,
+          tags: u.tagNames ?? [],
         })
         .onConflictDoNothing({ target: users.email })
     )
@@ -342,22 +295,21 @@ async function main() {
   console.log("→ 插入兴趣标签…")
   const allTagNames = TAG_DEFINITIONS.map((t) => t.name)
   const existingTags = await db
-    .select({ id: tags.id, name: tags.name })
-    .from(tags)
-    .where(inArray(tags.name, allTagNames))
+    .select({ id: hobbyTags.id, name: hobbyTags.name })
+    .from(hobbyTags)
+    .where(inArray(hobbyTags.name, allTagNames))
   const existingTagNames = new Set(existingTags.map((t) => t.name))
 
   const newTagDefs = TAG_DEFINITIONS.filter(
     (t) => !existingTagNames.has(t.name)
   )
   if (newTagDefs.length > 0) {
-    await db.insert(tags).values(
+    await db.insert(hobbyTags).values(
       newTagDefs.map((t) => {
         const { pinyin: py, pinyinInitials: pyInit } = computePinyin(t.name)
         return {
           name: t.name,
           category: t.category,
-          subCategory: t.subCategory,
           pinyin: py,
           pinyinInitials: pyInit,
           status: "approved" as const,
@@ -366,40 +318,7 @@ async function main() {
     )
   }
 
-  // === 7. 查询所有标签(获取 ID 与名称映射) ===
-  const tagRows = await db
-    .select({
-      id: tags.id,
-      name: tags.name,
-      category: tags.category,
-    })
-    .from(tags)
-    .where(inArray(tags.name, allTagNames))
-  const tagByName = new Map(tagRows.map((t) => [t.name, t]))
-
-  // === 8. 插入 user_tags 关联(幂等:唯一索引冲突时跳过) ===
-  console.log("→ 绑定用户兴趣标签…")
-  const userTagRows: { userId: string; tagId: string }[] = []
-  for (const u of userSeeds) {
-    if (!u.tagNames || u.tagNames.length === 0) continue
-    const userRow = userByEmail.get(u.email)
-    if (!userRow) continue
-    for (const tagName of u.tagNames) {
-      const tagRow = tagByName.get(tagName)
-      if (!tagRow) continue
-      userTagRows.push({ userId: userRow.id, tagId: tagRow.id })
-    }
-  }
-  if (userTagRows.length > 0) {
-    await db
-      .insert(userTags)
-      .values(userTagRows)
-      .onConflictDoNothing({
-        target: [userTags.userId, userTags.tagId],
-      })
-  }
-
-  // === 9. 插入圈子(幂等:按 title 查询现有,只插入不存在的) ===
+  // === 7. 插入圈子(幂等:按 title 查询现有,只插入不存在的,tags 直接写数组列) ===
   console.log("→ 插入圈子…")
   const circleTitles = circleSeeds.map((c) => c.title)
   const existingCircles = await db
@@ -429,10 +348,11 @@ async function main() {
       activityTime: c.activityTime,
       maxMembers: c.maxMembers,
       status: "active",
+      tags: c.tagNames,
     })
   }
 
-  // === 10. 查询所有圈子(获取 ID 映射) ===
+  // === 8. 查询所有圈子(获取 ID 映射) ===
   const allCircles = await db
     .select({
       id: circles.id,
@@ -443,28 +363,7 @@ async function main() {
     .where(inArray(circles.title, circleTitles))
   const circleByTitle = new Map(allCircles.map((c) => [c.title, c]))
 
-  // === 11. 插入 circle_tags 关联(幂等) ===
-  console.log("→ 绑定圈子兴趣标签…")
-  const circleTagRows: { circleId: string; tagId: string }[] = []
-  for (const c of circleSeeds) {
-    const circleRow = circleByTitle.get(c.title)
-    if (!circleRow) continue
-    for (const tagName of c.tagNames) {
-      const tagRow = tagByName.get(tagName)
-      if (!tagRow) continue
-      circleTagRows.push({ circleId: circleRow.id, tagId: tagRow.id })
-    }
-  }
-  if (circleTagRows.length > 0) {
-    await db
-      .insert(circleTags)
-      .values(circleTagRows)
-      .onConflictDoNothing({
-        target: [circleTags.circleId, circleTags.tagId],
-      })
-  }
-
-  // === 12. 插入 circle_members(创建者自动作为 creator 成员,幂等) ===
+  // === 9. 插入 circle_members(创建者自动作为 creator 成员,幂等) ===
   console.log("→ 插入圈子成员(创建者)…")
   const circleMemberRows: {
     circleId: string

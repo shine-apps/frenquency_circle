@@ -11,18 +11,18 @@ import type { CategoryNode, TagDTO } from '@/types'
  * @returns `{ list: TagDTO[] }`
  */
 export function searchTags(q: string, limit?: number) {
-  return http.get<{ list: TagDTO[] }>('/api/tags/search', {
+  return http.get<{ list: TagDTO[] }>('/api/hobby-tags/search', {
     ...(q !== '' ? { q } : {}),
     ...(limit !== undefined ? { limit } : {}),
   })
 }
 
 /**
- * 获取兴趣标签分类树(六大类与二级分类)。
+ * 获取兴趣标签分类树(六大类与二级分类名称)。
  * 用于兴趣选择页骨架。
  */
 export function getCategories() {
-  return http.get<{ categories: CategoryNode[] }>('/api/tags/categories')
+  return http.get<{ categories: CategoryNode[] }>('/api/hobby-tags/categories')
 }
 
 /**
@@ -35,5 +35,5 @@ export function getCategories() {
  * @returns 新创建的 TagDTO
  */
 export function createCustomTag(name: string) {
-  return http.post<TagDTO>('/api/tags/custom', { name })
+  return http.post<TagDTO>('/api/hobby-tags/custom', { name })
 }

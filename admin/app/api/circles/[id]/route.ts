@@ -1,19 +1,17 @@
 import { z } from "zod"
-import { count, eq } from "drizzle-orm"
+import { and, count, eq, inArray } from "drizzle-orm"
 
 import { db } from "@/lib/db"
 import {
   circles,
-  circleTags,
-  tags,
+  hobbyTags,
   contactLogs,
   users,
 } from "@/db/schema"
 import { corsOptions, fail, ok, withCors } from "@/lib/api"
 import { requireSession } from "@/lib/auth-utils"
-import { toTagDTO } from "@/lib/search/tag-search"
 import { logger, LOG_PREFIX } from "@/lib/logger"
-import type { CircleDTO, CircleDetailDTO, TagDTO } from "@/types/api"
+import type { CircleDTO, CircleDetailDTO } from "@/types/api"
 
 /** 手机号格式 */
 const PHONE_RE = /^1[3-9]\d{9}$/
@@ -44,7 +42,7 @@ function toCircleDTO(row: typeof circles.$inferSelect): CircleDTO {
   }
 }
 
-/** 查询圈子详情并组装 CircleDetailDTO */
+/** 查询圈子详情并组装 CircleDetailDTO(tags 直接取 circles.tags 数组) */
 async function fetchCircleDetail(circleId: string): Promise<CircleDetailDTO | null> {
   // 1. 查询圈子本身
   const [circleRow] = await db
@@ -59,15 +57,7 @@ async function fetchCircleDetail(circleId: string): Promise<CircleDetailDTO | nu
     .from(users)
     .where(eq(users.id, circleRow.creatorId))
 
-  // 3. 查询圈子标签
-  const tagRows = await db
-    .select()
-    .from(tags)
-    .innerJoin(circleTags, eq(circleTags.tagId, tags.id))
-    .where(eq(circleTags.circleId, circleId))
-  const circleTagList: TagDTO[] = tagRows.map((r) => toTagDTO(r.tags))
-
-  // 4. 统计被联系次数
+  // 3. 统计被联系次数
   const [countRow] = await db
     .select({ value: count() })
     .from(contactLogs)
@@ -80,7 +70,7 @@ async function fetchCircleDetail(circleId: string): Promise<CircleDetailDTO | nu
       name: creatorRow?.name ?? "未知用户",
       avatarUrl: creatorRow?.avatarUrl ?? null,
     },
-    tags: circleTagList,
+    tags: circleRow.tags ?? [],
     contactCount: countRow?.value ?? 0,
   }
 }
@@ -133,7 +123,7 @@ const updateCircleSchema = z
       .or(z.literal("")),
     activityTime: z.string().max(100).optional(),
     maxMembers: z.number().int().min(1).max(999).optional(),
-    tagIds: z.array(z.string().uuid()).min(1).max(5).optional(),
+    tags: z.array(z.string().trim().min(1).max(30)).min(1).max(5).optional(),
     /** 轮播图片 URL 数组(0-9 个)。空数组表示清空,undefined 表示不变 */
     coverImages: z.array(z.string().url()).max(9).optional(),
   })
@@ -152,7 +142,7 @@ const updateCircleSchema = z
 /**
  * PUT /api/circles/:id
  *
- * 更新圈子信息(仅创建者可调)。tagIds 提供时全量替换。
+ * 更新圈子信息(仅创建者可调)。tags 提供时全量替换 circles.tags 数组。
  */
 export async function PUT(req: Request, context: RouteContext) {
   const { id } = await context.params
@@ -188,9 +178,32 @@ export async function PUT(req: Request, context: RouteContext) {
     wechat,
     activityTime,
     maxMembers,
-    tagIds: newTagIds,
+    tags: newTags,
     coverImages,
   } = parsed.data
+
+  // 3.1 若提供 tags,校验名称存在且通过审核(去重)
+  let uniqueTags: string[] | undefined
+  if (newTags) {
+    uniqueTags = Array.from(new Set(newTags))
+    const existingTags = await db
+      .select({ name: hobbyTags.name })
+      .from(hobbyTags)
+      .where(
+        and(
+          inArray(hobbyTags.name, uniqueTags),
+          eq(hobbyTags.status, "approved")
+        )
+      )
+    const existingNames = new Set(existingTags.map((t) => t.name))
+    const missing = uniqueTags.filter((name) => !existingNames.has(name))
+    if (missing.length > 0) {
+      return withCors(
+        fail(400, "部分标签不存在或未通过审核", { missingTags: missing }),
+        req
+      )
+    }
+  }
 
   // 4. 更新圈子字段(仅更新已提供的字段)
   const updates: Partial<typeof circles.$inferInsert> = { updatedAt: new Date() }
@@ -201,22 +214,13 @@ export async function PUT(req: Request, context: RouteContext) {
   if (activityTime !== undefined) updates.activityTime = activityTime || null
   if (maxMembers !== undefined) updates.maxMembers = maxMembers
   if (coverImages !== undefined) updates.coverImages = coverImages
+  if (uniqueTags !== undefined) updates.tags = uniqueTags
 
   await db.update(circles).set(updates).where(eq(circles.id, id))
 
-  // 5. 全量替换 circle_tags(如果提供了 tagIds)
-  if (newTagIds) {
-    await db.transaction(async (tx) => {
-      await tx.delete(circleTags).where(eq(circleTags.circleId, id))
-      await tx.insert(circleTags).values(
-        newTagIds.map((tagId) => ({ circleId: id, tagId }))
-      )
-    })
-  }
-
   logger.info(LOG_PREFIX.CIRCLE, "Circle updated", { circleId: id, userId })
 
-  // 6. 返回更新后的详情
+  // 5. 返回更新后的详情
   const detail = await fetchCircleDetail(id)
   return withCors(ok(detail), req)
 }

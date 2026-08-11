@@ -6,15 +6,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
  * 覆盖:
  * - POST: 401 / 403(非 TEACHER) / 201 成功 / 400(校验失败) / 429(24h 配额) / 400(无联系方式)
  * - GET [id]: 401 / 200 成功(含 creator/tags/contactCount) / 404(不存在) / 404(非创建者访问非 active)
- * - PUT [id]: 401 / 403(非创建者) / 200 成功(含 tagIds 全量替换) / 404 / 400(校验失败)
+ * - PUT [id]: 401 / 403(非创建者) / 200 成功(含 tags 全量替换) / 404 / 400(校验失败)
  * - DELETE [id]: 401 / 403(非创建者) / 200 软删除 / 404
  * - GET /mine: 401 / 200 分页列表
  *
  * mock 层级:
- * - @/lib/db:select 队列(每次 db.select() 取队首)+ insert/update/transaction 链
+ * - @/lib/db:select 队列(每次 db.select() 取队首)+ insert/update 链
  * - @/lib/auth/session-token:控制 readUserFromToken 返回值
  * - @/lib/logger:避免输出噪音
- * - 不 mock @/lib/search/tag-search,使用真实 toTagDTO(需提供完整 tag row 含 Date 字段)
+ *
+ * 新契约:
+ * - 圈子标签直接存于 circles.tags text[](名称数组),无 circle_tags 桥接表与事务
+ * - 创建/更新时校验标签名称存在(approved),缺失返回 400
  */
 
 type CircleRow = {
@@ -33,6 +36,8 @@ type CircleRow = {
   status: string
   /** 轮播图片 URL 数组 */
   coverImages: string[]
+  /** 标签名称数组(存 hobby_tags.name) */
+  tags: string[]
   createdAt: Date
   updatedAt: Date
 }
@@ -41,7 +46,6 @@ type TagRow = {
   id: string
   name: string
   category: string
-  subCategory: string | null
   pinyin: string | null
   pinyinInitials: string | null
   status: string
@@ -57,20 +61,16 @@ const {
   insertReturningMock,
   updateWhereMock,
   setSelectResultsQueue,
-  transactionSpy,
-  txDeleteWhereSpy,
-  txInsertValuesSpy,
   readUserFromTokenMock,
 } = vi.hoisted(() => {
   // select 队列:每次 db.select() 调用取出队首结果
   const selectResultsQueue: Record<string, unknown>[][] = []
 
-  // 构造 thenable select chain,支持 from/where/innerJoin/orderBy/limit/offset
+  // 构造 thenable select chain,支持 from/where/orderBy/limit/offset
   function makeSelectChain(result: Record<string, unknown>[]) {
     const chain = {
       from: vi.fn(() => chain),
       where: vi.fn(() => chain),
-      innerJoin: vi.fn(() => chain),
       orderBy: vi.fn(() => chain),
       limit: vi.fn(() => chain),
       offset: vi.fn(() => chain),
@@ -83,8 +83,6 @@ const {
   }
 
   // insert().values(...).returning(...) 链
-  // values 返回 chain(thenable,resolve undefined),支持无 returning 的 await
-  // returning 返回 Promise,支持有 returning 的 await
   const insertReturningMock = vi.fn()
   const chainInsert = {
     values: vi.fn(function (this: unknown) {
@@ -97,23 +95,13 @@ const {
     ) => Promise.resolve(undefined).then(resolve, reject),
   }
 
-  // update().set(...).where(...) 链(where 可被 await)
+  // update().set(...).where(...) 链
   const updateWhereMock = vi.fn(async () => undefined)
   const chainUpdate = {
     set: vi.fn(function (this: unknown) {
       return chainUpdate
     }),
     where: updateWhereMock,
-  }
-
-  // 事务 tx mock:tx.delete(...).where() / tx.insert(...).values()
-  const txDeleteWhereSpy = vi.fn(async () => undefined)
-  const txDeleteChain = { where: txDeleteWhereSpy }
-  const txInsertValuesSpy = vi.fn(async () => undefined)
-  const txInsertChain = { values: txInsertValuesSpy }
-  const transactionTx = {
-    delete: vi.fn(() => txDeleteChain),
-    insert: vi.fn(() => txInsertChain),
   }
 
   const mockDb = {
@@ -124,11 +112,6 @@ const {
     update: vi.fn(function (this: unknown) {
       return chainUpdate
     }),
-    transaction: vi.fn(
-      async (cb: (tx: typeof transactionTx) => Promise<unknown>) => {
-        return cb(transactionTx)
-      }
-    ),
   }
 
   return {
@@ -141,9 +124,6 @@ const {
       selectResultsQueue.length = 0
       selectResultsQueue.push(...results)
     },
-    transactionSpy: mockDb.transaction,
-    txDeleteWhereSpy,
-    txInsertValuesSpy,
     readUserFromTokenMock: vi.fn(),
   }
 }) as {
@@ -151,7 +131,6 @@ const {
     select: ReturnType<typeof vi.fn>
     insert: ReturnType<typeof vi.fn>
     update: ReturnType<typeof vi.fn>
-    transaction: ReturnType<typeof vi.fn>
   }
   chainInsert: {
     values: ReturnType<typeof vi.fn>
@@ -168,9 +147,6 @@ const {
   insertReturningMock: ReturnType<typeof vi.fn>
   updateWhereMock: ReturnType<typeof vi.fn>
   setSelectResultsQueue: (results: Record<string, unknown>[][]) => void
-  transactionSpy: ReturnType<typeof vi.fn>
-  txDeleteWhereSpy: ReturnType<typeof vi.fn>
-  txInsertValuesSpy: ReturnType<typeof vi.fn>
   readUserFromTokenMock: ReturnType<typeof vi.fn>
 }
 
@@ -216,12 +192,12 @@ const REGULAR_USER = {
   role: "USER" as const,
 }
 
-const TAG_ID_1 = "00000000-0000-4000-8000-000000000001"
-const TAG_ID_2 = "00000000-0000-4000-8000-000000000002"
+const TAG_NAME_1 = "太极拳"
+const TAG_NAME_2 = "书法"
 
 const VALID_CIRCLE_BODY = {
   title: "陈氏太极拳晨练班",
-  tagIds: [TAG_ID_1, TAG_ID_2],
+  tags: [TAG_NAME_1, TAG_NAME_2],
   description: "每周二、四早晨在朝阳公园练习陈氏太极拳,欢迎有一定基础的拳友加入。",
   latitude: 39.9042,
   longitude: 116.4074,
@@ -248,6 +224,7 @@ function makeCircleRow(overrides: Partial<CircleRow> = {}): CircleRow {
     memberCount: overrides.memberCount ?? 8,
     status: overrides.status ?? "active",
     coverImages: overrides.coverImages ?? [],
+    tags: overrides.tags ?? [TAG_NAME_1, TAG_NAME_2],
     createdAt: overrides.createdAt ?? new Date("2026-07-01T00:00:00Z"),
     updatedAt: overrides.updatedAt ?? new Date("2026-07-01T00:00:00Z"),
   }
@@ -255,12 +232,11 @@ function makeCircleRow(overrides: Partial<CircleRow> = {}): CircleRow {
 
 function makeTagRow(overrides: Partial<TagRow> = {}): TagRow {
   return {
-    id: overrides.id ?? TAG_ID_1,
-    name: overrides.name ?? "陈氏太极拳",
+    id: overrides.id ?? "00000000-0000-4000-8000-000000000001",
+    name: overrides.name ?? TAG_NAME_1,
     category: overrides.category ?? "武术养生",
-    subCategory: overrides.subCategory ?? "太极拳",
-    pinyin: overrides.pinyin ?? "chenshitaijiquan",
-    pinyinInitials: overrides.pinyinInitials ?? "cstjq",
+    pinyin: overrides.pinyin ?? "taijiquan",
+    pinyinInitials: overrides.pinyinInitials ?? "tjq",
     status: overrides.status ?? "approved",
     createdBy: overrides.createdBy ?? null,
     createdAt: overrides.createdAt ?? new Date("2026-01-01T00:00:00Z"),
@@ -305,23 +281,21 @@ function makeContext(id: string): RouteContext {
 }
 
 /**
- * 组装 fetchCircleDetail 所需的 4 个 select 结果队列(circle + creator + tags + count)。
+ * 组装 fetchCircleDetail 所需的 3 个 select 结果队列(circle + creator + count)。
+ * circles.tags 为数组列,直接存在于 circle 行,无需额外标签查询。
  * circles/[id] 的 GET 与 PUT(更新后回查)都会调用 fetchCircleDetail。
  */
 function enqueueFetchCircleDetail(
   queue: Record<string, unknown>[][],
   circle: CircleRow,
   creator: { id: string; name: string; avatarUrl: string | null } | null,
-  tags: TagRow[],
   contactCount: number
 ) {
-  // 1. circle 行
+  // 1. circle 行(含 tags 数组)
   queue.push([circle])
   // 2. creator 行(select 部分字段)
   queue.push(creator ? [creator] : [])
-  // 3. tags 行(innerJoin 结果,每项含 .tags 属性)
-  queue.push(tags.map((t) => ({ tags: t })))
-  // 4. contact count 行
+  // 3. contact count 行
   queue.push([{ value: contactCount }])
 }
 
@@ -329,14 +303,10 @@ beforeEach(() => {
   mockDb.select.mockClear()
   mockDb.insert.mockClear()
   mockDb.update.mockClear()
-  mockDb.transaction.mockClear()
   chainInsert.values.mockClear()
   insertReturningMock.mockReset()
   chainUpdate.set.mockClear()
   updateWhereMock.mockClear()
-  transactionSpy.mockClear()
-  txDeleteWhereSpy.mockClear()
-  txInsertValuesSpy.mockClear()
   readUserFromTokenMock.mockReset()
   setSelectResultsQueue([])
 })
@@ -354,23 +324,23 @@ describe("POST /api/circles", () => {
     expect(mockDb.insert).not.toHaveBeenCalled()
   })
 
-  it("returns 400 when USER role submits without certificationFiles", async () => {
+  it("returns 403 when USER role (non-TEACHER)", async () => {
     readUserFromTokenMock.mockResolvedValue(REGULAR_USER)
     const res = await POST(
       makeJsonRequest(VALID_CIRCLE_BODY, "/api/circles")
     )
-    // USER 角色现已允许创建圈子,但必须附带教师认证材料
-    expect(res.status).toBe(400)
+    expect(res.status).toBe(403)
     const body = (await res.json()) as IResponse<null>
-    expect(body.code).toBe(400)
-    expect(body.message).toContain("USER")
+    expect(body.code).toBe(403)
+    expect(body.message).toContain("教师认证")
     expect(mockDb.insert).not.toHaveBeenCalled()
   })
 
   it("creates circle successfully and returns 201 with circleId", async () => {
     readUserFromTokenMock.mockResolvedValue(TEACHER_USER)
-    // select 24h 配额校验:返回空数组(0 个近期圈子)
-    setSelectResultsQueue([[]])
+    // select 1: 24h 配额校验(0 个近期圈子)
+    // select 2: 标签名称存在性校验(2 个 approved 标签)
+    setSelectResultsQueue([[], [makeTagRow(), makeTagRow({ name: TAG_NAME_2 })]])
     // insert circles returning {id}
     const newCircleId = "new-circle-uuid"
     insertReturningMock.mockResolvedValue([{ id: newCircleId }])
@@ -386,10 +356,19 @@ describe("POST /api/circles", () => {
     expect(body.code).toBe(201)
     expect(body.data.circleId).toBe(newCircleId)
     expect(body.data.status).toBe("pending")
-    // 验证 insert 链路:circles + circleTags + circleMembers = 3 次
-    expect(mockDb.insert).toHaveBeenCalledTimes(3)
+    // 验证 insert 链路:circles + circleMembers = 2 次(无桥接表)
+    expect(mockDb.insert).toHaveBeenCalledTimes(2)
     // circles insert 应有 returning
     expect(insertReturningMock).toHaveBeenCalledTimes(1)
+    // circles insert 的 values 应包含 tags 名称数组
+    const valuesCalls = chainInsert.values.mock.calls
+    const circleInsert = valuesCalls.find((call) => {
+      const v = call[0] as Record<string, unknown> | undefined
+      return !!v && v.title === VALID_CIRCLE_BODY.title
+    })
+    expect(circleInsert).toBeDefined()
+    const insertArg = circleInsert![0] as Record<string, unknown>
+    expect(insertArg.tags).toEqual([TAG_NAME_1, TAG_NAME_2])
   })
 
   it("returns 429 when 24h quota reached (5 existing circles)", async () => {
@@ -412,6 +391,21 @@ describe("POST /api/circles", () => {
     const body = (await res.json()) as IResponse<null>
     expect(body.code).toBe(429)
     expect(body.message).toContain("24")
+    expect(mockDb.insert).not.toHaveBeenCalled()
+  })
+
+  it("returns 400 when a tag name does not exist or is not approved", async () => {
+    readUserFromTokenMock.mockResolvedValue(TEACHER_USER)
+    // 配额通过,但标签校验只返回 1 个(另一个名称缺失/未审核)
+    setSelectResultsQueue([[], [makeTagRow()]])
+
+    const res = await POST(
+      makeJsonRequest(VALID_CIRCLE_BODY, "/api/circles")
+    )
+    expect(res.status).toBe(400)
+    const body = (await res.json()) as IResponse<null>
+    expect(body.code).toBe(400)
+    expect(body.details).toEqual({ missingTags: [TAG_NAME_2] })
     expect(mockDb.insert).not.toHaveBeenCalled()
   })
 
@@ -443,10 +437,10 @@ describe("POST /api/circles", () => {
     expect(mockDb.insert).not.toHaveBeenCalled()
   })
 
-  it("returns 400 when tagIds is empty", async () => {
+  it("returns 400 when tags is empty", async () => {
     readUserFromTokenMock.mockResolvedValue(TEACHER_USER)
     const res = await POST(
-      makeJsonRequest({ ...VALID_CIRCLE_BODY, tagIds: [] }, "/api/circles")
+      makeJsonRequest({ ...VALID_CIRCLE_BODY, tags: [] }, "/api/circles")
     )
     expect(res.status).toBe(400)
     const body = (await res.json()) as IResponse<null>
@@ -463,7 +457,7 @@ describe("POST /api/circles", () => {
 
   it("accepts only contactPhone without wechat", async () => {
     readUserFromTokenMock.mockResolvedValue(TEACHER_USER)
-    setSelectResultsQueue([[]])
+    setSelectResultsQueue([[], [makeTagRow(), makeTagRow({ name: TAG_NAME_2 })]])
     insertReturningMock.mockResolvedValue([{ id: "c-phone-only" }])
     const { wechat: _w, ...rest } = VALID_CIRCLE_BODY
     void _w
@@ -473,7 +467,7 @@ describe("POST /api/circles", () => {
 
   it("accepts coverImages and persists them on insert", async () => {
     readUserFromTokenMock.mockResolvedValue(TEACHER_USER)
-    setSelectResultsQueue([[]])
+    setSelectResultsQueue([[], [makeTagRow(), makeTagRow({ name: TAG_NAME_2 })]])
     insertReturningMock.mockResolvedValue([{ id: "c-with-covers" }])
     const coverImages = [
       "https://example.com/a.jpg",
@@ -550,10 +544,9 @@ describe("GET /api/circles/:id", () => {
       name: "Teacher",
       avatarUrl: null,
     }
-    const tags = [makeTagRow({ id: TAG_ID_1 }), makeTagRow({ id: TAG_ID_2 })]
-    // fetchCircleDetail 的 4 个 select
+    // fetchCircleDetail 的 3 个 select
     const queue: Record<string, unknown>[][] = []
-    enqueueFetchCircleDetail(queue, circle, creator, tags, 3)
+    enqueueFetchCircleDetail(queue, circle, creator, 3)
     setSelectResultsQueue(queue)
 
     const res = await getCircleById(
@@ -567,8 +560,7 @@ describe("GET /api/circles/:id", () => {
     expect(body.data.title).toBe("陈氏太极拳晨练班")
     expect(body.data.creator.id).toBe(TEACHER_USER.id)
     expect(body.data.creator.name).toBe("Teacher")
-    expect(body.data.tags).toHaveLength(2)
-    expect(body.data.tags[0]!.id).toBe(TAG_ID_1)
+    expect(body.data.tags).toEqual([TAG_NAME_1, TAG_NAME_2])
     expect(body.data.contactCount).toBe(3)
     expect(body.data.memberCount).toBe(8)
   })
@@ -594,13 +586,12 @@ describe("GET /api/circles/:id", () => {
       status: "offline",
       creatorId: TEACHER_USER.id,
     })
-    // fetchCircleDetail:circle 行(offline)+ creator + tags + count
+    // fetchCircleDetail:circle 行(offline)+ creator + count
     const queue: Record<string, unknown>[][] = []
     enqueueFetchCircleDetail(
       queue,
       offlineCircle,
       { id: TEACHER_USER.id, name: "Teacher", avatarUrl: null },
-      [],
       0
     )
     setSelectResultsQueue(queue)
@@ -624,7 +615,6 @@ describe("GET /api/circles/:id", () => {
       queue,
       offlineCircle,
       { id: TEACHER_USER.id, name: "Teacher", avatarUrl: null },
-      [],
       0
     )
     setSelectResultsQueue(queue)
@@ -688,9 +678,9 @@ describe("PUT /api/circles/:id", () => {
       name: "Teacher",
       avatarUrl: null,
     }
-    // 队列:1) creator check select 2-5) fetchCircleDetail 的 4 个 select
+    // 队列:1) creator check select 2-4) fetchCircleDetail 的 3 个 select
     const queue: Record<string, unknown>[][] = [[circle]]
-    enqueueFetchCircleDetail(queue, updatedCircle, creator, [], 0)
+    enqueueFetchCircleDetail(queue, updatedCircle, creator, 0)
     setSelectResultsQueue(queue)
 
     const res = await putCircle(
@@ -705,8 +695,6 @@ describe("PUT /api/circles/:id", () => {
     expect(mockDb.update).toHaveBeenCalledTimes(1)
     expect(chainUpdate.set).toHaveBeenCalledTimes(1)
     expect(updateWhereMock).toHaveBeenCalledTimes(1)
-    // 不应触发事务(未提供 tagIds)
-    expect(transactionSpy).not.toHaveBeenCalled()
   })
 
   it("updates coverImages and writes them to db (with full replacement)", async () => {
@@ -725,9 +713,9 @@ describe("PUT /api/circles/:id", () => {
       name: "Teacher",
       avatarUrl: null,
     }
-    // 队列:1) creator check 2-5) fetchCircleDetail
+    // 队列:1) creator check 2-4) fetchCircleDetail
     const queue: Record<string, unknown>[][] = [[oldCircle]]
-    enqueueFetchCircleDetail(queue, updatedCircle, creator, [], 0)
+    enqueueFetchCircleDetail(queue, updatedCircle, creator, 0)
     setSelectResultsQueue(queue)
 
     const res = await putCircle(
@@ -762,7 +750,7 @@ describe("PUT /api/circles/:id", () => {
       avatarUrl: null,
     }
     const queue: Record<string, unknown>[][] = [[oldCircle]]
-    enqueueFetchCircleDetail(queue, clearedCircle, creator, [], 0)
+    enqueueFetchCircleDetail(queue, clearedCircle, creator, 0)
     setSelectResultsQueue(queue)
 
     const res = await putCircle(
@@ -796,36 +784,47 @@ describe("PUT /api/circles/:id", () => {
     expect(mockDb.update).not.toHaveBeenCalled()
   })
 
-  it("replaces tagIds via transaction when provided", async () => {
+  it("replaces tags directly via update when provided", async () => {
     readUserFromTokenMock.mockResolvedValue(TEACHER_USER)
     const circle = makeCircleRow()
-    const updatedCircle = makeCircleRow()
-    const newTags = [makeTagRow({ id: TAG_ID_2 })]
+    const updatedCircle = makeCircleRow({ tags: [TAG_NAME_2] })
     const creator = {
       id: TEACHER_USER.id,
       name: "Teacher",
       avatarUrl: null,
     }
-    // 队列:1) creator check 2-5) fetchCircleDetail
-    const queue: Record<string, unknown>[][] = [[circle]]
-    enqueueFetchCircleDetail(queue, updatedCircle, creator, newTags, 0)
+    // 队列:1) creator check 2) 标签名称校验 3-5) fetchCircleDetail
+    const queue: Record<string, unknown>[][] = [[circle], [makeTagRow({ name: TAG_NAME_2 })]]
+    enqueueFetchCircleDetail(queue, updatedCircle, creator, 0)
     setSelectResultsQueue(queue)
 
     const res = await putCircle(
       makePutRequest(
-        { tagIds: [TAG_ID_2] },
+        { tags: [TAG_NAME_2] },
         "/api/circles/circle-1"
       ),
       makeContext("circle-1")
     )
     expect(res.status).toBe(200)
     const body = (await res.json()) as IResponse<CircleDetailDTO>
-    expect(body.data.tags).toHaveLength(1)
-    expect(body.data.tags[0]!.id).toBe(TAG_ID_2)
-    // 事务应被调用(删除旧 tag + 插入新 tag)
-    expect(transactionSpy).toHaveBeenCalledTimes(1)
-    expect(txDeleteWhereSpy).toHaveBeenCalledTimes(1)
-    expect(txInsertValuesSpy).toHaveBeenCalledTimes(1)
+    expect(body.data.tags).toEqual([TAG_NAME_2])
+    // 直接 update,无事务
+    const setArg = chainUpdate.set.mock.calls[0]?.[0] as Record<string, unknown>
+    expect(setArg.tags).toEqual([TAG_NAME_2])
+  })
+
+  it("returns 400 when tag name does not exist", async () => {
+    readUserFromTokenMock.mockResolvedValue(TEACHER_USER)
+    const circle = makeCircleRow()
+    // creator check 通过,但标签校验失败(仅返回 1 个)
+    setSelectResultsQueue([[circle], [makeTagRow({ name: TAG_NAME_1 })]])
+
+    const res = await putCircle(
+      makePutRequest({ tags: [TAG_NAME_1, "不存在的标签"] }, "/api/circles/circle-1"),
+      makeContext("circle-1")
+    )
+    expect(res.status).toBe(400)
+    expect(mockDb.update).not.toHaveBeenCalled()
   })
 
   it("returns 400 when title is too short", async () => {

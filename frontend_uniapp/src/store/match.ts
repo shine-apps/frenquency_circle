@@ -16,8 +16,8 @@ export const useMatchStore = defineStore('match', () => {
   const rangeKm = ref(5)
   /** 当前匹配使用的位置(可空) */
   const location = ref<LocationPoint | null>(null)
-  /** 当前匹配使用的标签 ID 列表 */
-  const tagIds = ref<string[]>([])
+  /** 当前匹配使用的标签名称列表 */
+  const tags = ref<string[]>([])
   /** 人列表总数(分页用) */
   const totalPeople = ref(0)
   /** 圈子列表总数(分页用) */
@@ -33,7 +33,7 @@ export const useMatchStore = defineStore('match', () => {
     circles?: MatchCircleDTO[]
     rangeKm: number
     location: LocationPoint | null
-    tagIds: string[]
+    tags: string[]
     totalPeople?: number
     totalCircles?: number
   }) {
@@ -43,7 +43,7 @@ export const useMatchStore = defineStore('match', () => {
       circles.value = payload.circles
     rangeKm.value = payload.rangeKm
     location.value = payload.location
-    tagIds.value = payload.tagIds
+    tags.value = payload.tags
     if (payload.totalPeople !== undefined)
       totalPeople.value = payload.totalPeople
     if (payload.totalCircles !== undefined)
@@ -56,7 +56,7 @@ export const useMatchStore = defineStore('match', () => {
     circles.value = []
     rangeKm.value = 5
     location.value = null
-    tagIds.value = []
+    tags.value = []
     totalPeople.value = 0
     totalCircles.value = 0
     page.value = 1
@@ -68,7 +68,7 @@ export const useMatchStore = defineStore('match', () => {
     circles,
     rangeKm,
     location,
-    tagIds,
+    tags,
     totalPeople,
     totalCircles,
     page,

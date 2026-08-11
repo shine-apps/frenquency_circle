@@ -1,19 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 /**
- * /api/tags/* 集成测试。
+ * /api/hobby-tags/* 集成测试。
  *
  * 覆盖:
- * - GET /api/tags/search?q=陈氏太极拳 返回匹配标签
- * - GET /api/tags/search?q=cstj 拼音首字母匹配
- * - GET /api/tags/search 无 q 返回热门标签
- * - GET /api/tags/categories 返回分类树
- * - POST /api/tags/custom 未登录返回 401
- * - POST /api/tags/custom 登录后创建 pending 标签
+ * - GET /api/hobby-tags/search?q=太极拳 返回匹配标签
+ * - GET /api/hobby-tags/search?q=tjq 拼音首字母匹配
+ * - GET /api/hobby-tags/search 无 q 返回热门标签
+ * - GET /api/hobby-tags/categories 返回二级分类树(category + name)
+ * - POST /api/hobby-tags/custom 未登录返回 401
+ * - POST /api/hobby-tags/custom 登录后创建 pending 标签
  *
  * mock 层级:
  * - @/lib/db:支持 select().from().where().orderBy().limit() 与
- *   query.tags.findFirst / insert().values().returning() 链式调用
+ *   query.hobbyTags.findFirst / insert().values().returning() 链式调用
  * - @/lib/auth/session-token:控制 readUserFromToken 返回值
  * - @/lib/logger:避免输出噪音
  *
@@ -24,7 +24,6 @@ type TagRow = {
   id: string
   name: string
   category: string
-  subCategory: string | null
   pinyin: string | null
   pinyinInitials: string | null
   status: string
@@ -83,7 +82,7 @@ const {
       return chainInsert
     }),
     query: {
-      tags: {
+      hobbyTags: {
         findFirst: vi.fn(),
       },
     },
@@ -99,14 +98,14 @@ const {
     mockDb,
     chainSelect,
     chainInsert,
-    findFirstMock: mockDb.query.tags.findFirst,
+    findFirstMock: mockDb.query.hobbyTags.findFirst,
     readUserFromTokenMock: vi.fn(),
   }
 }) as {
   mockDb: {
     select: ReturnType<typeof vi.fn>
     insert: ReturnType<typeof vi.fn>
-    query: { tags: { findFirst: ReturnType<typeof vi.fn> } }
+    query: { hobbyTags: { findFirst: ReturnType<typeof vi.fn> } }
     _setSelectResult: (rows: TagRow[]) => void
     _setInsertResult: (rows: TagRow[]) => void
   }
@@ -143,9 +142,9 @@ vi.mock("@/lib/logger", () => ({
   },
 }))
 
-import { GET as searchGet } from "@/app/api/tags/search/route"
-import { GET as categoriesGet } from "@/app/api/tags/categories/route"
-import { POST as customPost } from "@/app/api/tags/custom/route"
+import { GET as searchGet } from "@/app/api/hobby-tags/search/route"
+import { GET as categoriesGet } from "@/app/api/hobby-tags/categories/route"
+import { POST as customPost } from "@/app/api/hobby-tags/custom/route"
 import type { IResponse, TagDTO } from "@/types/api"
 
 const FAKE_USER = {
@@ -158,11 +157,10 @@ const FAKE_USER = {
 function makeTagRow(overrides: Partial<TagRow> = {}): TagRow {
   return {
     id: overrides.id ?? "tag-1",
-    name: overrides.name ?? "陈氏太极拳",
+    name: overrides.name ?? "太极拳",
     category: overrides.category ?? "武术养生",
-    subCategory: overrides.subCategory ?? "太极拳",
-    pinyin: overrides.pinyin ?? "chenshitaijiquan",
-    pinyinInitials: overrides.pinyinInitials ?? "cstjq",
+    pinyin: overrides.pinyin ?? "taijiquan",
+    pinyinInitials: overrides.pinyinInitials ?? "tjq",
     status: overrides.status ?? "approved",
     createdBy: overrides.createdBy ?? null,
     createdAt: overrides.createdAt ?? new Date("2026-01-01T00:00:00Z"),
@@ -189,25 +187,20 @@ beforeEach(() => {
   mockDb._setInsertResult([])
 })
 
-describe("GET /api/tags/search", () => {
-  it("returns matching tags for Chinese query '陈氏太极拳'", async () => {
+describe("GET /api/hobby-tags/search", () => {
+  it("returns matching tags for Chinese query '太极拳'", async () => {
     const rows = [
-      makeTagRow({
-        id: "tag-1",
-        name: "陈氏太极拳养生八式",
-        pinyin: "chenshitaijiquanyangshengbashi",
-        pinyinInitials: "cstjysbs",
-      }),
+      makeTagRow({ id: "tag-1", name: "太极拳" }),
       makeTagRow({
         id: "tag-2",
-        name: "陈氏太极拳老架一路",
-        pinyin: "chenshitaijiquanlaojiayilu",
-        pinyinInitials: "cstjljyl",
+        name: "书法",
+        pinyin: "shufa",
+        pinyinInitials: "sf",
       }),
     ]
     mockDb._setSelectResult(rows)
 
-    const req = new Request(makeUrl("/api/tags/search?q=陈氏太极拳"), {
+    const req = new Request(makeUrl("/api/hobby-tags/search?q=太极"), {
       method: "GET",
     })
     const res = await searchGet(req)
@@ -215,33 +208,35 @@ describe("GET /api/tags/search", () => {
     const body = (await res.json()) as IResponse<{ list: TagDTO[] }>
     expect(body.code).toBe(200)
     expect(body.data.list).toHaveLength(2)
-    expect(body.data.list[0]!.name).toBe("陈氏太极拳养生八式")
-    expect(body.data.list[1]!.name).toBe("陈氏太极拳老架一路")
+    expect(body.data.list[0]!.name).toBe("太极拳")
+    expect(body.data.list[1]!.name).toBe("书法")
     // 每条 DTO 应包含必需字段
     expect(body.data.list[0]).toHaveProperty("id")
     expect(body.data.list[0]).toHaveProperty("name")
     expect(body.data.list[0]).toHaveProperty("category")
     expect(body.data.list[0]).toHaveProperty("pinyin")
+    // DTO 不应包含已移除的 subCategory 字段
+    expect(body.data.list[0]).not.toHaveProperty("subCategory")
   })
 
-  it("returns matching tags for pinyin initials 'cstj'", async () => {
+  it("returns matching tags for pinyin initials 'tjq'", async () => {
     const rows = [
       makeTagRow({
         id: "tag-1",
-        name: "陈氏太极拳",
-        pinyinInitials: "cstjq",
+        name: "太极拳",
+        pinyinInitials: "tjq",
       }),
     ]
     mockDb._setSelectResult(rows)
 
-    const req = new Request(makeUrl("/api/tags/search?q=cstj"), {
+    const req = new Request(makeUrl("/api/hobby-tags/search?q=tjq"), {
       method: "GET",
     })
     const res = await searchGet(req)
     expect(res.status).toBe(200)
     const body = (await res.json()) as IResponse<{ list: TagDTO[] }>
     expect(body.data.list).toHaveLength(1)
-    expect(body.data.list[0]!.name).toBe("陈氏太极拳")
+    expect(body.data.list[0]!.name).toBe("太极拳")
   })
 
   it("returns popular tags when q is missing", async () => {
@@ -251,7 +246,7 @@ describe("GET /api/tags/search", () => {
     ]
     mockDb._setSelectResult(rows)
 
-    const req = new Request(makeUrl("/api/tags/search"), { method: "GET" })
+    const req = new Request(makeUrl("/api/hobby-tags/search"), { method: "GET" })
     const res = await searchGet(req)
     expect(res.status).toBe(200)
     const body = (await res.json()) as IResponse<{ list: TagDTO[] }>
@@ -262,7 +257,7 @@ describe("GET /api/tags/search", () => {
 
   it("returns popular tags when q is empty string", async () => {
     mockDb._setSelectResult([])
-    const req = new Request(makeUrl("/api/tags/search?q="), {
+    const req = new Request(makeUrl("/api/hobby-tags/search?q="), {
       method: "GET",
     })
     const res = await searchGet(req)
@@ -273,7 +268,7 @@ describe("GET /api/tags/search", () => {
 
   it("respects limit query parameter (default 10, max 50)", async () => {
     mockDb._setSelectResult([])
-    const req = new Request(makeUrl("/api/tags/search?q=太极&limit=20"), {
+    const req = new Request(makeUrl("/api/hobby-tags/search?q=太极&limit=20"), {
       method: "GET",
     })
     await searchGet(req)
@@ -281,7 +276,7 @@ describe("GET /api/tags/search", () => {
   })
 
   it("returns 400 when limit is invalid", async () => {
-    const req = new Request(makeUrl("/api/tags/search?q=太极&limit=0"), {
+    const req = new Request(makeUrl("/api/hobby-tags/search?q=太极&limit=0"), {
       method: "GET",
     })
     const res = await searchGet(req)
@@ -293,7 +288,7 @@ describe("GET /api/tags/search", () => {
 
   it("caps limit at 50", async () => {
     mockDb._setSelectResult([])
-    const req = new Request(makeUrl("/api/tags/search?q=太极&limit=100"), {
+    const req = new Request(makeUrl("/api/hobby-tags/search?q=太极&limit=100"), {
       method: "GET",
     })
     const res = await searchGet(req)
@@ -301,19 +296,18 @@ describe("GET /api/tags/search", () => {
   })
 })
 
-describe("GET /api/tags/categories", () => {
-  it("returns category tree grouped by category with deduped subCategories", async () => {
+describe("GET /api/hobby-tags/categories", () => {
+  it("returns category tree grouped by category with deduped names", async () => {
     const rows = [
-      { category: "武术养生", subCategory: "太极拳" },
-      { category: "武术养生", subCategory: "太极拳" }, // 重复 subCategory,应被去重
-      { category: "武术养生", subCategory: "气功功法" },
-      { category: "民族器乐", subCategory: "弹拨乐器" },
-      { category: "民族器乐", subCategory: null }, // null subCategory,不参与二级分类
+      { category: "武术养生", name: "太极拳" },
+      { category: "武术养生", name: "太极拳" }, // 重复 name,应被去重
+      { category: "武术养生", name: "气功功法" },
+      { category: "民族器乐", name: "弹拨乐器" },
+      { category: "民族器乐", name: "拉弦乐器" },
     ]
-    // categories 路由用 select({ category, subCategory }) 链式调用
     mockDb._setSelectResult(rows as unknown as TagRow[])
 
-    const req = new Request(makeUrl("/api/tags/categories"), { method: "GET" })
+    const req = new Request(makeUrl("/api/hobby-tags/categories"), { method: "GET" })
     const res = await categoriesGet(req)
     expect(res.status).toBe(200)
     const body = (await res.json()) as IResponse<{
@@ -326,12 +320,12 @@ describe("GET /api/tags/categories", () => {
     expect(wushu!.subCategories).toEqual(["太极拳", "气功功法"])
     const yueqi = body.data.categories.find((c) => c.category === "民族器乐")
     expect(yueqi).toBeDefined()
-    expect(yueqi!.subCategories).toEqual(["弹拨乐器"])
+    expect(yueqi!.subCategories).toEqual(["弹拨乐器", "拉弦乐器"])
   })
 
   it("returns empty array when no approved tags exist", async () => {
     mockDb._setSelectResult([])
-    const req = new Request(makeUrl("/api/tags/categories"), { method: "GET" })
+    const req = new Request(makeUrl("/api/hobby-tags/categories"), { method: "GET" })
     const res = await categoriesGet(req)
     expect(res.status).toBe(200)
     const body = (await res.json()) as IResponse<{
@@ -341,9 +335,9 @@ describe("GET /api/tags/categories", () => {
   })
 })
 
-describe("POST /api/tags/custom", () => {
+describe("POST /api/hobby-tags/custom", () => {
   function makeJsonRequest(body: unknown): Request {
-    return new Request("http://localhost/api/tags/custom", {
+    return new Request("http://localhost/api/hobby-tags/custom", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: typeof body === "string" ? body : JSON.stringify(body),
@@ -368,7 +362,6 @@ describe("POST /api/tags/custom", () => {
       id: "new-tag-1",
       name: "王派快板",
       category: "自定义",
-      subCategory: null,
       pinyin: "wangpaikuaiban",
       pinyinInitials: "wpkb",
       status: "pending",
@@ -420,7 +413,7 @@ describe("POST /api/tags/custom", () => {
 
   it("returns 400 when name exceeds 30 characters", async () => {
     readUserFromTokenMock.mockResolvedValue(FAKE_USER)
-    const longName = "一二三四五六七八九十一二三四五六七八九十一二三四五六"
+    const longName = "一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十."
     expect(longName.length).toBeGreaterThan(30)
     const res = await customPost(makeJsonRequest({ name: longName }))
     expect(res.status).toBe(400)

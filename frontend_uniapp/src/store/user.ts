@@ -1,4 +1,4 @@
-import type { ActivityLevel, LocationPoint, PrivacySettings, TagDTO, UserRole } from '@/types'
+import type { ActivityLevel, LocationPoint, PrivacySettings, UserRole } from '@/types'
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { fetchCurrentUser, fromUserDTO } from '@/api/auth'
@@ -30,8 +30,8 @@ export interface UserInfo {
   location?: LocationPoint | null
   /** 逆地理编码地址(可空) */
   address?: string | null
-  /** 用户已绑定的兴趣标签列表(默认空数组) */
-  tags: TagDTO[]
+  /** 用户已绑定的兴趣标签名称数组(默认空数组,存 hobby_tags.name) */
+  tags: string[]
   // 以下字段用于兼容 unibest 模板的 IUserInfoRes 结构
   username?: string
   nickname?: string
@@ -112,8 +112,8 @@ export const useUserStore = defineStore(
       userInfo.value = next
     }
 
-    /** 设置兴趣标签列表 */
-    function setTags(tags: TagDTO[]) {
+    /** 设置兴趣标签名称列表 */
+    function setTags(tags: string[]) {
       updateUser({ tags })
     }
 

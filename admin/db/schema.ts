@@ -93,9 +93,14 @@ export const users = pgTable("users", {
   activityLevel: text("activity_level").notNull().default("medium"),
   /** 最后活跃时间(可空,用于活跃度排序) */
   lastActiveAt: timestamp("last_active_at", { withTimezone: true }),
+  /** 兴趣标签名称数组(存 hobby_tags.name,如 ['太极拳','书法']),默认空数组 */
+  tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-})
+}, (table) => [
+  // 数组包含查询 "标签 X ∈ users.tags" 走 GIN 索引
+  index("users_tags_gin_idx").using("gin", table.tags),
+])
 
 export type User = typeof users.$inferSelect
 export type NewUser = typeof users.$inferInsert
@@ -120,15 +125,15 @@ export const accounts = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => ({
+  (table) => [
     // 同一 provider 下 providerAccountId 唯一
-    providerAccountIdx: uniqueIndex("accounts_provider_account_idx").on(
+    uniqueIndex("accounts_provider_account_idx").on(
       table.provider,
       table.providerAccountId
     ),
     // 按 userId 反查
-    userIdx: index("accounts_user_idx").on(table.userId),
-  })
+    index("accounts_user_idx").on(table.userId),
+  ]
 )
 
 export type Account = typeof accounts.$inferSelect
@@ -149,9 +154,9 @@ export const smsVerificationCodes = pgTable(
     consumedAt: timestamp("consumed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => ({
-    phoneIdx: index("sms_verification_codes_phone_idx").on(table.phone),
-  })
+  (table) => [
+    index("sms_verification_codes_phone_idx").on(table.phone),
+  ]
 )
 
 export type SmsVerificationCode = typeof smsVerificationCodes.$inferSelect
@@ -167,17 +172,18 @@ export const TAG_STATUSES = ["pending", "approved", "rejected"] as const
 export type TagStatus = (typeof TAG_STATUSES)[number]
 
 /**
- * 兴趣标签库。
- * 三级分类:category(一级大类)→ subCategory(二级分类)→ name(三级具体项目)。
+ * 兴趣标签库(二级分类体系)。
+ * category(一级大类)→ name(二级分类名称,如"太极拳""书法")。
  * 支持中文 / 拼音全拼 / 拼音首字母多维度检索。
  */
-export const tags = pgTable(
-  "tags",
+export const hobbyTags = pgTable(
+  "hobby_tags",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    /** 二级分类名称(如"太极拳""书法"),同一 category 下唯一由业务保证 */
     name: text("name").notNull(),
+    /** 一级大类(如"武术养生") */
     category: text("category").notNull(),
-    subCategory: text("sub_category"),
     pinyin: text("pinyin"),
     pinyinInitials: text("pinyin_initials"),
     status: text("status").notNull().default("pending"),
@@ -192,53 +198,22 @@ export const tags = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (table) => ({
+  (table) => [
     // 标签名 B-tree 索引(ILIKE 前缀查询走 B-tree)
-    nameIdx: index("tags_name_idx").on(table.name),
-    pinyinIdx: index("tags_pinyin_idx").on(table.pinyin),
-    pinyinInitialsIdx: index("tags_pinyin_initials_idx").on(table.pinyinInitials),
-    // 大类 + 二级分类组合索引(分类树查询)
-    categorySubIdx: index("tags_category_sub_idx").on(
+    index("hobby_tags_name_idx").on(table.name),
+    index("hobby_tags_pinyin_idx").on(table.pinyin),
+    index("hobby_tags_pinyin_initials_idx").on(table.pinyinInitials),
+    // 大类 + 二级名称组合索引(分类树查询)
+    index("hobby_tags_category_name_idx").on(
       table.category,
-      table.subCategory
+      table.name
     ),
-    statusIdx: index("tags_status_idx").on(table.status),
-  })
+    index("hobby_tags_status_idx").on(table.status),
+  ]
 )
 
-export type Tag = typeof tags.$inferSelect
-export type NewTag = typeof tags.$inferInsert
-
-/**
- * 用户与兴趣标签的关联表(多对多)。
- * - level: 标签精度等级预留字段(MVP 暂不使用,默认 0)
- */
-export const userTags = pgTable(
-  "user_tags",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    tagId: uuid("tag_id")
-      .notNull()
-      .references(() => tags.id, { onDelete: "cascade" }),
-    level: integer("level").default(0),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (table) => ({
-    // 同一用户不可重复绑定同一标签
-    userTagUniq: uniqueIndex("user_tags_user_tag_idx").on(
-      table.userId,
-      table.tagId
-    ),
-  })
-)
-
-export type UserTag = typeof userTags.$inferSelect
-export type NewUserTag = typeof userTags.$inferInsert
+export type HobbyTag = typeof hobbyTags.$inferSelect
+export type NewHobbyTag = typeof hobbyTags.$inferInsert
 
 /**
  * 圈子状态字面量联合:
@@ -286,13 +261,15 @@ export const circles = pgTable(
     status: text("status").notNull().default("active"),
     /**
      * 轮播图片 URL 数组(0-9 个,可空数组)。
-     * - 与 locations.tagIds uuid[] 同款 array 列,无需关联表
+     * - 与 locations.tagNames text[] 同款 array 列,无需关联表
      * - 默认空数组(避免 NULL 语义混乱)
      */
     coverImages: text("cover_images")
       .array()
       .notNull()
       .default(sql`'{}'::text[]`),
+    /** 兴趣标签名称数组(存 hobby_tags.name,如 ['太极拳','书法']),默认空数组 */
+    tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -300,47 +277,21 @@ export const circles = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (table) => ({
-    creatorIdx: index("circles_creator_idx").on(table.creatorId),
-    statusIdx: index("circles_status_idx").on(table.status),
+  (table) => [
+    index("circles_creator_idx").on(table.creatorId),
+    index("circles_status_idx").on(table.status),
     // 经纬度组合 B-tree 索引(MVP 简化;真实 GIST 索引留待 PostGIS 完整集成)
-    locationIdx: index("circles_location_idx").on(
+    index("circles_location_idx").on(
       table.latitude,
       table.longitude
     ),
-  })
+    // 数组包含查询 "标签 X ∈ circles.tags" 走 GIN 索引
+    index("circles_tags_gin_idx").using("gin", table.tags),
+  ]
 )
 
 export type Circle = typeof circles.$inferSelect
 export type NewCircle = typeof circles.$inferInsert
-
-/**
- * 圈子与兴趣标签的关联表(多对多)。
- */
-export const circleTags = pgTable(
-  "circle_tags",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    circleId: uuid("circle_id")
-      .notNull()
-      .references(() => circles.id, { onDelete: "cascade" }),
-    tagId: uuid("tag_id")
-      .notNull()
-      .references(() => tags.id, { onDelete: "cascade" }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (table) => ({
-    circleTagUniq: uniqueIndex("circle_tags_circle_tag_idx").on(
-      table.circleId,
-      table.tagId
-    ),
-  })
-)
-
-export type CircleTag = typeof circleTags.$inferSelect
-export type NewCircleTag = typeof circleTags.$inferInsert
 
 /**
  * 圈子成员表。
@@ -361,12 +312,12 @@ export const circleMembers = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (table) => ({
-    circleMemberUniq: uniqueIndex("circle_members_circle_user_idx").on(
+  (table) => [
+    uniqueIndex("circle_members_circle_user_idx").on(
       table.circleId,
       table.userId
     ),
-  })
+  ]
 )
 
 export type CircleMember = typeof circleMembers.$inferSelect
@@ -418,11 +369,11 @@ export const teacherApplications = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (table) => ({
-    userIdx: index("teacher_applications_user_idx").on(table.userId),
-    circleIdx: index("teacher_applications_circle_idx").on(table.circleId),
-    statusIdx: index("teacher_applications_status_idx").on(table.status),
-  })
+  (table) => [
+    index("teacher_applications_user_idx").on(table.userId),
+    index("teacher_applications_circle_idx").on(table.circleId),
+    index("teacher_applications_status_idx").on(table.status),
+  ]
 )
 
 export type TeacherApplication = typeof teacherApplications.$inferSelect
@@ -431,7 +382,7 @@ export type NewTeacherApplication = typeof teacherApplications.$inferInsert
 /**
  * 用户定位发布记录。
  * 每次发布定位时写入一条记录,同时更新 users.latitude/longitude 为最新位置。
- * tagIds 为发布时已选标签的快照(uuid 数组)。
+ * tagNames 为发布时已选标签名称的快照(text 数组,存 hobby_tags.name)。
  */
 export const locations = pgTable(
   "locations",
@@ -443,21 +394,21 @@ export const locations = pgTable(
     latitude: doublePrecision("latitude").notNull(),
     longitude: doublePrecision("longitude").notNull(),
     address: text("address").notNull(),
-    /** 发布时已选标签 ID 快照 */
-    tagIds: uuid("tag_ids").array(),
+    /** 发布时已选标签名称快照 */
+    tagNames: text("tag_names").array(),
     /** 发布时选择的匹配范围(km) */
     rangeKm: integer("range_km").notNull(),
     publishedAt: timestamp("published_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
-  (table) => ({
-    userIdx: index("locations_user_idx").on(table.userId),
-    locationIdx: index("locations_location_idx").on(
+  (table) => [
+    index("locations_user_idx").on(table.userId),
+    index("locations_location_idx").on(
       table.latitude,
       table.longitude
     ),
-  })
+  ]
 )
 
 export type Location = typeof locations.$inferSelect
@@ -490,10 +441,10 @@ export const contactLogs = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (table) => ({
-    circleIdx: index("contact_logs_circle_idx").on(table.circleId),
-    userIdx: index("contact_logs_user_idx").on(table.userId),
-  })
+  (table) => [
+    index("contact_logs_circle_idx").on(table.circleId),
+    index("contact_logs_user_idx").on(table.userId),
+  ]
 )
 
 export type ContactLog = typeof contactLogs.$inferSelect

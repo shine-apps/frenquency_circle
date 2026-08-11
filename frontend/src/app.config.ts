@@ -24,7 +24,7 @@ export default defineAppConfig({
   // 定位权限声明(weapp 端生效,H5 端忽略)
   permission: {
     'scope.userLocation': {
-      desc: '你的位置信息将用于发现附近的同频圈子和爱好者'
+      desc: '你的位置信息将用于发现附近的文艺同频圈子和爱好者'
     }
   },
   // 微信合规要求:调用 getLocation / chooseLocation 等隐私接口

@@ -103,7 +103,7 @@ export function isDoubleTokenRes(tokenRes: IAuthLoginRes): tokenRes is IDoubleTo
   return 'accessToken' in tokenRes && 'refreshToken' in tokenRes
 }
 
-// ==================== 同频圈业务类型 ====================
+// ==================== 文艺同频圈业务类型 ====================
 
 /** JWT 中携带的用户字段(与后端 AuthUser 对齐) */
 export interface AuthUser {

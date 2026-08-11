@@ -204,7 +204,7 @@ export const useTokenStore = defineStore(
       }
     }
 
-    // ==================== 同频圈业务登录 ====================
+    // ==================== 文艺同频圈业务登录 ====================
 
     /** 发送短信验证码 */
     async function sendSmsCode(phone: string) {
@@ -213,7 +213,7 @@ export const useTokenStore = defineStore(
 
     /**
      * 登录成功后统一处理:设置 token + 拉取用户信息。
-     * 同频圈后端返回 `{ token, user }`,单 token 模式。
+     * 文艺同频圈后端返回 `{ token, user }`,单 token 模式。
      */
     async function handleLoginSuccess(res: AuthLoginResponse) {
       setTokenInfo({ token: res.token, expiresIn: 86400 })
@@ -381,7 +381,7 @@ export const useTokenStore = defineStore(
       login,
       wxLogin,
       logout,
-      // 同频圈业务登录
+      // 文艺同频圈业务登录
       sendSmsCode,
       loginByPhone,
       loginByCredentials,

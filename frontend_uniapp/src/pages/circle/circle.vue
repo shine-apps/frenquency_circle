@@ -155,7 +155,7 @@ const maxMembersText = computed(() => (circle.value?.maxMembers ? String(circle.
 onShareAppMessage(() => {
   const title = circle.value
     ? `${circle.value.title}｜${circle.value.description.slice(0, 40)}`
-    : '同频圈子'
+    : '文艺同频圈'
   return {
     title,
     path: `/pages/circle/circle?id=${circleId.value}`,
@@ -170,7 +170,7 @@ onShareAppMessage(() => {
 onShareTimeline(() => {
   const title = circle.value
     ? `${circle.value.title}｜${circle.value.description.slice(0, 40)}`
-    : '同频圈子'
+    : '文艺同频圈'
   return {
     title,
     query: `id=${circleId.value}`,

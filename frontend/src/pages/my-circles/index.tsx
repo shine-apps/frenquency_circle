@@ -65,7 +65,7 @@ const MyCirclesPage: React.FC = () => {
       {circles.length === 0 ? (
         <View className={styles.empty}>
           <Text className={styles.emptyText}>
-            暂未匹配到任何圈子,去首页发现同频圈子吧
+            暂未匹配到任何圈子,去首页发现文艺同频圈子吧
           </Text>
           <View className={styles.emptyActions}>
             <Button

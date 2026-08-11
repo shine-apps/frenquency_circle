@@ -97,7 +97,7 @@ export const useUserStore = defineStore(
     /**
      * 从后端刷新当前用户信息。
      * - 走 `GET /api/auth/me`,返回 UserDTO
-     * - 与模板的 getUserInfo(`/user/info`) 不同,同频圈后端无该接口
+     * - 与模板的 getUserInfo(`/user/info`) 不同,文艺同频圈后端无该接口
      */
     async function fetchUserInfo() {
       const dto = await fetchCurrentUser()

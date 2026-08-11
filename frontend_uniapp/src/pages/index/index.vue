@@ -302,14 +302,14 @@ const noTags = computed(() => tagIds.value.length === 0)
 
 // ====== 微信分享:分享给好友 ======
 onShareAppMessage(() => ({
-  title: '同频圈子',
+  title: '文艺同频圈',
   path: '/pages/index/index',
 }))
 
 // #ifdef MP-WEIXIN
 // 朋友圈分享(仅小程序端)
 onShareTimeline(() => ({
-  title: '同频圈子',
+  title: '文艺同频圈',
 }))
 // #endif
 </script>
@@ -332,7 +332,7 @@ onShareTimeline(() => ({
     <view v-if="showIntro" class="mx-4 mt-3 rounded-2xl bg-white p-4">
       <view class="flex items-center justify-between">
         <text class="text-base font-semibold text-[#333]">
-          同频圈是什么
+          文艺同频圈是什么
         </text>
         <text class="text-lg text-[#999] px-2" @click="handleDismissIntro">
           ×

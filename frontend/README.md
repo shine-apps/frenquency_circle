@@ -285,7 +285,7 @@ frontend/
 
 ### 11. 兴趣标签体系 `src/components/TagSelector/` + `src/pages/search/`
 
-「同频圈」核心模块之一,围绕六大类兴趣标签(太极 / 书法 / 古琴 / 茶道 / 国画 / 民乐)实现标签选择、搜索、自定义添加。
+「文艺同频圈」核心模块之一,围绕六大类兴趣标签(太极 / 书法 / 古琴 / 茶道 / 国画 / 民乐)实现标签选择、搜索、自定义添加。
 
 - **TagSelector 通用组件** `src/components/TagSelector/index.tsx`
   - props:`{ selectedIds: string[], onChange: (ids: string[]) => void, max?: number }`(默认 max=10)
@@ -346,7 +346,7 @@ TEACHER 角色专属(普通 USER 提交创建圈子时自动升级 role)。
 
 ### 15. 自定义 TabBar(3 项凸起) `src/components/CustomTabBar/index.tsx`
 
-「同频圈」MVP 改版后的 TabBar:
+「文艺同频圈」MVP 改版后的 TabBar:
 
 - 3 项:**首页** / **发布[中间凸起]** / **我的**
 - 中间"发布"按钮:`transform: translateY(-20rpx)` 实现凸起 + 圆形渐变背景 + 阴影(`PublishIcon` SVG)

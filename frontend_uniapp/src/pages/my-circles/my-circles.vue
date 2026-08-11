@@ -71,7 +71,7 @@ function renderTags(tags: TagDTO[]): { visible: TagDTO[]; rest: number } {
 
     <view v-if="circles.length === 0" class="flex flex-col items-center pt-20">
       <text class="text-sm text-[#999]">
-        暂未匹配到任何圈子,去首页发现同频圈子吧
+        暂未匹配到任何圈子,去首页发现文艺同频圈子吧
       </text>
       <view class="mt-4 flex gap-3">
         <wd-button round size="small" @click="handleGoHome">去首页发现</wd-button>

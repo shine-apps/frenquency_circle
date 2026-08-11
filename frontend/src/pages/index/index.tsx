@@ -94,12 +94,12 @@ const IndexPage: React.FC = () => {
 
   // ====== 微信分享:分享给好友 / 朋友圈 ======
   useShareAppMessage(() => ({
-    title: '同频圈子',
+    title: '文艺同频圈',
     path: '/pages/index/index',
   }));
 
   useShareTimeline(() => ({
-    title: '同频圈子',
+    title: '文艺同频圈',
   }));
 
   /** 获取位置并拉取匹配 */
@@ -325,7 +325,7 @@ const IndexPage: React.FC = () => {
       {showIntro && (
         <View className={styles.introCard}>
           <View className={styles.introHead}>
-            <Text className={styles.introTitle}>同频圈是什么</Text>
+            <Text className={styles.introTitle}>文艺同频圈是什么</Text>
             <Text className={styles.introClose} onClick={handleDismissIntro}>
               ×
             </Text>

@@ -169,7 +169,7 @@ const CirclePage: React.FC = () => {
   useShareAppMessage(() => {
     const title = circle
       ? `${circle.title}｜${circle.description.slice(0, 40)}`
-      : '同频圈子';
+      : '文艺同频圈';
     return {
       title,
       path: `/pages/circle/index?id=${circleId}`,
@@ -183,7 +183,7 @@ const CirclePage: React.FC = () => {
   useShareTimeline(() => {
     const title = circle
       ? `${circle.title}｜${circle.description.slice(0, 40)}`
-      : '同频圈子';
+      : '文艺同频圈';
     return {
       title,
       query: `id=${circleId}`,

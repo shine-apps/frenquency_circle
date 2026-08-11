@@ -160,7 +160,6 @@ All commands run from the project root with no `cd` needed.
   - `circles` — id, title, description, creatorId (FK → users), latitude, longitude(lat/lng 双列), address, contactPhone, wechat, activityTime, maxMembers int, memberCount int default 0, status(`'active' | 'offline' | 'deleted' | 'violated'`), createdAt, updatedAt. 复合 btree 索引 (latitude, longitude)。TEACHER 创建,普通用户联系老师。
   - `circleTags` — id, circleId (FK → circles), tagId (FK → tags). 唯一索引 `(circleId, tagId)`。圈子与标签多对多。
   - `circleMembers` — id, circleId (FK → circles), userId (FK → users), role(`'member' | 'creator'`), joinedAt. 唯一索引 `(circleId, userId)`。
-  - `locations` — id, userId (FK → users), latitude, longitude(lat/lng 双列), address, tagIds (uuid[] 快照), publishedAt. 复合 btree 索引 (latitude, longitude)。用户发布定位用于匹配。
   - `contactLogs` — id, circleId (FK → circles), userId (FK → users), contactType(`'phone' | 'wechat'`), createdAt. 索引 on circleId。记录用户联系老师的行为。
 - **空间索引说明:** 原 spec 设计用 PostGIS GIST 索引,实际采用 lat/lng 双列方案(spec SubTask 1.3 允许),GIST 改为 (latitude, longitude) btree 复合索引;距离计算用 haversine 公式(`lib/match/distance.ts`)。
 - **Client:** always import from `@/lib/db`. Run independent queries in parallel with `Promise.all`.
@@ -191,18 +190,17 @@ All commands run from the project root with no `cd` needed.
 
 「文艺同频圈」核心业务 API,均走 `requireSession(req)` 鉴权(非 admin),返回 `IResponse<T>` 信封。
 
-- **`GET /api/tags/search?q=&limit=`**:公开,搜索标签。策略:1) 精确 name → 2) ILIKE `%q%` → 3) pinyin 完全匹配 → 4) pinyinInitials 完全匹配 → 5) pinyinInitials 前缀匹配。`q` 为空时返回热门 top 10。`limit` 默认 10,最大 50。
-- **`GET /api/tags/categories`**:公开,返回六大类与二级分类树(从 tags 表 group by)。
-- **`POST /api/tags/custom`**:登录用户,zod 校验 `name`(1-30 字符)→ 自动填充 pinyin → 创建 `status='pending'` 标签 → 返回 `TagDTO`(需管理员审核后才进入匹配池)。
-- **`PUT /api/users/me/tags`**:登录用户,zod 校验 `tagIds: string[]`(1-10 项)→ 全量替换 `userTags` → 返回 `TagDTO[]`。
+- **`GET /api/hobby-tags/search?q=&limit=`**:公开,搜索标签。策略:1) 精确 name → 2) ILIKE `%q%` → 3) pinyin 完全匹配 → 4) pinyinInitials 完全匹配 → 5) pinyinInitials 前缀匹配。`q` 为空时返回热门 top 10。`limit` 默认 10,最大 50。
+- **`GET /api/hobby-tags/categories`**:公开,返回六大类与二级分类树(从 hobby_tags 表 group by)。
+- **`POST /api/hobby-tags/custom`**:登录用户,zod 校验 `name`(1-30 字符)→ 自动填充 pinyin → 创建 `status='pending'` 标签 → 返回 `TagDTO`。
+- **`PUT /api/users/me/hobby-tags`**:登录用户,zod 校验 `tags: string[]`(1-10 项标签名)→ 全量替换 `users.tags` → 返回 `{ tags: string[] }`。
 - **`PUT /api/users/me/privacy`**:登录用户,zod 校验 `PrivacySettings` → 写入 `users.privacySettings` JSONB。
 - **`PATCH /api/users/me/profile`**:登录用户,支持更新 `role('USER' | 'TEACHER')` / `phone` / `practiceYears` / `activityLevel`。复用 `readUserFromToken`。
 - **`GET /api/auth/me`**:扩展返回 `UserProfileDTO`(含 `phone / role / practiceYears / activityLevel / privacySettings / tags`)。
 
 ### Phase 3: 定位与匹配 API
 
-- **`POST /api/locations/publish`**:登录用户,zod 校验 `{ latitude, longitude, address, tagIds, rangeKm }` → 写入 `locations` 表(同时更新 `users.latitude/longitude/address` 为最新位置)→ 返回 `{ locationId, publishedAt }`。频率限制:同一用户 5 分钟内只能 publish 1 次(`lib/rate-limit/publish.ts`),超限 429。
-- **`GET /api/locations/match-people`**:登录用户,query 参数 `latitude / longitude / tagIds / rangeKm / page / pageSize` → 调 `matchPeople`(`lib/match/people-matcher.ts`)→ 返回 `Paginated<MatchPersonDTO>`。范围筛选用 haversine;排除当前用户与 `privacySettings.allowMatch=false` 用户;加权排序(距离 40% + 兴趣重合度 40% + 活跃度 20%);`privacySettings.locationPrecision` 对 `distanceKm` 脱敏(`community` → 0.5km,`region` → 5km)。
+- **`GET /api/locations/match-people`**:登录用户,query 参数 `latitude / longitude / tags(逗号分隔标签名) / rangeKm / page / pageSize` → 调 `matchPeople`(`lib/match/people-matcher.ts`)→ 返回 `Paginated<MatchPersonDTO>`。范围筛选用 haversine;排除当前用户与 `privacySettings.allowMatch=false` 用户;加权排序(距离 40% + 兴趣重合度 40% + 活跃度 20%);`privacySettings.locationPrecision` 对 `distanceKm` 脱敏(`community` → 0.5km,`region` → 5km)。
 - **`GET /api/locations/match-circles`**:登录用户,同上,调 `matchCircles`(`lib/match/circle-matcher.ts`),过滤 `status='active'`,加权(30/50/20%)。
 
 ### Phase 4: 圈子 CRUD 与联系 API
@@ -222,16 +220,15 @@ All commands run from the project root with no `cd` needed.
 - **`PATCH /api/admin/tags/:id`**:更新 `status`(`approved` / `rejected`)与 `category` / `subCategory`(管理员可重新分类)。
 - **`GET /api/admin/circles`**:分页 + 按 `status/creator` 筛选。
 - **`PATCH /api/admin/circles/:id`**:更新 `status`(`offline` / `violated` / `active`)。
-- **`GET /api/admin/stats`**:返回 `{ userCount, circleCount, todayMatchCount, pendingTagCount, pendingCircleCount }`,供仪表盘 5 张 StatCard。
+- **`GET /api/admin/stats`**:返回 `{ userCount, circleCount, locatedUserCount, pendingTagCount, pendingCircleCount }`,供仪表盘 5 张 StatCard(`locatedUserCount` = `users.latitude/longitude` 均非空的用户数)。
 
 ### 匹配引擎与隐私脱敏(`lib/match/`)
 
 - **`lib/match/distance.ts`**:`withinRangeSql(lng, lat, rangeKm)` 返回 drizzle `sql` 模板(haversine 范围筛选);`distanceKmSql(lng, lat)` 返回距离表达式。
-- **`lib/match/people-matcher.ts`**:`matchPeople({ lng, lat, tagIds, rangeKm, currentUserId, page, pageSize })` — 范围筛选 → JOIN `userTags` 算 tag 重合度 → 加权打分 → 排序分页 → 返回 `MatchPersonDTO[]`。
+- **`lib/match/people-matcher.ts`**:`matchPeople({ lng, lat, tags, rangeKm, currentUserId, page, pageSize })` — 范围筛选 → 按 `users.tags` 算 tag 重合度 → 加权打分 → 排序分页 → 返回 `MatchPersonDTO[]`。
 - **`lib/match/circle-matcher.ts`**:`matchCircles(...)` — 类似,JOIN `circleTags`,过滤 `status='active'`,加权(30/50/20%)。
 - **`lib/match/precision.ts`**:`locationPrecision` 隐私脱敏,在 DTO 转换层对 `distanceKm` 四舍五入(`community` → 0.5km,`region` → 5km)。
 - **`lib/search/tag-search.ts`**:`searchTags(query, limit)` 多策略搜索;`lib/search/pinyin.ts` 封装 `pinyin-pro` 提供 `toPinyin` / `toPinyinInitials`。
-- **`lib/rate-limit/publish.ts`**:定位发布频率限制(5 分钟 1 次),参考 `lib/sms/rate-limit.ts` 模式,**非多实例安全**。
 - **`lib/auth-utils.ts`**:`requireSession(req)` 返回 `{ user: AuthUser } | { response: NextResponse }`,供非 admin 业务接口复用(基于 `readUserFromToken`)。
 
 ## Authentication

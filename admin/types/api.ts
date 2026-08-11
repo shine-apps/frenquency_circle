@@ -283,14 +283,3 @@ export type AdminTeacherApplicationItem = TeacherApplicationDTO & {
   userName: string
   reviewerName?: string | null
 }
-
-/**
- * 定位发布请求体。
- */
-export type LocationPublishInput = {
-  latitude: number
-  longitude: number
-  address: string
-  tagNames: string[]
-  rangeKm: 1 | 5 | 10 | 30
-}

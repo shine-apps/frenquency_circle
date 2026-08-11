@@ -261,7 +261,6 @@ export const circles = pgTable(
     status: text("status").notNull().default("active"),
     /**
      * 轮播图片 URL 数组(0-9 个,可空数组)。
-     * - 与 locations.tagNames text[] 同款 array 列,无需关联表
      * - 默认空数组(避免 NULL 语义混乱)
      */
     coverImages: text("cover_images")
@@ -378,41 +377,6 @@ export const teacherApplications = pgTable(
 
 export type TeacherApplication = typeof teacherApplications.$inferSelect
 export type NewTeacherApplication = typeof teacherApplications.$inferInsert
-
-/**
- * 用户定位发布记录。
- * 每次发布定位时写入一条记录,同时更新 users.latitude/longitude 为最新位置。
- * tagNames 为发布时已选标签名称的快照(text 数组,存 hobby_tags.name)。
- */
-export const locations = pgTable(
-  "locations",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    latitude: doublePrecision("latitude").notNull(),
-    longitude: doublePrecision("longitude").notNull(),
-    address: text("address").notNull(),
-    /** 发布时已选标签名称快照 */
-    tagNames: text("tag_names").array(),
-    /** 发布时选择的匹配范围(km) */
-    rangeKm: integer("range_km").notNull(),
-    publishedAt: timestamp("published_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (table) => [
-    index("locations_user_idx").on(table.userId),
-    index("locations_location_idx").on(
-      table.latitude,
-      table.longitude
-    ),
-  ]
-)
-
-export type Location = typeof locations.$inferSelect
-export type NewLocation = typeof locations.$inferInsert
 
 /**
  * 联系方式联系类型字面量联合:

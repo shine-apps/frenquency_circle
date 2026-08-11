@@ -1,7 +1,7 @@
-import { eq, gte, sql } from "drizzle-orm"
+import { and, eq, isNotNull, sql } from "drizzle-orm"
 
 import { db } from "@/lib/db"
-import { users, circles, hobbyTags, locations } from "@/db/schema"
+import { users, circles, hobbyTags } from "@/db/schema"
 import { ok } from "@/lib/api"
 import { requireAdmin } from "@/lib/auth-utils"
 
@@ -11,8 +11,8 @@ type AdminStats = {
   userCount: number
   /** 圈子总数(不含已删除) */
   circleCount: number
-  /** 今日匹配次数(今日发布定位数) */
-  todayMatchCount: number
+  /** 已设置位置的用户数(users.latitude/longitude 非空) */
+  locatedUserCount: number
   /** 待审核标签数(status='pending') */
   pendingTagCount: number
   /** 待处理圈子数(status='violated') */
@@ -31,16 +31,10 @@ export async function GET() {
   const guard = await requireAdmin()
   if (!guard.ok) return guard.response
 
-  // 今日 00:00(本地时区)作为分界点
-  const now = new Date()
-  const todayStart = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
-  )
-
   const [
     [{ userCount }],
     [{ circleCount }],
-    [{ todayMatchCount }],
+    [{ locatedUserCount }],
     [{ pendingTagCount }],
     [{ pendingCircleCount }],
   ] = await Promise.all([
@@ -50,9 +44,9 @@ export async function GET() {
       .from(circles)
       .where(sql`${circles.status} != 'deleted'`),
     db
-      .select({ todayMatchCount: sql<number>`count(*)::int` })
-      .from(locations)
-      .where(gte(locations.publishedAt, todayStart)),
+      .select({ locatedUserCount: sql<number>`count(*)::int` })
+      .from(users)
+      .where(and(isNotNull(users.latitude), isNotNull(users.longitude))),
     db
       .select({ pendingTagCount: sql<number>`count(*)::int` })
       .from(hobbyTags)
@@ -66,7 +60,7 @@ export async function GET() {
   const payload: AdminStats = {
     userCount: Number(userCount),
     circleCount: Number(circleCount),
-    todayMatchCount: Number(todayMatchCount),
+    locatedUserCount: Number(locatedUserCount),
     pendingTagCount: Number(pendingTagCount),
     pendingCircleCount: Number(pendingCircleCount),
   }

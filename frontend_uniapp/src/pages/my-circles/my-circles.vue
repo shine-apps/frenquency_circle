@@ -24,9 +24,9 @@ function handleGoHome() {
   uni.reLaunch({ url: '/pages/index/index' })
 }
 
-/** 跳搜寻同频页(主动匹配) */
-function handlePublish() {
-  uni.navigateTo({ url: '/pages/publish/publish' })
+/** 跳匹配结果页 */
+function handleViewMatch() {
+  uni.navigateTo({ url: '/pages/match/match' })
 }
 
 /** 距离格式化 */
@@ -49,12 +49,7 @@ function formatDateTime(iso: string | null): string {
   }
 }
 
-/** 渲染标签 */
-function renderTags(tags: string[]): { visible: string[]; rest: number } {
-  const visible = tags.slice(0, MAX_TAG_VISIBLE)
-  const rest = tags.length - visible.length
-  return { visible, rest }
-}
+
 </script>
 
 <template>
@@ -64,7 +59,7 @@ function renderTags(tags: string[]): { visible: string[]; rest: number } {
         最近匹配的圈子
       </text>
       <text class="mt-1 block text-xs text-[#999]">
-        基于最近一次搜寻同频的匹配结果
+        基于自动匹配结果
       </text>
     </view>
 
@@ -74,9 +69,9 @@ function renderTags(tags: string[]): { visible: string[]; rest: number } {
       </text>
       <view class="mt-4 flex gap-3">
         <wd-button round size="small" @click="handleGoHome">去首页发现</wd-button>
-        <view class="rounded-full border border-[#e0e0e0] bg-white px-5 py-2" @click="handlePublish">
+        <view class="rounded-full border border-[#e0e0e0] bg-white px-5 py-2" @click="handleViewMatch">
           <text class="text-sm text-[#666]">
-            搜寻同频匹配
+            查看匹配结果
           </text>
         </view>
       </view>
@@ -121,13 +116,13 @@ function renderTags(tags: string[]): { visible: string[]; rest: number } {
           </view>
         </view>
         <view v-if="c.tags.length > 0" class="mt-3 flex flex-wrap gap-2">
-          <template v-for="name in renderTags(c.tags).visible" :key="name">
-            <text class="rounded-full bg-[#fdf3e7] px-2.5 py-1 text-xs text-[#e68a00]">
+          <template v-for="(name, i) in c.tags" :key="name">
+            <text v-if="i < MAX_TAG_VISIBLE" class="rounded-full bg-[#fdf3e7] px-2.5 py-1 text-xs text-[#e68a00]">
               {{ name }}
             </text>
           </template>
-          <text v-if="renderTags(c.tags).rest > 0" class="text-xs text-[#999]">
-            +{{ renderTags(c.tags).rest }}
+          <text v-if="c.tags.length > MAX_TAG_VISIBLE" class="text-xs text-[#999]">
+            +{{ c.tags.length - MAX_TAG_VISIBLE }}
           </text>
         </view>
       </view>

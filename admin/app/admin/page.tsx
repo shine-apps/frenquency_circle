@@ -1,8 +1,8 @@
-import { desc, eq, gte, sql } from "drizzle-orm"
-import { UsersIcon, CircleIcon, ZapIcon, TagIcon, AlertTriangleIcon } from "lucide-react"
+import { and, desc, eq, isNotNull, sql } from "drizzle-orm"
+import { UsersIcon, CircleIcon, MapPin, TagIcon, AlertTriangleIcon } from "lucide-react"
 
 import { db } from "@/lib/db"
-import { users, circles, hobbyTags, locations } from "@/db/schema"
+import { users, circles, hobbyTags } from "@/db/schema"
 import { StatCard } from "@/components/stat-card"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import {
@@ -16,16 +16,10 @@ import {
 import { Badge } from "@/components/ui/badge"
 
 export default async function AdminDashboardPage() {
-  // 今日 00:00 UTC 作为分界点
-  const now = new Date()
-  const todayStart = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
-  )
-
   const [
     [{ usersCount }],
     [{ circleCount }],
-    [{ todayMatchCount }],
+    [{ locatedUserCount }],
     [{ pendingTagCount }],
     [{ pendingCircleCount }],
     recentUsers,
@@ -36,9 +30,9 @@ export default async function AdminDashboardPage() {
       .from(circles)
       .where(sql`${circles.status} != 'deleted'`),
     db
-      .select({ todayMatchCount: sql<number>`count(*)::int` })
-      .from(locations)
-      .where(gte(locations.publishedAt, todayStart)),
+      .select({ locatedUserCount: sql<number>`count(*)::int` })
+      .from(users)
+      .where(and(isNotNull(users.latitude), isNotNull(users.longitude))),
     db
       .select({ pendingTagCount: sql<number>`count(*)::int` })
       .from(hobbyTags)
@@ -73,10 +67,10 @@ export default async function AdminDashboardPage() {
           icon={<CircleIcon className="size-4 text-muted-foreground" />}
         />
         <StatCard
-          label="今日匹配"
-          value={Number(todayMatchCount)}
-          description="今日发布定位数"
-          icon={<ZapIcon className="size-4 text-muted-foreground" />}
+          label="已设置位置"
+          value={Number(locatedUserCount)}
+          description="已设置位置的用户数"
+          icon={<MapPin className="size-4 text-muted-foreground" />}
         />
         <StatCard
           label="待审标签"

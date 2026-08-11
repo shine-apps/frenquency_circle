@@ -9,6 +9,9 @@ import { useToast } from '@wot-ui/ui/components/wd-toast'
 import type { UpdateMyProfileInput, UpdateProfileInput } from '@/api/types/login'
 import type { FormInstance, FormSchema } from '@wot-ui/ui/components/wd-form/types'
 
+/** 标签展示最大数量 */
+const TAG_VISIBLE_LIMIT = 8
+
 // #ifdef H5
 import H5LocationPicker from '@/components/H5LocationPicker/H5LocationPicker.vue'
 // #endif
@@ -238,6 +241,16 @@ const displayPhone = computed(() => {
 })
 
 const displayAddress = computed(() => user.value?.address || '未设置')
+
+/** 我的兴趣展示(最多 8 个 + "+N") */
+const myTags = computed(() => user.value?.tags || [])
+const tagPreview = computed(() => myTags.value.slice(0, TAG_VISIBLE_LIMIT))
+const tagRest = computed(() => Math.max(0, myTags.value.length - TAG_VISIBLE_LIMIT))
+
+/** 跳兴趣选择页 */
+function handleGoTags() {
+  uni.navigateTo({ url: '/pages/search/search' })
+}
 
 // ===== 编辑模式 =====
 function enterEdit() {
@@ -513,8 +526,37 @@ async function handleBindPhone() {
         <text v-else class="mt-3 text-[12px] text-white/70">点击头像更换照片</text>
       </view>
 
-      <!-- ===== 信息卡片(浮在 Header 底部,负 margin) ===== -->
+      <!-- ===== 我的兴趣卡片(浮在 Header 底部) ===== -->
       <view class="mx-4 mt-4 md:mx-6">
+        <view class="rounded-[20px] bg-white p-5 shadow-[0_6px_24px_rgba(0,0,0,0.06)]">
+          <view class="flex items-center justify-between">
+            <text class="text-[13px] text-[#999] font-semibold tracking-[0.5px]">
+              我的兴趣
+            </text>
+            <text class="cursor-pointer text-xs text-[#018d71]" @click="handleGoTags">
+              {{ myTags.length > 0 ? '去编辑 ›' : '去选择 ›' }}
+            </text>
+          </view>
+          <view v-if="myTags.length > 0" class="mt-3 flex flex-wrap gap-2">
+            <text
+              v-for="name in tagPreview"
+              :key="name"
+              class="rounded-full bg-[#e8f5f1] px-3 py-1 text-xs text-[#018d71]"
+            >
+              {{ name }}
+            </text>
+            <text v-if="tagRest > 0" class="rounded-full bg-[#f5f6f7] px-3 py-1 text-xs text-[#999]">
+              +{{ tagRest }}
+            </text>
+          </view>
+          <text v-else class="mt-3 block text-sm leading-6 text-[#999]">
+            未选择兴趣标签,完善后可自动匹配同频
+          </text>
+        </view>
+      </view>
+
+      <!-- ===== 信息卡片(浮在 Header 底部,负 margin) ===== -->
+      <view class="mx-4 mt-3 md:mx-6">
         <view class="rounded-[20px] bg-white shadow-[0_6px_24px_rgba(0,0,0,0.06)]">
           <!-- 查看模式 -->
           <view v-if="!editMode" class="px-5 pb-3 pt-5">

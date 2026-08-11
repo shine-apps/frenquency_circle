@@ -108,6 +108,11 @@ function handleRemoveSelected(name: string) {
   emit('update:selectedTags', props.selectedTags.filter(x => x !== name))
 }
 
+/** 清空所有已选 */
+function handleRemoveAll() {
+  emit('update:selectedTags', [])
+}
+
 // ====== 分类展开/收起 ======
 function handleToggleCategory(cat: string) {
   expandedCategory.value = expandedCategory.value === cat ? null : cat
@@ -162,11 +167,14 @@ async function handleSubmitCustom() {
       </text>
     </view>
 
-    <!-- ====== 2. 已选标签区 ====== -->
+    <!-- ====== 2. 已选标签区(胶囊 + 大圆角) ====== -->
     <view v-if="selectedTagList.length > 0" class="mt-3 px-4">
-      <view class="mb-2">
+      <view class="mb-2 flex items-center justify-between">
         <text class="text-xs text-[#999]">
           已选({{ selectedTagList.length }}/{{ max }})
+        </text>
+        <text v-if="selectedTagList.length > 0" class="text-xs text-[#018d71]" @click="handleRemoveAll">
+          全部清除
         </text>
       </view>
       <scroll-view scroll-x class="whitespace-nowrap">
@@ -174,13 +182,16 @@ async function handleSubmitCustom() {
           <view
             v-for="name in selectedTagList"
             :key="name"
-            class="inline-flex items-center gap-1 rounded-full bg-[#e8f5f1] py-1 pl-3 pr-1.5"
+            class="inline-flex items-center gap-1 rounded-full border border-[#cdeae2] bg-[#e8f5f1] py-1 pl-3 pr-1.5 active:scale-95"
           >
             <text class="text-xs text-[#018d71]">
               {{ name }}
             </text>
-            <view class="flex h-4 w-4 items-center justify-center rounded-full bg-[#cdeae2]" @click="handleRemoveSelected(name)">
-              <text class="text-[10px] leading-none text-[#018d71]">
+            <view
+              class="flex h-4 w-4 items-center justify-center rounded-full bg-[#018d71]"
+              @click="handleRemoveSelected(name)"
+            >
+              <text class="text-[10px] leading-none text-white">
                 ✕
               </text>
             </view>
@@ -196,12 +207,13 @@ async function handleSubmitCustom() {
           未找到"{{ query.trim() }}"相关标签,试试自定义添加
         </text>
       </view>
-      <view class="flex flex-col">
+      <view class="overflow-hidden rounded-2xl bg-white shadow-sm">
         <view
-          v-for="tag in suggestions"
+          v-for="(tag, idx) in suggestions"
           :key="tag.id"
-          class="flex items-center justify-between border-b border-[#f2f2f2] py-3"
-          @click="!selectedTags.includes(tag.name) && handleToggleTag(tag)"
+          class="flex items-center justify-between border-b border-[#f2f2f2] px-4 py-3 last:border-b-0"
+          :class="selectedTags.includes(tag.name) ? 'bg-[#e8f5f1]' : ''"
+          @click="handleToggleTag(tag)"
         >
           <view class="flex flex-col">
             <text class="text-sm text-[#333]">
@@ -211,8 +223,11 @@ async function handleSubmitCustom() {
               {{ tag.category }}
             </text>
           </view>
-          <text class="text-xs text-[#018d71]">
-            {{ selectedTags.includes(tag.name) ? '已选' : reachedMax ? `上限${max}` : '选择' }}
+          <text
+            class="text-xs"
+            :class="selectedTags.includes(tag.name) ? 'text-[#018d71]' : reachedMax ? 'text-[#999]' : 'text-[#018d71]'"
+          >
+            {{ selectedTags.includes(tag.name) ? '✓ 已选' : reachedMax ? `上限${max}` : '+ 选择' }}
           </text>
         </view>
       </view>
@@ -224,7 +239,7 @@ async function handleSubmitCustom() {
           六大类兴趣
         </text>
         <text class="text-xs text-[#999]">
-          点击标签快速搜索
+          点击展开子类快速搜索
         </text>
       </view>
       <view v-if="categories.length === 0" class="flex flex-col items-center pt-12">
@@ -232,8 +247,8 @@ async function handleSubmitCustom() {
           分类加载中...
         </text>
       </view>
-      <view v-for="node in categories" :key="node.category" class="mt-3">
-        <view class="flex items-center justify-between" @click="handleToggleCategory(node.category)">
+      <view v-for="node in categories" :key="node.category" class="mt-3 overflow-hidden rounded-2xl bg-white shadow-sm">
+        <view class="flex items-center justify-between px-4 py-3" @click="handleToggleCategory(node.category)">
           <text class="text-sm font-medium text-[#333]">
             {{ node.category }}
           </text>
@@ -241,21 +256,23 @@ async function handleSubmitCustom() {
             {{ expandedCategory === node.category ? '收起' : '展开' }}
           </text>
         </view>
-        <view v-if="expandedCategory === node.category && node.subCategories.length > 0" class="mt-2 flex flex-wrap gap-2">
-          <text
-            v-for="sub in node.subCategories"
-            :key="sub"
-            class="rounded-full bg-[#f5f6f7] px-3 py-1 text-xs text-[#666]"
-            @click="query = sub"
-          >
-            {{ sub }}
-          </text>
+        <view v-if="expandedCategory === node.category && node.subCategories.length > 0" class="border-t border-[#f5f6f7] px-4 py-3">
+          <view class="flex flex-wrap gap-2">
+            <text
+              v-for="sub in node.subCategories"
+              :key="sub"
+              class="rounded-full bg-[#f5f6f7] px-3 py-1 text-xs text-[#666] active:scale-95"
+              @click="query = sub"
+            >
+              {{ sub }}
+            </text>
+          </view>
         </view>
       </view>
     </view>
 
-    <!-- ====== 4. 自定义添加入口 ====== -->
-    <view class="border-t border-[#f2f2f2] px-4 py-3">
+    <!-- ====== 4. 自定义添加入口(底部固定) ====== -->
+    <view class="mt-3 border-t border-[#f2f2f2] bg-white px-4 py-3 pb-safe">
       <view class="flex items-center justify-between" @click="customOpen = !customOpen">
         <text class="text-sm font-medium text-[#333]">
           {{ customOpen ? '收起自定义' : '自定义添加' }}
@@ -265,7 +282,7 @@ async function handleSubmitCustom() {
         </text>
       </view>
       <view v-if="customOpen" class="mt-3 flex items-center gap-3">
-        <view class="flex h-10 flex-1 items-center rounded-lg bg-[#f5f6f7] px-3">
+        <view class="flex h-10 flex-1 items-center rounded-full bg-[#f5f6f7] px-4">
           <input
             :value="customName"
             class="flex-1 text-sm"
@@ -275,15 +292,14 @@ async function handleSubmitCustom() {
             @input="handleCustomNameChange"
           />
         </view>
-        <wd-button
-          size="small"
-          :round="false"
+        <button
+          class="rounded-full bg-[#018d71] px-4 py-2 text-sm text-white disabled:opacity-50 active:scale-95"
           :disabled="!customName.trim() || customSubmitting"
           :loading="customSubmitting"
           @click="handleSubmitCustom"
         >
           添加
-        </wd-button>
+        </button>
       </view>
     </view>
   </view>

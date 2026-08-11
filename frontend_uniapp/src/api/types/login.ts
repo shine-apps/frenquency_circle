@@ -1,4 +1,4 @@
-import type { ActivityLevel, PrivacySettings, TagDTO, UserProfile, UserRole as BusinessUserRole } from '@/types'
+import type { ActivityLevel, UserRole as BusinessUserRole, PrivacySettings, TagDTO, UserProfile } from '@/types'
 
 // 认证模式类型
 export type AuthMode = 'single' | 'double'
@@ -142,7 +142,7 @@ export interface UpdateMyProfileInput {
 }
 
 /**
- * 业务资料更新请求体(role / phone / practiceYears / activityLevel)。
+ * 业务资料更新请求体(role / phone / address / latitude / longitude / practiceYears / activityLevel)。
  * 对应后端 `PATCH /api/users/me/profile` zod schema。
  */
 export interface UpdateProfileInput {
@@ -150,6 +150,12 @@ export interface UpdateProfileInput {
   role?: 'USER' | 'TEACHER'
   /** 手机号(空串视为清除,后端归一为 null) */
   phone?: string
+  /** 地址(空串视为清除,后端归一为 null,最长 200 字符) */
+  address?: string
+  /** 纬度(与 longitude 成对,由地址选择组件回填;null 视为清除) */
+  latitude?: number | null
+  /** 经度(与 latitude 成对,由地址选择组件回填;null 视为清除) */
+  longitude?: number | null
   /** 练习年限(0-100 整数) */
   practiceYears?: number
   /** 活跃度等级 */

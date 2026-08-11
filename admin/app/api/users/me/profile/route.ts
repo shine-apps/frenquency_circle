@@ -17,7 +17,10 @@ import type {
 /**
  * 用户业务资料更新请求体 schema。
  * - role: 仅允许 'USER' | 'TEACHER'(禁止 'ADMIN',防止越权提权)
- * - phone: 手机号格式(可空串清除,空串归一为 null)
+ * - 注意:phone 不在本 schema 内,手机号变更必须走短信验证流程
+ *   (POST /api/users/me/phone/verify),禁止经本接口直接设置
+ * - address: 地址文本(可空串清除,空串归一为 null,最长 200 字符)
+ * - latitude / longitude: 定位坐标(成对出现,与 address 一起由地址选择组件回填)
  * - practiceYears: 0-100 整数
  * - activityLevel: 活跃度等级
  *
@@ -26,12 +29,34 @@ import type {
 const patchProfileSchema = z
   .object({
     role: z.enum(["USER", "TEACHER"]).optional(),
-    phone: z.union([z.string().regex(/^1[3-9]\d{9}$/), z.literal("")]).optional(),
+    address: z.union([z.string().trim().max(200), z.literal("")]).optional(),
+    latitude: z.union([z.number().min(-90).max(90), z.null()]).optional(),
+    longitude: z.union([z.number().min(-180).max(180), z.null()]).optional(),
     practiceYears: z.number().int().min(0).max(100).optional(),
     activityLevel: z.enum(["low", "medium", "high"]).optional(),
   })
-  .refine((d) => Object.keys(d).length > 0, {
-    message: "至少提供一个字段",
+  .superRefine((d, ctx) => {
+    if (Object.keys(d).length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "至少提供一个字段",
+      })
+    }
+    // 经纬度必须成对出现(允许只更新 address 不带坐标)
+    if (d.latitude !== undefined && d.longitude === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["longitude"],
+        message: "longitude 不能为空",
+      })
+    }
+    if (d.longitude !== undefined && d.latitude === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["latitude"],
+        message: "latitude 不能为空",
+      })
+    }
   })
 
 /**
@@ -63,12 +88,16 @@ function toUserDTO(row: typeof users.$inferSelect): UserDTO {
 /**
  * PATCH /api/users/me/profile
  *
- * 更新当前用户的业务资料字段(role / phone / practiceYears / activityLevel)。
+ * 更新当前用户的业务资料字段(role / address / latitude / longitude /
+ * practiceYears / activityLevel)。
  *
  * - 鉴权:任意登录用户
  * - zod 校验请求体(全部可选,至少 1 个字段)
  * - role 不允许更新为 'ADMIN'(防止越权提权)
- * - phone 空串归一为 null
+ * - phone 不在本接口范围内,手机号变更必须走短信验证码流程
+ *   (POST /api/users/me/phone/verify)
+ * - address 空串归一为 null
+ * - latitude / longitude 成对出现(由地址选择组件回填,可仅更新 address)
  * - 更新 users 表对应字段
  * - 返回 `IResponse<UserProfileDTO>`(包含 tags 列表)
  */
@@ -92,15 +121,21 @@ export async function PATCH(req: Request) {
     )
   }
 
-  // 3. 组装 update payload(phone 空串归一为 null)
+  // 3. 组装 update payload(phone 不在本接口范围内,由短信验证流程处理)
   const updatePayload: Partial<typeof users.$inferInsert> = {
     updatedAt: new Date(),
   }
   if (parsed.data.role !== undefined) {
     updatePayload.role = parsed.data.role
   }
-  if (parsed.data.phone !== undefined) {
-    updatePayload.phone = parsed.data.phone === "" ? null : parsed.data.phone
+  if (parsed.data.address !== undefined) {
+    updatePayload.address = parsed.data.address === "" ? null : parsed.data.address
+  }
+  if (parsed.data.latitude !== undefined) {
+    updatePayload.latitude = parsed.data.latitude
+  }
+  if (parsed.data.longitude !== undefined) {
+    updatePayload.longitude = parsed.data.longitude
   }
   if (parsed.data.practiceYears !== undefined) {
     updatePayload.practiceYears = parsed.data.practiceYears
@@ -125,7 +160,7 @@ export async function PATCH(req: Request) {
     fields: Object.keys(parsed.data),
   })
 
-  // 5. 查询用户 tags,组装 UserProfileDTO
+  // 6. 查询用户 tags,组装 UserProfileDTO
   const userTagsList = await fetchUserTags(userId)
   const profile: UserProfileDTO = {
     ...toUserDTO(updated),

@@ -122,7 +122,7 @@ export async function PATCH(req: Request) {
       where: and(eq(users.email, email), ne(users.id, authUser.id)),
     })
     if (exists) {
-      return withCors(fail(409, "Email already in use"), req)
+      return withCors(fail(409, "该邮箱已被其他用户使用"), req)
     }
   }
 

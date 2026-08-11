@@ -68,6 +68,10 @@ const {
     update: vi.fn(function (this: unknown) {
       return chainUpdate
     }),
+    query: {
+      users: { findFirst: vi.fn() },
+      accounts: { findFirst: vi.fn() },
+    },
   }
 
   return {
@@ -78,7 +82,13 @@ const {
     fetchUserTagsMock: vi.fn(),
   }
 }) as {
-  mockDb: { update: ReturnType<typeof vi.fn> }
+  mockDb: {
+    update: ReturnType<typeof vi.fn>
+    query: {
+      users: { findFirst: ReturnType<typeof vi.fn> }
+      accounts: { findFirst: ReturnType<typeof vi.fn> }
+    }
+  }
   chainUpdate: {
     set: ReturnType<typeof vi.fn>
     where: ReturnType<typeof vi.fn>
@@ -227,33 +237,64 @@ describe("PATCH /api/users/me/profile", () => {
     expect(mockDb.update).not.toHaveBeenCalled()
   })
 
-  it("normalizes phone empty string to null in DB set payload", async () => {
+  it("rejects phone field entirely (must use SMS verification flow)", async () => {
     readUserFromTokenMock.mockResolvedValue(FAKE_USER)
-    const updatedRow = makeUserRow({ phone: null })
-    returningMock.mockResolvedValue([updatedRow])
-
-    const res = await PATCH(makeJsonRequest({ phone: "" }))
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as IResponse<UserProfileDTO>
-    expect(body.code).toBe(200)
-    expect(body.data.phone).toBeNull()
-    // 验证 set() 收到的 payload 中 phone 是 null
-    const setArg = chainUpdate.set.mock.calls[0]?.[0] as Record<string, unknown>
-    expect(setArg.phone).toBeNull()
+    const res = await PATCH(makeJsonRequest({ phone: "13800138000" }))
+    expect(res.status).toBe(400)
+    const body = (await res.json()) as IResponse<null>
+    expect(body.code).toBe(400)
+    expect(body.message).toBe("Invalid request body")
+    // phone 不在 schema 内,不应执行 update
+    expect(mockDb.update).not.toHaveBeenCalled()
   })
 
-  it("accepts a valid phone number and persists it", async () => {
+  it("rejects phone empty string too (must use SMS verification flow)", async () => {
     readUserFromTokenMock.mockResolvedValue(FAKE_USER)
-    const updatedRow = makeUserRow({ phone: "13800138000" })
+    const res = await PATCH(makeJsonRequest({ phone: "" }))
+    expect(res.status).toBe(400)
+    const body = (await res.json()) as IResponse<null>
+    expect(body.code).toBe(400)
+    expect(body.message).toBe("Invalid request body")
+    expect(mockDb.update).not.toHaveBeenCalled()
+  })
+
+  it("normalizes address empty string to null in DB set payload", async () => {
+    readUserFromTokenMock.mockResolvedValue(FAKE_USER)
+    const updatedRow = makeUserRow({ address: null })
     returningMock.mockResolvedValue([updatedRow])
 
-    const res = await PATCH(makeJsonRequest({ phone: "13800138000" }))
+    const res = await PATCH(makeJsonRequest({ address: "" }))
     expect(res.status).toBe(200)
     const body = (await res.json()) as IResponse<UserProfileDTO>
     expect(body.code).toBe(200)
-    expect(body.data.phone).toBe("13800138000")
+    expect(body.data.address).toBeNull()
+    // 验证 set() 收到的 payload 中 address 是 null
     const setArg = chainUpdate.set.mock.calls[0]?.[0] as Record<string, unknown>
-    expect(setArg.phone).toBe("13800138000")
+    expect(setArg.address).toBeNull()
+  })
+
+  it("accepts a valid address and persists it", async () => {
+    readUserFromTokenMock.mockResolvedValue(FAKE_USER)
+    const updatedRow = makeUserRow({ address: "武汉市洪山区珞喻路 152 号" })
+    returningMock.mockResolvedValue([updatedRow])
+
+    const res = await PATCH(makeJsonRequest({ address: "武汉市洪山区珞喻路 152 号" }))
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as IResponse<UserProfileDTO>
+    expect(body.code).toBe(200)
+    expect(body.data.address).toBe("武汉市洪山区珞喻路 152 号")
+    const setArg = chainUpdate.set.mock.calls[0]?.[0] as Record<string, unknown>
+    expect(setArg.address).toBe("武汉市洪山区珞喻路 152 号")
+  })
+
+  it("returns 400 when address exceeds 200 chars", async () => {
+    readUserFromTokenMock.mockResolvedValue(FAKE_USER)
+    const res = await PATCH(makeJsonRequest({ address: "址".repeat(201) }))
+    expect(res.status).toBe(400)
+    const body = (await res.json()) as IResponse<null>
+    expect(body.code).toBe(400)
+    expect(body.message).toBe("Invalid request body")
+    expect(mockDb.update).not.toHaveBeenCalled()
   })
 
   it("updates practiceYears and activityLevel successfully", async () => {
@@ -291,7 +332,7 @@ describe("PATCH /api/users/me/profile", () => {
     expect(mockDb.update).not.toHaveBeenCalled()
   })
 
-  it("returns 400 on invalid phone format", async () => {
+  it("returns 400 when phone field is present (any value, incl. invalid format)", async () => {
     readUserFromTokenMock.mockResolvedValue(FAKE_USER)
     const res = await PATCH(makeJsonRequest({ phone: "12345" }))
     expect(res.status).toBe(400)
@@ -359,5 +400,90 @@ describe("PATCH /api/users/me/profile", () => {
     const body = (await res.json()) as IResponse<UserProfileDTO>
     expect(body.data.location).toEqual({ latitude: 30.5, longitude: 114.3 })
     expect(body.data.address).toBe("武汉市")
+  })
+
+  it("persists latitude and longitude when address changes", async () => {
+    readUserFromTokenMock.mockResolvedValue(FAKE_USER)
+    const updatedRow = makeUserRow({
+      latitude: 30.5,
+      longitude: 114.3,
+      address: "武汉市洪山区",
+    })
+    returningMock.mockResolvedValue([updatedRow])
+
+    const res = await PATCH(
+      makeJsonRequest({
+        address: "武汉市洪山区",
+        latitude: 30.5,
+        longitude: 114.3,
+      })
+    )
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as IResponse<UserProfileDTO>
+    expect(body.data.address).toBe("武汉市洪山区")
+    expect(body.data.location).toEqual({ latitude: 30.5, longitude: 114.3 })
+    const setArg = chainUpdate.set.mock.calls[0]?.[0] as Record<string, unknown>
+    expect(setArg.latitude).toBe(30.5)
+    expect(setArg.longitude).toBe(114.3)
+  })
+
+  it("clears latitude and longitude with null", async () => {
+    readUserFromTokenMock.mockResolvedValue(FAKE_USER)
+    const updatedRow = makeUserRow({
+      latitude: null,
+      longitude: null,
+      address: null,
+    })
+    returningMock.mockResolvedValue([updatedRow])
+
+    const res = await PATCH(
+      makeJsonRequest({
+        address: "",
+        latitude: null,
+        longitude: null,
+      })
+    )
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as IResponse<UserProfileDTO>
+    expect(body.data.address).toBeNull()
+    expect(body.data.location).toBeNull()
+    const setArg = chainUpdate.set.mock.calls[0]?.[0] as Record<string, unknown>
+    expect(setArg.latitude).toBeNull()
+    expect(setArg.longitude).toBeNull()
+  })
+
+  it("returns 400 when latitude is missing but longitude provided (must be paired)", async () => {
+    readUserFromTokenMock.mockResolvedValue(FAKE_USER)
+    const res = await PATCH(makeJsonRequest({ longitude: 114.3 }))
+    expect(res.status).toBe(400)
+    const body = (await res.json()) as IResponse<null>
+    expect(body.code).toBe(400)
+    expect(body.message).toBe("Invalid request body")
+    expect(mockDb.update).not.toHaveBeenCalled()
+  })
+
+  it("returns 400 when longitude is missing but latitude provided (must be paired)", async () => {
+    readUserFromTokenMock.mockResolvedValue(FAKE_USER)
+    const res = await PATCH(makeJsonRequest({ latitude: 30.5 }))
+    expect(res.status).toBe(400)
+    expect(mockDb.update).not.toHaveBeenCalled()
+  })
+
+  it("returns 400 when latitude is out of range", async () => {
+    readUserFromTokenMock.mockResolvedValue(FAKE_USER)
+    const res = await PATCH(
+      makeJsonRequest({ latitude: 91, longitude: 114.3 })
+    )
+    expect(res.status).toBe(400)
+    expect(mockDb.update).not.toHaveBeenCalled()
+  })
+
+  it("returns 400 when longitude is out of range", async () => {
+    readUserFromTokenMock.mockResolvedValue(FAKE_USER)
+    const res = await PATCH(
+      makeJsonRequest({ latitude: 30.5, longitude: 181 })
+    )
+    expect(res.status).toBe(400)
+    expect(mockDb.update).not.toHaveBeenCalled()
   })
 })

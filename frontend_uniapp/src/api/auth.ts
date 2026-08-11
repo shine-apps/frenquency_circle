@@ -17,7 +17,7 @@ function extractPhone(email: string): string | undefined {
  * 手机号登录用户的 email 形如 `13800138000@phonedomain.com`,从中提取手机号。
  * 登录响应不含 tags,默认空数组;后续由 `getMyProfile` 填充。
  */
-export function toUserInfo(auth: { id: string; email: string; name: string; role: string }): Partial<UserInfo> {
+export function toUserInfo(auth: { id: string, email: string, name: string, role: string }): Partial<UserInfo> {
   return {
     id: auth.id,
     name: auth.name,
@@ -105,4 +105,20 @@ export async function updatePrivacy(settings: PrivacySettings): Promise<PrivacyS
  */
 export function updateProfile(patch: UpdateProfileInput) {
   return http.patch<UserProfile>('/api/users/me/profile', patch as Record<string, unknown>)
+}
+
+/**
+ * 通过短信验证码绑定/更换当前用户的手机号。
+ * - POST /api/users/me/phone/verify
+ * - 需先调用 `sendSmsCode(phone)` 发送验证码到目标手机号
+ *
+ * @param phone 目标手机号(11 位)
+ * @param code 6 位短信验证码
+ * @returns 更新后的 UserProfile(phone 已为新号码)
+ */
+export function verifyPhoneBind(phone: string, code: string) {
+  return http.post<UserProfile>('/api/users/me/phone/verify', {
+    phone,
+    code,
+  })
 }

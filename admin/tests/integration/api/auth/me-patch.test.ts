@@ -169,7 +169,7 @@ describe("PATCH /api/auth/me", () => {
     const res = await PATCH(makeRequest({ email: "new@example.com" }))
     expect(res.status).toBe(409)
     const body = (await res.json()) as IResponse<null>
-    expect(body.message).toBe("Email already in use")
+    expect(body.message).toBe("该邮箱已被其他用户使用")
     // 冲突时不应执行 update
     expect(mockDb.update).not.toHaveBeenCalled()
   })

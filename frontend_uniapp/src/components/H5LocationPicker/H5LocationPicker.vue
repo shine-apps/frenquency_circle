@@ -336,7 +336,7 @@ function handleConfirm() {
       <div :id="containerId" class="h-full w-full" />
       <!-- 中心图钉(固定在地图视觉中心) -->
       <view class="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-full">
-        <view class="i-carbon-pin-filled text-[30px] leading-none text-red-500" />
+        <view class="i-carbon:location-filled text-[30px] leading-none text-red-500" />
       </view>
       <!-- 加载遮罩 -->
       <view v-if="loading" class="absolute inset-0 flex items-center justify-center bg-white/80">

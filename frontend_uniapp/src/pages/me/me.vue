@@ -61,6 +61,11 @@ function handleMyPublished() {
   uni.navigateTo({ url: '/pages/my-published/my-published' })
 }
 
+/** 跳教师认证页(非 TEACHER / ADMIN 角色) */
+function handleTeacherCert() {
+  uni.navigateTo({ url: '/pages/teacher-certification/teacher-certification' })
+}
+
 /** 跳隐私设置页 */
 function handlePrivacy() {
   uni.navigateTo({ url: '/pages/privacy/privacy' })
@@ -181,6 +186,24 @@ const roleChipClass = computed(() => {
           </text>
           <text class="mt-0.5 text-xs text-[#999]">
             传承人专属
+          </text>
+        </view>
+        <text class="text-sm text-[#ccc]">
+          ›
+        </text>
+      </view>
+
+      <view
+        v-if="user?.role !== 'TEACHER' && user?.role !== 'ADMIN'"
+        class="flex items-center justify-between border-b border-[#f5f5f5] px-4 py-4"
+        @click="handleTeacherCert"
+      >
+        <view class="flex flex-col">
+          <text class="text-sm font-medium text-[#333]">
+            教师认证
+          </text>
+          <text class="mt-0.5 text-xs text-[#999]">
+            申请成为认证教师,发布圈子
           </text>
         </view>
         <text class="text-sm text-[#ccc]">

@@ -4,7 +4,7 @@ import { useUserStore } from '@/store/user'
 import { createCircle, getCircle, updateCircle } from '@/api/circles'
 import { uploadFile } from '@/api/upload'
 import { LOGIN_PAGE } from '@/router/config'
-import type { CertificationFile, CircleDetailDTO, CreateCircleInput, UpdateCircleInput, TagDTO } from '@/types'
+import type { CircleDetailDTO, TagDTO, UpdateCircleInput } from '@/types'
 
 definePage({
   style: {
@@ -23,9 +23,6 @@ const MAX_MEMBERS_MIN = 1
 const MAX_MEMBERS_MAX = 999
 /** 手机号校验(11 位) */
 const PHONE_RE = /^1\d{10}$/
-/** 教师认证材料数量限制 */
-const CERT_FILES_MIN = 1
-const CERT_FILES_MAX = 5
 /** 轮播图片最大数量 */
 const COVER_IMAGES_MAX = 9
 
@@ -50,15 +47,9 @@ const activityTime = ref('')
 const maxMembers = ref('')
 const submitting = ref(false)
 const pickerVisible = ref(false)
-const certificationFiles = ref<CertificationFile[]>([])
-const uploadingCert = ref(false)
 const coverImages = ref<string[]>([])
 const uploadingCover = ref(false)
 const tagSelectorOpen = ref(false)
-
-// 是否是 USER(非 TEACHER)
-const isUser = computed(() => userStore.userInfo?.role === 'USER')
-const needCert = computed(() => isUser.value && !isEdit.value)
 
 let hasFetched = false
 
@@ -97,6 +88,12 @@ onShow(() => {
   const pages = getCurrentPages()
   const current = pages[pages.length - 1] as any
   editId.value = current?.options?.id || current?.$page?.options?.id || ''
+  // 新建模式:仅 TEACHER / ADMIN 可创建圈子,其余角色先完成教师认证
+  if (!isEdit.value && !['TEACHER', 'ADMIN'].includes(userStore.userInfo?.role ?? '')) {
+    uni.showToast({ title: '请先完成教师认证', icon: 'none' })
+    uni.navigateTo({ url: '/pages/teacher-certification/teacher-certification' })
+    return
+  }
   if (isEdit.value && !hasFetched) {
     hasFetched = true
     void fetchForEdit(editId.value)
@@ -117,19 +114,14 @@ const maxMembersValid = computed(() =>
   || (!Number.isNaN(maxMembersNum.value as number)
     && (maxMembersNum.value as number) >= MAX_MEMBERS_MIN
     && (maxMembersNum.value as number) <= MAX_MEMBERS_MAX))
-const certValid = computed(() =>
-  !needCert.value
-  || (certificationFiles.value.length >= CERT_FILES_MIN && certificationFiles.value.length <= CERT_FILES_MAX))
-
 const canSubmit = computed(() =>
   titleValid.value && descriptionValid.value && tagsValid.value && locationValid.value
-  && hasContact.value && phoneValid.value && maxMembersValid.value && certValid.value && !submitting.value)
+  && hasContact.value && phoneValid.value && maxMembersValid.value && !submitting.value)
 
 const formErr = computed((): string => {
   if (!hasContact.value) return '请至少填写一种联系方式'
   if (!phoneValid.value) return '手机号格式不正确(11 位)'
   if (!maxMembersValid.value) return `人数上限范围 ${MAX_MEMBERS_MIN}-${MAX_MEMBERS_MAX}`
-  if (!certValid.value) return `请至少上传 ${CERT_FILES_MIN} 个认证材料`
   return ''
 })
 
@@ -159,66 +151,6 @@ function handlePickerConfirm(loc: { latitude: number; longitude: number; address
   longitude.value = loc.longitude
   address.value = loc.address
   pickerVisible.value = false
-}
-
-// 上传认证材料
-async function handlePickCert() {
-  if (uploadingCert.value) return
-  const remaining = CERT_FILES_MAX - certificationFiles.value.length
-  if (remaining <= 0) {
-    uni.showToast({ title: `最多 ${CERT_FILES_MAX} 个`, icon: 'none' })
-    return
-  }
-  try {
-    const res = await uni.chooseMedia({
-      count: remaining,
-      mediaType: ['image', 'video'],
-      sourceType: ['album', 'camera'],
-      sizeType: ['compressed'],
-      maxDuration: 60,
-      camera: 'back',
-    })
-    if (!(res as any)?.tempFiles?.length) return
-    uploadingCert.value = true
-    const uploaded: CertificationFile[] = []
-    for (const f of (res as any).tempFiles) {
-      try {
-        const file: string | File = f.originalFileObj ?? f.tempFilePath
-        const name = (f.originalFileObj && f.originalFileObj.name)
-          || f.tempFilePath
-          || `cert-${Date.now()}`
-        const result = await uploadFile({ file, name, purpose: 'generic' })
-        uploaded.push({
-          url: result.url,
-          key: result.key,
-          size: result.size,
-          mimeType: result.mimeType,
-          originalName: result.originalName,
-        })
-      }
-      catch (e) {
-        console.warn('[create-circle] cert upload failed:', e)
-      }
-    }
-    if (uploaded.length === 0) {
-      uni.showToast({ title: '上传失败', icon: 'none' })
-      return
-    }
-    certificationFiles.value = [...certificationFiles.value, ...uploaded].slice(0, CERT_FILES_MAX)
-    uni.showToast({ title: `已上传 ${uploaded.length} 个`, icon: 'success' })
-  }
-  catch (e) {
-    const err = e as Error & { errMsg?: string }
-    if (err?.errMsg && /cancel/i.test(err.errMsg)) return
-    uni.showToast({ title: err?.message || '选择失败', icon: 'none' })
-  }
-  finally {
-    uploadingCert.value = false
-  }
-}
-
-function handleRemoveCert(idx: number) {
-  certificationFiles.value = certificationFiles.value.filter((_, i) => i !== idx)
 }
 
 // 上传轮播图片
@@ -310,7 +242,6 @@ async function handleSubmit() {
         wechat: wechat.value.trim() || undefined,
         activityTime: activityTime.value.trim() || undefined,
         maxMembers: finalMax,
-        certificationFiles: needCert.value ? certificationFiles.value : undefined,
         coverImages: coverImages.value,
       })
       uni.redirectTo({ url: `/pages/circle/circle?id=${res.circleId}` })
@@ -488,55 +419,8 @@ const tagsCountText = computed(() => `${tagIds.value.length}/${TAGS_MAX}`)
           />
         </view>
 
-        <!-- 9. 教师认证材料 -->
-        <view v-if="needCert" class="mx-4 mt-3 rounded-2xl bg-white p-4">
-          <view class="flex items-center justify-between">
-            <text class="text-sm font-medium text-[#333]">
-              教师认证材料 <text class="text-[#f53f3f]">*</text>
-            </text>
-            <text class="text-xs text-[#999]">{{ certificationFiles.length }}/{{ CERT_FILES_MAX }}</text>
-          </view>
-          <text class="mt-1 block text-xs text-[#999]">
-            上传证书照片或视频(1-5 个),管理员审核通过后圈子才能上线
-          </text>
-          <view class="mt-3 flex flex-wrap gap-2">
-            <view
-              v-for="(f, idx) in certificationFiles"
-              :key="f.key"
-              class="relative h-20 w-20 overflow-hidden rounded-lg"
-            >
-              <image
-                v-if="f.mimeType.startsWith('image/')"
-                :src="f.url"
-                class="h-full w-full"
-                mode="aspectFill"
-              />
-              <view v-else class="flex h-full w-full items-center justify-center bg-[#f5f6f7]">
-                <text class="text-lg">🎬</text>
-              </view>
-              <view
-                class="absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-bl-lg bg-black/50"
-                @click="handleRemoveCert(idx)"
-              >
-                <text class="text-xs text-white">×</text>
-              </view>
-            </view>
-            <view
-              v-if="certificationFiles.length < CERT_FILES_MAX"
-              class="flex h-20 w-20 flex-col items-center justify-center rounded-lg border border-dashed border-[#e0e0e0] bg-[#fafafa]"
-              @click="handlePickCert"
-            >
-              <text class="text-2xl text-[#ccc]">+</text>
-              <text class="mt-0.5 text-xs text-[#999]">{{ uploadingCert ? '上传中' : '添加' }}</text>
-            </view>
-          </view>
-        </view>
-
         <!-- 审核提示 -->
-        <text v-if="needCert" class="mx-4 mt-3 block text-xs text-[#999]">
-          提交后需管理员审核通过,圈子才能上线;同时将为您提交教师认证申请
-        </text>
-        <text v-else-if="!isEdit" class="mx-4 mt-3 block text-xs text-[#999]">
+        <text v-if="!isEdit" class="mx-4 mt-3 block text-xs text-[#999]">
           提交后需管理员审核通过,圈子才能上线
         </text>
       </scroll-view>

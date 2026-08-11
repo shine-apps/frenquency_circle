@@ -207,7 +207,7 @@ function handleSearchClick(): void {
 /** 跳发布定位页 */
 function handlePublishClick(): void {
   const role = user.value?.role
-  if (role === 'TEACHER') {
+  if (role === 'TEACHER' || role === 'ADMIN') {
     uni.showActionSheet({
       itemList: ['发布定位', '创建圈子'],
       success(res) {

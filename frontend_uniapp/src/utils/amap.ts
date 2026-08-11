@@ -82,6 +82,25 @@ export function loadAMap(): Promise<any> {
       throw new Error('高德地图 SDK 加载失败：未配置 AMAP_KEY（请在 admin 环境变量 AMAP_KEY 中设置）')
     }
 
+    // 抑制高德 SDK Canvas 2D 频繁 getImageData 导致的 willReadFrequently 警告。
+    // 补丁仅应用一次，在 AMap script 加载前拦截 getContext，为 2D 上下文
+    // 自动补充 willReadFrequently: true（符合浏览器性能优化建议）。
+    if (!(HTMLCanvasElement.prototype as any).__amapGetContextPatched) {
+      ;(HTMLCanvasElement.prototype as any).__amapGetContextPatched = true
+      const _origGetContext = HTMLCanvasElement.prototype.getContext
+      HTMLCanvasElement.prototype.getContext = function (
+        ...args: any[]
+      ) {
+        if (args[0] === '2d') {
+          const opts = args[1] as Record<string, any> | undefined
+          if (!opts?.hasOwnProperty?.('willReadFrequently')) {
+            args[1] = { ...(opts || {}), willReadFrequently: true }
+          }
+        }
+        return _origGetContext.apply(this, args as any)
+      }
+    }
+
     // 设置安全密钥(必须在高德 script 加载前)
     window._AMapSecurityConfig = {
       securityJsCode: amapSecurityCode,

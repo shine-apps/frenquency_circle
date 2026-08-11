@@ -39,20 +39,21 @@ const pickerVisible = ref(false)
 // 发布类型 Tab:location 定位发布 / circle 圈子发布
 const publishType = ref<'location' | 'circle'>('location')
 
-/** 切换到"发布圈子":TEACHER 直接跳转,USER 弹窗提示需提交认证材料 */
+/** 切换到"发布圈子":TEACHER / ADMIN 直接跳转,其余角色引导先完成教师认证 */
 function handleSwitchToCircle() {
-  if (user.value?.role === 'TEACHER') {
+  const role = user.value?.role
+  if (role === 'TEACHER' || role === 'ADMIN') {
     uni.navigateTo({ url: '/pages/create-circle/create-circle' })
     return
   }
-  // USER(或其他非 TEACHER 角色):弹窗提示需要提交认证材料
+  // 非 TEACHER / ADMIN:弹窗引导前往教师认证页
   uni.showModal({
     title: '教师认证',
-    content: '创建圈子需要提交教师认证材料(证书照片或视频),管理员审核通过后圈子才能上线。是否继续?',
-    confirmText: '去创建',
+    content: '创建圈子需要先完成教师认证,审核通过后即可发布。是否前往认证页面?',
+    confirmText: '去认证',
     success(res) {
       if (res.confirm) {
-        uni.navigateTo({ url: '/pages/create-circle/create-circle' })
+        uni.navigateTo({ url: '/pages/teacher-certification/teacher-certification' })
       }
     },
   })

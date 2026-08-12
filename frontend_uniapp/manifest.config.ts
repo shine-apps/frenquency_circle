@@ -122,7 +122,7 @@ export default defineManifestConfig({
     setting: {
       urlCheck: false,
       // 是否启用 ES6 转 ES5
-      es6: true,
+      es6: false,
       minified: true,
     },
     optimization: {
@@ -134,6 +134,10 @@ export default defineManifestConfig({
     // styleIsolation: 'shared',
     usingComponents: true,
     // __usePrivacyCheck__: true,
+    requiredPrivateInfos: [
+      'getLocation',
+      'chooseLocation'
+    ],
   },
   'mp-alipay': {
     usingComponents: true,

@@ -4,6 +4,7 @@ import { useUserStore } from '@/store/user'
 import { createCircle, getCircle, updateCircle } from '@/api/circles'
 import { uploadFile } from '@/api/upload'
 import { LOGIN_PAGE } from '@/router/config'
+import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue'
 import type { CircleDetailDTO, UpdateCircleInput } from '@/types'
 
 definePage({
@@ -49,6 +50,16 @@ const pickerVisible = ref(false)
 const coverImages = ref<string[]>([])
 const uploadingCover = ref(false)
 const tagSelectorOpen = ref(false)
+
+/** 打开兴趣标签选择弹窗 */
+function handleOpenTagSelector() {
+  tagSelectorOpen.value = true
+}
+
+/** 弹窗确认:更新圈子标签 */
+function handleTagConfirm(newTags: string[]) {
+  tags.value = newTags
+}
 
 let hasFetched = false
 
@@ -293,12 +304,23 @@ const tagsCountText = computed(() => `${tags.value.length}/${TAGS_MAX}`)
             </text>
             <text class="text-xs text-[#999]">{{ tagsCountText }}</text>
           </view>
-          <view class="mt-2">
-            <TagSelector
-              :selected-tags="tags"
-              :max="TAGS_MAX"
-              @update:selected-tags="tags = $event"
-            />
+          <view
+            class="mt-2 flex min-h-11 items-center justify-between rounded-lg bg-[#f5f6f7] p-3"
+            @click="handleOpenTagSelector"
+          >
+            <text v-if="tags.length === 0" class="text-sm text-[#bbb]">
+              点击选择兴趣标签
+            </text>
+            <view v-else class="flex flex-1 flex-wrap gap-1.5">
+              <text
+                v-for="(tag, idx) in tags"
+                :key="`${tag}-${idx}`"
+                class="rounded bg-[#e6f6f1] px-2 py-0.5 text-xs text-[#018d71]"
+              >
+                {{ tag }}
+              </text>
+            </view>
+            <text class="ml-2 shrink-0 text-sm text-[#018d71]">编辑 ›</text>
           </view>
         </view>
 
@@ -312,7 +334,7 @@ const tagsCountText = computed(() => `${tags.value.length}/${TAGS_MAX}`)
           </view>
           <textarea
             v-model="description"
-            class="mt-2 h-32 w-full rounded-lg bg-[#f5f6f7] p-3 text-sm leading-6"
+            class="mt-2 h-32 rounded-lg bg-[#f5f6f7] p-3 text-sm leading-6"
             :maxlength="DESCRIPTION_MAX"
             placeholder="1-500 字符,介绍圈子内容、目标人群等"
             placeholder-class="text-[#bbb]"
@@ -374,7 +396,7 @@ const tagsCountText = computed(() => `${tags.value.length}/${TAGS_MAX}`)
           <text class="text-sm font-medium text-[#333]">联系电话</text>
           <input
             v-model="contactPhone"
-            class="mt-2 h-10 w-full rounded-lg bg-[#f5f6f7] px-3 text-sm"
+            class="mt-2 h-10 rounded-lg bg-[#f5f6f7] px-3 text-sm"
             type="number"
             :maxlength="11"
             placeholder="11 位手机号(与微信号至少填一个)"
@@ -387,7 +409,7 @@ const tagsCountText = computed(() => `${tags.value.length}/${TAGS_MAX}`)
           <text class="text-sm font-medium text-[#333]">微信号</text>
           <input
             v-model="wechat"
-            class="mt-2 h-10 w-full rounded-lg bg-[#f5f6f7] px-3 text-sm"
+            class="mt-2 h-10 rounded-lg bg-[#f5f6f7] px-3 text-sm"
             placeholder="微信号(与联系电话至少填一个)"
             placeholder-class="text-[#bbb]"
           />
@@ -398,7 +420,7 @@ const tagsCountText = computed(() => `${tags.value.length}/${TAGS_MAX}`)
           <text class="text-sm font-medium text-[#333]">活动时间</text>
           <input
             v-model="activityTime"
-            class="mt-2 h-10 w-full rounded-lg bg-[#f5f6f7] px-3 text-sm"
+            class="mt-2 h-10 rounded-lg bg-[#f5f6f7] px-3 text-sm"
             placeholder="如:每周六上午 9:00-11:00"
             placeholder-class="text-[#bbb]"
           />
@@ -409,7 +431,7 @@ const tagsCountText = computed(() => `${tags.value.length}/${TAGS_MAX}`)
           <text class="text-sm font-medium text-[#333]">人数上限</text>
           <input
             v-model="maxMembers"
-            class="mt-2 h-10 w-full rounded-lg bg-[#f5f6f7] px-3 text-sm"
+            class="mt-2 h-10 rounded-lg bg-[#f5f6f7] px-3 text-sm"
             type="number"
             :placeholder="`可选,范围 ${MAX_MEMBERS_MIN}-${MAX_MEMBERS_MAX}`"
             placeholder-class="text-[#bbb]"
@@ -447,6 +469,14 @@ const tagsCountText = computed(() => `${tags.value.length}/${TAGS_MAX}`)
         @close="pickerVisible = false"
       />
       <!-- #endif -->
+
+      <!-- 兴趣标签选择弹窗(添加/移除均在此弹窗中完成) -->
+      <TagSelectorPopup
+        v-model="tagSelectorOpen"
+        :max="TAGS_MAX"
+        :initial-tags="tags"
+        @confirm="handleTagConfirm"
+      />
     </template>
   </view>
 </template>

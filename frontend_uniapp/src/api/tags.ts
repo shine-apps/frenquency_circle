@@ -32,8 +32,12 @@ export function getCategories() {
  * - 名称重复返回 409
  *
  * @param name 标签名(1-30 字符)
+ * @param category 可选兴趣大类;不传时后端回退为 "自定义"
  * @returns 新创建的 TagDTO
  */
-export function createCustomTag(name: string) {
-  return http.post<TagDTO>('/api/hobby-tags/custom', { name })
+export function createCustomTag(name: string, category?: string) {
+  return http.post<TagDTO>('/api/hobby-tags/custom', {
+    name,
+    ...(category ? { category } : {}),
+  })
 }

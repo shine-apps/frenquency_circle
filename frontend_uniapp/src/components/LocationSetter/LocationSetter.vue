@@ -159,12 +159,7 @@ function handleH5Close(): void {
           </text>
         </view>
       </view>
-      <button
-        class="rounded-full border border-[#018d71] px-3 py-1 text-xs text-[#018d71] active:scale-95"
-        @click="handleChoose"
-      >
-        {{ actionLabel }}
-      </button>
+      <wd-button type="primary" @click="handleChoose" variant="text" size="small">{{ actionLabel }} ›</wd-button>
     </view>
 
     <!-- 当前地址 -->

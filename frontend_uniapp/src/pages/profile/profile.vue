@@ -6,14 +6,15 @@ import { sendSmsCode } from '@/api/login'
 import { uploadFile } from '@/api/upload'
 import { LOGIN_PAGE } from '@/router/config'
 import { useToast } from '@wot-ui/ui/components/wd-toast'
+import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue'
 import type { UpdateMyProfileInput, UpdateProfileInput } from '@/api/types/login'
 import type { FormInstance, FormSchema } from '@wot-ui/ui/components/wd-form/types'
 
-/** 标签展示最大数量 */
-const TAG_VISIBLE_LIMIT = 8
-
 // #ifdef H5
 import H5LocationPicker from '@/components/H5LocationPicker/H5LocationPicker.vue'
+
+/** 标签展示最大数量 */
+const TAG_VISIBLE_LIMIT = 8
 // #endif
 
 definePage({
@@ -247,9 +248,12 @@ const myTags = computed(() => user.value?.tags || [])
 const tagPreview = computed(() => myTags.value.slice(0, TAG_VISIBLE_LIMIT))
 const tagRest = computed(() => Math.max(0, myTags.value.length - TAG_VISIBLE_LIMIT))
 
-/** 跳兴趣选择页 */
+/** 兴趣标签选择弹窗显隐 */
+const tagPopupVisible = ref(false)
+
+/** 打开兴趣标签选择弹窗 */
 function handleGoTags() {
-  uni.navigateTo({ url: '/pages/search/search' })
+  tagPopupVisible.value = true
 }
 
 // ===== 编辑模式 =====
@@ -549,7 +553,7 @@ async function handleBindPhone() {
               +{{ tagRest }}
             </text>
           </view>
-          <text v-else class="mt-3 block text-sm leading-6 text-[#999]">
+          <text v-else class="mt-3 block text-sm text-[#999] leading-6">
             未选择兴趣标签,完善后可自动匹配同频
           </text>
         </view>
@@ -786,5 +790,8 @@ async function handleBindPhone() {
       @close="pickerVisible = false"
     />
     <!-- #endif -->
+
+    <!-- 兴趣标签选择弹窗 -->
+    <TagSelectorPopup v-model="tagPopupVisible" />
   </view>
 </template>

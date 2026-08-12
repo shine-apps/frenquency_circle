@@ -12,9 +12,11 @@ import { toTagDTO } from "@/lib/search/tag-search"
 /**
  * 自定义标签请求体 schema。
  * - name: 1-30 字符,trim 后校验
+ * - category: 可选,用户所选兴趣大类(1-30 字符);不传时回退 "自定义"
  */
 const createCustomTagSchema = z.object({
   name: z.string().trim().min(1).max(30),
+  category: z.string().trim().min(1).max(30).optional(),
 })
 
 /**
@@ -22,9 +24,9 @@ const createCustomTagSchema = z.object({
  *
  * 用户自定义标签创建接口(需登录)。
  *
- * - zod 校验 `name`(1-30 字符,trim)
+ * - zod 校验 `name`(1-30 字符,trim)、可选 `category`(1-30 字符,trim)
  * - 用 `toPinyin` 与 `toPinyinInitials` 自动计算 pinyin 字段
- * - 设置 `category='自定义'`、`status='pending'`、`createdBy=当前用户ID`
+ * - 设置 `category`(用户所选,缺省"自定义")、`status='pending'`、`createdBy=当前用户ID`
  * - 插入 `hobby_tags` 表(若 name 已存在则返回 409)
  * - 返回 `IResponse<TagDTO>`(包含新创建的 tagId)
  *
@@ -52,6 +54,7 @@ export async function POST(req: Request) {
   }
 
   const name = parsed.data.name
+  const category = parsed.data.category ?? "自定义"
 
   // 3. 检查 name 是否已存在(任何状态都视为冲突,避免重复创建)
   const existing = await db.query.hobbyTags.findFirst({
@@ -70,7 +73,7 @@ export async function POST(req: Request) {
     .insert(hobbyTags)
     .values({
       name,
-      category: "自定义",
+      category,
       pinyin: pinyinFull,
       pinyinInitials: pinyinInit,
       status: "pending",

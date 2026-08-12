@@ -3,9 +3,10 @@ import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
 import { useMatchStore } from '@/store/match'
-import { matchPeople, matchCircles } from '@/api/locations'
+import { matchCircles, matchPeople } from '@/api/locations'
 import { getCurrentLocation } from '@/utils/location'
 import LocationSetter from '@/components/LocationSetter/LocationSetter.vue'
+import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue'
 import type { MatchCircleDTO, MatchPersonDTO } from '@/types'
 
 defineOptions({
@@ -21,7 +22,7 @@ definePage({
 })
 
 /** 范围 Tab 选项 */
-const RANGE_OPTIONS: Array<{ label: string; value: number }> = [
+const RANGE_OPTIONS: Array<{ label: string, value: number }> = [
   { label: '1km', value: 1 },
   { label: '5km', value: 5 },
   { label: '10km', value: 10 },
@@ -67,7 +68,8 @@ let loadSeq = 0
 
 /** 获取位置并拉取匹配 */
 async function loadAll(lat: number, lng: number, range: number): Promise<void> {
-  if (userTags.value.length === 0) return
+  if (userTags.value.length === 0)
+    return
   const seq = ++loadSeq
   loading.value = true
   try {
@@ -89,7 +91,8 @@ async function loadAll(lat: number, lng: number, range: number): Promise<void> {
         pageSize: 20,
       }),
     ])
-    if (seq !== loadSeq) return // 已有更新的请求,丢弃本次结果
+    if (seq !== loadSeq)
+      return // 已有更新的请求,丢弃本次结果
     const mixed: MixedItem[] = [
       ...(peopleRes.list || []).map(p => ({
         kind: 'person' as const,
@@ -116,12 +119,14 @@ async function loadAll(lat: number, lng: number, range: number): Promise<void> {
     })
   }
   catch (e) {
-    if (seq !== loadSeq) return
+    if (seq !== loadSeq)
+      return
     console.error('[index] loadAll failed:', e)
     uni.showToast({ title: (e as Error).message || '加载失败', icon: 'none' })
   }
   finally {
-    if (seq === loadSeq) loading.value = false
+    if (seq === loadSeq)
+      loading.value = false
   }
 }
 
@@ -158,9 +163,20 @@ onShow(() => {
   }
 })
 
-/** 跳兴趣选择页 */
+/** 兴趣标签选择弹窗显隐 */
+const tagPopupVisible = ref(false)
+
+/** 打开兴趣标签选择弹窗 */
 function handleEditTags(): void {
-  uni.navigateTo({ url: '/pages/search/search' })
+  tagPopupVisible.value = true
+}
+
+/** 标签保存成功后刷新匹配结果(当前坐标已就绪时) */
+function handleTagsConfirmed(tags:string[]): void {
+  userStore.setTags(tags)
+  if (latitude.value != null && longitude.value != null && userTags.value.length > 0) {
+    loadAll(latitude.value, longitude.value, rangeKm.value)
+  }
 }
 
 /** 跳创建圈子页(仅 TEACHER / ADMIN) */
@@ -179,7 +195,8 @@ function handleRefreshMatch(): void {
 
 /** 范围切换 */
 function handleRangeChange(range: number): void {
-  if (range === rangeKm.value) return
+  if (range === rangeKm.value)
+    return
   rangeKm.value = range
   if (ready.value) {
     loadAll(latitude.value!, longitude.value!, range)
@@ -208,16 +225,19 @@ function handleCircleClick(circleId: string): void {
 
 /** 距离格式化 */
 function formatDistance(km: number): string {
-  if (km < 1) return `${(km * 1000).toFixed(0)}m`
+  if (km < 1)
+    return `${(km * 1000).toFixed(0)}m`
   return `${km.toFixed(1)}km`
 }
 
 /** 活动时间格式化 */
 function formatDateTime(iso: string | null): string {
-  if (!iso) return '时间待定'
+  if (!iso)
+    return '时间待定'
   try {
     const d = new Date(iso)
-    if (Number.isNaN(d.getTime())) return '时间待定'
+    if (Number.isNaN(d.getTime()))
+      return '时间待定'
     const pad = (n: number) => String(n).padStart(2, '0')
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
   }
@@ -228,8 +248,10 @@ function formatDateTime(iso: string | null): string {
 
 /** 活跃度文案 */
 function activityText(level: string): string {
-  if (level === 'low') return '活跃度:低'
-  if (level === 'medium') return '活跃度:中'
+  if (level === 'low')
+    return '活跃度:低'
+  if (level === 'medium')
+    return '活跃度:中'
   return '活跃度:高'
 }
 
@@ -248,32 +270,27 @@ onShareTimeline(() => ({
 </script>
 
 <template>
-  <view class="flex min-h-screen flex-col bg-[#f7f8fa]">
+  <view class="min-h-screen flex flex-col bg-[#f7f8fa]">
     <!-- ====== 顶部品牌区(青绿渐变) ====== -->
-    <view class="bg-gradient-to-b from-[#018d71] to-[#0aa07f] px-5 pb-6 pt-safe">
+    <view class="from-[#018d71] to-[#0aa07f] bg-gradient-to-b px-5 p-6 sticky top-0 z-10">
       <view class="flex items-center justify-between">
         <view class="flex flex-col">
-          <text class="text-xl font-semibold text-white">
-            文艺同频圈
-          </text>
+          <view class="flex items-center gap-1">
+            <image src="/static/images/logo_256_circle.png" class="w-[40px] h-[40px]"></image>
+            <text class="text-xl text-white font-semibold">
+              文艺同频圈
+            </text>
+          </view>
           <text class="mt-1 text-xs text-white/80">
             选择兴趣,遇见同频的人与圈子
           </text>
         </view>
         <view class="flex gap-2">
-          <button
-            class="rounded-full bg-white/20 px-3 py-1 text-xs text-white active:scale-95"
-            @click="handleRefreshMatch"
-          >
-            立即匹配
-          </button>
-          <button
-            v-if="user?.role === 'TEACHER' || user?.role === 'ADMIN'"
-            class="rounded-full bg-white px-3 py-1 text-xs text-[#018d71] active:scale-95"
-            @click="handleCreateCircle"
-          >
+          <wd-button  v-if="user?.role === 'TEACHER' || user?.role === 'ADMIN'" 
+            variant="subtle" round @click="handleCreateCircle">
             创建圈子
-          </button>
+          </wd-button>
+          
         </view>
       </view>
     </view>
@@ -285,7 +302,7 @@ onShareTimeline(() => ({
     >
       <view class="flex items-center gap-2">
         <view class="i-carbon:information text-[16px] text-[#e68a00]" />
-        <text class="text-sm font-medium text-[#333]">
+        <text class="text-sm text-[#333] font-medium">
           完善信息,开启自动匹配
         </text>
       </view>
@@ -312,7 +329,7 @@ onShareTimeline(() => ({
       <view class="flex items-center justify-between">
         <view class="flex items-center gap-2">
           <view class="i-carbon:tag text-[18px] text-[#018d71]" />
-          <text class="text-sm font-medium text-[#333]">
+          <text class="text-sm text-[#333] font-medium">
             我的兴趣
           </text>
           <view v-if="tagsReady" class="rounded-full bg-[#e8f5f1] px-2 py-0.5">
@@ -326,12 +343,9 @@ onShareTimeline(() => ({
             </text>
           </view>
         </view>
-        <button
-          class="rounded-full border border-[#018d71] px-3 py-1 text-xs text-[#018d71] active:scale-95"
-          @click="handleEditTags"
-        >
-          {{ tagsReady ? '编辑' : '去选择' }}
-        </button>
+        <wd-button @click="handleEditTags" type="primary" size="small" variant="text">
+          {{ tagsReady ? '编辑' : '去选择' }} ›
+        </wd-button>
       </view>
       <view v-if="tagsReady" class="mt-3 flex flex-wrap gap-2">
         <text
@@ -342,7 +356,7 @@ onShareTimeline(() => ({
           {{ name }}
         </text>
       </view>
-      <text v-else class="mt-3 block text-sm leading-6 text-[#999]">
+      <text v-else class="mt-3 block text-sm text-[#999] leading-6">
         未选择任何兴趣,匹配结果将为空
       </text>
     </view>
@@ -365,7 +379,7 @@ onShareTimeline(() => ({
           <view
             v-for="opt in RANGE_OPTIONS"
             :key="opt.value"
-            class="flex h-9 min-w-10 items-center justify-center rounded-full px-4"
+            class="h-9 min-w-10 flex items-center justify-center rounded-full px-4"
             :class="rangeKm === opt.value ? 'bg-[#018d71]' : 'bg-white'"
             @click="handleRangeChange(opt.value)"
           >
@@ -399,15 +413,15 @@ onShareTimeline(() => ({
           <!-- 人卡片 -->
           <template v-if="item.kind === 'person' && item.person">
             <view class="flex items-center gap-3">
-              <view class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#e8f5f1]">
+              <view class="h-12 w-12 flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#e8f5f1]">
                 <image v-if="item.person.avatarUrl" :src="item.person.avatarUrl" class="h-full w-full" mode="aspectFill" />
-                <text v-else class="text-lg font-medium text-[#018d71]">
+                <text v-else class="text-lg text-[#018d71] font-medium">
                   {{ item.person.name ? item.person.name[0] : '?' }}
                 </text>
               </view>
               <view class="min-w-0 flex-1">
                 <view class="flex items-center justify-between">
-                  <text class="truncate text-base font-medium text-[#333]">
+                  <text class="truncate text-base text-[#333] font-medium">
                     {{ item.person.name }}
                   </text>
                   <text class="shrink-0 text-xs text-[#999]">
@@ -439,14 +453,14 @@ onShareTimeline(() => ({
           <!-- 圈子卡片 -->
           <template v-else-if="item.circle">
             <view class="flex items-center gap-3">
-              <view class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#fdf3e7]">
-                <text class="text-lg font-medium text-[#e68a00]">
+              <view class="h-12 w-12 flex shrink-0 items-center justify-center rounded-full bg-[#fdf3e7]">
+                <text class="text-lg text-[#e68a00] font-medium">
                   圈
                 </text>
               </view>
               <view class="min-w-0 flex-1">
                 <view class="flex items-center justify-between">
-                  <text class="truncate text-base font-medium text-[#333]">
+                  <text class="truncate text-base text-[#333] font-medium">
                     {{ item.circle.title }}
                   </text>
                   <text class="shrink-0 text-xs text-[#999]">
@@ -477,6 +491,9 @@ onShareTimeline(() => ({
 
     <!-- 留白区:ready 为 false 时占位,避免内容过短露出底部 -->
     <view v-if="!ready" class="flex-1" />
+
+    <!-- 兴趣标签选择弹窗 -->
+    <TagSelectorPopup v-model="tagPopupVisible" :initial-tags="userTags" @confirm="handleTagsConfirmed" />
   </view>
 </template>
 

@@ -245,6 +245,7 @@ async function handleGetPhoneNumber(e: any) {
             />
           </view>
           <wd-button
+            type="primary"
             size="small"
             :round="false"
             :disabled="countdown > 0 || sendingCode"
@@ -314,7 +315,3 @@ async function handleGetPhoneNumber(e: any) {
     </view>
   </view>
 </template>
-
-<style lang="scss" scoped>
-//
-</style>

@@ -53,7 +53,7 @@ export function getUserInfo() {
  * 退出登录
  */
 export function logout() {
-  return http.get<void>('/auth/logout')
+  return http.get<void>('/api/auth/logout')
 }
 
 /**

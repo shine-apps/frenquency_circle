@@ -1,6 +1,9 @@
 <script lang="ts" setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { createCustomTag, getCategories, searchTags } from '@/api/tags'
+import { useDialog } from '@wot-ui/ui/components/wd-dialog'
+import { useUserStore } from '@/store/user'
+import { toLoginPage } from '@/utils/toLoginPage'
 import type { CategoryNode, TagDTO } from '@/types'
 
 /**
@@ -76,6 +79,29 @@ function handleVisibleChange(v: boolean) {
     return
   }
   handleCancel()
+}
+
+// ====== 登录守卫:未登录禁止自定义标签 ======
+const userStore = useUserStore()
+const isLoggedIn = computed(() => userStore.isLoggedIn)
+const dialog = useDialog()
+
+/** 点击自定义标签入口:未登录弹窗确认是否去登录,已登录执行打开动作 */
+function requireLoginThen(action: () => void) {
+  if (isLoggedIn.value) {
+    action()
+    return
+  }
+  dialog.confirm({
+    title: '提示',
+    msg: '自定义兴趣标签需要先登录',
+    confirmButtonText: '去登录',
+    cancelButtonText: '取消',
+    zIndex: 2200,
+  }).then((res) => {
+    if (res.action === 'confirm')
+      toLoginPage()
+  })
 }
 
 // ====== 搜索 / 分类 / 自定义添加(原 TagSelector 内容) ======
@@ -330,7 +356,7 @@ async function handleSubmitCustom() {
             <view v-if="suggestions.length === 0 && !loading" class="flex flex-col items-center pt-12">
               <view class="text-sm text-[#999]">
                 未找到"{{ query.trim() }}"相关标签,试试
-                <wd-button variant="text" size="small" @click="customOpen = true">自定义添加</wd-button>
+                <wd-button variant="text" size="small" @click="requireLoginThen(() => customOpen = true)">自定义添加</wd-button>
               </view>
             </view>
             <view v-else class="overflow-hidden rounded-2xl bg-white shadow-sm">
@@ -407,7 +433,7 @@ async function handleSubmitCustom() {
       <view class="shrink-0 border-t border-[#f2f2f2] bg-white px-4 py-3">
                 <!-- 自定义添加表单(卡片式,头部点击展开/收起,与分类块样式一致) -->
        
-          <view class="flex items-center justify-between px-4 py-3" @click="customOpen = !customOpen">
+          <view class="flex items-center justify-between px-4 py-3" @click="requireLoginThen(() => customOpen = !customOpen)">
             <text class="text-sm text-[#333] font-medium">
                没找到?创建一个新标签
             </text>
@@ -466,6 +492,9 @@ async function handleSubmitCustom() {
       @confirm="handleCategoryConfirm"
       @update:visible="customCategoryPickerVisible = $event"
     />
+
+    <!-- 未登录确认弹窗(root-portal 脱离外层 popup,z-index 2200 覆盖在其上) -->
+    <wd-dialog root-portal />
   </wd-popup>
 </template>
 

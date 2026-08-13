@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
 import { useMatchStore } from '@/store/match'
+import { updateMyTags } from '@/api/auth'
 import { matchCircles, matchPeople } from '@/api/locations'
 import { getCurrentLocation } from '@/utils/location'
 import LocationSetter from '@/components/LocationSetter/LocationSetter.vue'
@@ -168,8 +169,24 @@ function handleEditTags(): void {
 }
 
 /** 标签保存成功后刷新匹配结果(当前坐标已就绪时) */
-function handleTagsConfirmed(tags:string[]): void {
-  userStore.setTags(tags)
+async function handleTagsConfirmed(tags: string[]): Promise<void> {
+  // 已登录:自动保存到我的兴趣标签集合(后端),失败则只保留本地,不影响匹配
+  if (userStore.isLoggedIn) {
+    try {
+      const saved = await updateMyTags(tags)
+      userStore.setTags(saved)
+      uni.showToast({ title: '兴趣已保存', icon: 'success' })
+    }
+    catch (e) {
+      console.error('[index] updateMyTags failed:', e)
+      userStore.setTags(tags)
+      uni.showToast({ title: '兴趣保存失败,请重试', icon: 'none' })
+    }
+  }
+  else {
+    // 未登录:仅更新本地状态用于本次匹配展示,不发起后端保存
+    userStore.setTags(tags)
+  }
   if (latitude.value != null && longitude.value != null && userTags.value.length > 0) {
     loadAll(latitude.value, longitude.value, rangeKm.value)
   }
@@ -459,7 +476,7 @@ onShareTimeline(() => ({
     <!-- 留白区:ready 为 false 时占位,避免内容过短露出底部 -->
     <view v-if="!ready" class="flex-1" />
 
-    <!-- 兴趣标签选择弹窗 -->
+    <!-- 兴趣标签选择弹窗:仅回传选择结果,保存由本页统一处理(未登录不保存) -->
     <TagSelectorPopup v-model="tagPopupVisible" :initial-tags="userTags" @confirm="handleTagsConfirmed" />
   </view>
 </template>

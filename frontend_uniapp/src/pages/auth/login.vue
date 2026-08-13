@@ -30,7 +30,7 @@ const sendingCode = ref(false)
 const email = ref('')
 const password = ref('')
 // 公共状态
-const agreed = ref(false)
+const agreed = ref(true)
 const submitting = ref(false)
 
 let timer: ReturnType<typeof setInterval> | null = null

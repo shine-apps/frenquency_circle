@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useUserStore } from '@/store/user'
 import { useTokenStore } from '@/store/token'
-import { getMyProfile } from '@/api/auth'
+import { getMyProfile, updateMyTags } from '@/api/auth'
 import { LOGIN_PAGE } from '@/router/config'
 import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue'
 import type { UserRole } from '@/types'
@@ -50,6 +50,23 @@ const tagPopupVisible = ref(false)
 /** 打开兴趣标签选择弹窗 */
 function handleTags() {
   tagPopupVisible.value = true
+}
+
+/** 编辑兴趣确认:已登录时保存到"我的兴趣标签集合"(后端),并同步本地 store */
+async function handleTagsConfirmed(tags: string[]): Promise<void> {
+  if (!userStore.isLoggedIn) {
+    uni.showToast({ title: '请先登录', icon: 'none' })
+    return
+  }
+  try {
+    const saved = await updateMyTags(tags)
+    userStore.setTags(saved)
+    uni.showToast({ title: '兴趣已保存', icon: 'success' })
+  }
+  catch (e) {
+    console.error('[me] updateMyTags failed:', e)
+    uni.showToast({ title: '兴趣保存失败,请重试', icon: 'none' })
+  }
 }
 
 /** 跳我的圈子页(展示最近匹配的圈子) */
@@ -237,8 +254,8 @@ const roleChipClass = computed(() => {
       </text>
     </view>
 
-    <!-- 兴趣标签选择弹窗(打开时预填当前用户的兴趣,完成时由组件内部自动提交到后台并同步 store) -->
-    <TagSelectorPopup v-model="tagPopupVisible" :initial-tags="user?.tags ?? []" />
+    <!-- 兴趣标签选择弹窗(打开时预填当前用户兴趣,完成时由本页统一保存到后端) -->
+    <TagSelectorPopup v-model="tagPopupVisible" :initial-tags="user?.tags ?? []" @confirm="handleTagsConfirmed" />
   </view>
 </template>
 

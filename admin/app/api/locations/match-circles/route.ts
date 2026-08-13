@@ -1,7 +1,6 @@
 import { z } from "zod"
 
 import { corsOptions, fail, ok, withCors, parsePagination } from "@/lib/api"
-import { requireSession } from "@/lib/auth-utils"
 import { matchCircles } from "@/lib/match/circle-matcher"
 import { logger, LOG_PREFIX } from "@/lib/logger"
 
@@ -30,18 +29,15 @@ export async function OPTIONS(req: Request) {
 }
 
 export async function GET(req: Request) {
-  // 1. 鉴权
-  const guard = await requireSession(req)
-  if ("response" in guard) return guard.response
+  // 1. 解析分页参数(无需登录即可访问)
 
-  // 2. 解析分页参数
   const url = new URL(req.url)
   const pagination = parsePagination(url.searchParams)
   if (!pagination) {
     return withCors(fail(400, "Invalid pagination parameters"), req)
   }
 
-  // 3. 解析并校验查询参数
+  // 2. 解析并校验查询参数
   const parsed = matchQuerySchema.safeParse({
     latitude: url.searchParams.get("latitude") ?? undefined,
     longitude: url.searchParams.get("longitude") ?? undefined,

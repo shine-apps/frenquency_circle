@@ -1,9 +1,9 @@
 import { z } from "zod"
 
 import { corsOptions, fail, ok, withCors, parsePagination } from "@/lib/api"
-import { requireSession } from "@/lib/auth-utils"
 import { matchPeople } from "@/lib/match/people-matcher"
 import { logger, LOG_PREFIX } from "@/lib/logger"
+import { readUserFromToken } from "@/lib/auth/session-token"
 
 /**
  * GET /api/locations/match-people
@@ -36,10 +36,9 @@ export async function OPTIONS(req: Request) {
 }
 
 export async function GET(req: Request) {
-  // 1. 鉴权
-  const guard = await requireSession(req)
-  if ("response" in guard) return guard.response
-  const currentUserId = guard.user.id
+  // 1. 尝试读取登录用户(可选):登录时排除自身,游客未登录则不强校验
+  const authUser = await readUserFromToken(req)
+  const currentUserId = authUser?.id
 
   // 2. 解析分页参数
   const url = new URL(req.url)
@@ -76,7 +75,7 @@ export async function GET(req: Request) {
   })
 
   logger.info(LOG_PREFIX.MATCH, "Match people queried", {
-    userId: currentUserId,
+    userId: currentUserId ?? "guest",
     rangeKm,
     total: result.total,
   })

@@ -5,6 +5,8 @@ import { useUserStore } from '@/store/user'
 import { useMatchStore } from '@/store/match'
 import { updateMyTags } from '@/api/auth'
 import { matchCircles, matchPeople } from '@/api/locations'
+import { LOGIN_PAGE } from '@/router/config'
+import { useDialog } from '@wot-ui/ui/components/wd-dialog'
 import { getCurrentLocation } from '@/utils/location'
 import LocationSetter from '@/components/LocationSetter/LocationSetter.vue'
 import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue'
@@ -43,6 +45,7 @@ interface MixedItem {
 
 const userStore = useUserStore()
 const matchStore = useMatchStore()
+const dialog = useDialog()
 const user = computed(() => userStore.userInfo)
 const userTags = computed(() => user.value?.tags || [])
 
@@ -175,7 +178,6 @@ async function handleTagsConfirmed(tags: string[]): Promise<void> {
     try {
       const saved = await updateMyTags(tags)
       userStore.setTags(saved)
-      uni.showToast({ title: '兴趣已保存', icon: 'success' })
     }
     catch (e) {
       console.error('[index] updateMyTags failed:', e)
@@ -226,9 +228,25 @@ function handleLocationUpdated(loc: { latitude: number, longitude: number, addre
   }
 }
 
-/** 点击人卡片:提示暂不支持直接联系 */
-function handlePersonClick(): void {
-  uni.showToast({ title: '同频的人暂不支持直接联系,请通过圈子互动', icon: 'none' })
+/** 点击人卡片:已登录则跳转到对方个人主页,未登录提示先登录 */
+function handlePersonClick(person: { userId: string | number } | null | undefined): void {
+  if (!person?.userId) {
+    uni.showToast({ title: '用户数据异常', icon: 'none' })
+    return
+  }
+  if (!userStore.isLoggedIn) {
+    dialog.confirm({
+      title: '需要登录',
+      msg: '查看同频的人需要先登录,是否前往登录页?',
+      confirmButtonText: '去登录',
+      cancelButtonText: '取消',
+    }).then((res) => {
+      if (res.action === 'confirm')
+        uni.navigateTo({ url: LOGIN_PAGE })
+    })
+    return
+  }
+  uni.navigateTo({ url: `/pages/user-home/user-home?id=${person.userId}` })
 }
 
 /** 点击圈子卡片:跳圈子详情 */
@@ -392,7 +410,7 @@ onShareTimeline(() => ({
           v-for="(item, idx) in items"
           :key="item.kind === 'person' ? `p-${item.person!.userId}-${idx}` : `c-${item.circle!.circleId}-${idx}`"
           class="rounded-2xl bg-white p-4 shadow-sm"
-          @click="item.kind === 'person' ? handlePersonClick() : handleCircleClick(item.circle!.circleId)"
+          @click="item.kind === 'person' ? handlePersonClick(item.person) : handleCircleClick(item.circle!.circleId)"
         >
           <!-- 人卡片 -->
           <template v-if="item.kind === 'person' && item.person">
@@ -478,6 +496,9 @@ onShareTimeline(() => ({
 
     <!-- 兴趣标签选择弹窗:仅回传选择结果,保存由本页统一处理(未登录不保存) -->
     <TagSelectorPopup v-model="tagPopupVisible" :initial-tags="userTags" @confirm="handleTagsConfirmed" />
+
+    <!-- 登录提示对话框挂载点(供 useDialog 使用) -->
+    <wd-dialog root-portal />
   </view>
 </template>
 

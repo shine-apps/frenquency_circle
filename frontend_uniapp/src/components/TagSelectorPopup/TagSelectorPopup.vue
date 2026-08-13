@@ -204,7 +204,7 @@ function handleRemoveAll() {
 function handleToggleCategory(cat: string) {
   expandedCategory.value = expandedCategory.value === cat ? null : cat
   // 展开分类时收起自定义添加
-  if(expandedCategory.value !== null) {
+  if (expandedCategory.value !== null) {
     customOpen.value = false
   }
 }
@@ -295,13 +295,26 @@ async function handleSubmitCustom() {
             <!-- 取消:顶部左侧 -->
             <wd-button @click="handleCancel" type="info" round variant="subtle">取消</wd-button>
             <!-- 标题 -->
-            <text class="text-lg text-white font-semibold">
-              选择你的兴趣
-            </text>
+            <view class="flex flex-col items-center">
+              <text class="text-lg text-white font-semibold">
+                选择你的兴趣
+              </text>
+              <text class="text-sm text-[#eee]">
+                可以选择 1-{{ max }} 个兴趣标签
+              </text>
+            </view>
+
             <!-- 完成:顶部右侧(点击直接把选择结果交回父组件) -->
             <wd-button round @click="handleComplete" type="primary" variant="subtle">完成{{ count > 0 ? `(${count})` : ''
-              }}</wd-button>
+            }}</wd-button>
           </view>
+        </view>
+
+        <!-- 操作提示 -->
+        <view class="px-4 pt-1">
+          <text class="text-sm text-[#bbb]">
+            可以选择 1-{{ max }} 个兴趣标签
+          </text>
         </view>
 
         <!-- 操作栏:已选数量 + 全部清除(原 TagSelector 内部重复文案已合并去重) -->
@@ -314,36 +327,16 @@ async function handleSubmitCustom() {
           </text>
         </view>
 
-        <!-- 搜索框 -->
-        <view class="flex items-center gap-2 px-4 pb-1">
-          <view class="h-10 flex flex-1 items-center rounded-full bg-[#f5f6f7] px-4 b-solid b-[#e5e5e5]">
-            <input
-              v-model="query"
-              class="flex-1 text-sm"
-              placeholder="搜索兴趣/标签"
-              placeholder-class="text-[#bbb]"
-            >
-          </view>
-          <text v-if="loading" class="shrink-0 text-xs text-[#999]">
-            搜索中...
-          </text>
-        </view>
-
         <!-- 已选胶囊区(限高约 2 行,超出内部滚动,不撑高挤压中部滚动区) -->
         <scroll-view v-if="selectedTags.length > 0" scroll-y class="max-h-[104px] px-4 pb-3 box-border">
           <view class="flex flex-wrap gap-2">
-            <view
-              v-for="name in selectedTags"
-              :key="name"
-              class="inline-flex items-center gap-1 border border-[#cdeae2] rounded-full bg-[#e8f5f1] py-1 pl-3 pr-1.5 active:scale-95"
-            >
+            <view v-for="name in selectedTags" :key="name"
+              class="inline-flex items-center gap-1 border border-[#cdeae2] rounded-full bg-[#e8f5f1] py-1 pl-3 pr-1.5 active:scale-95">
               <text class="text-xs text-[#018d71]">
                 {{ name }}
               </text>
-              <view
-                class="h-4 w-4 flex items-center justify-center rounded-full bg-[#018d71]"
-                @click="handleRemoveSelected(name)"
-              >
+              <view class="h-4 w-4 flex items-center justify-center rounded-full bg-[#018d71]"
+                @click="handleRemoveSelected(name)">
                 <text class="text-[10px] text-white leading-none">
                   ✕
                 </text>
@@ -351,27 +344,35 @@ async function handleSubmitCustom() {
             </view>
           </view>
         </scroll-view>
+
+        <!-- 搜索框 -->
+        <view class="flex items-center gap-2 px-4 pb-1">
+          <view class="h-10 flex flex-1 items-center rounded-full bg-[#f5f6f7] px-4 b-solid b-[#e5e5e5]">
+            <input v-model="query" class="flex-1 text-sm" placeholder="搜索兴趣/标签" placeholder-class="text-[#bbb]">
+          </view>
+          <text v-if="loading" class="shrink-0 text-xs text-[#999]">
+            搜索中...
+          </text>
+        </view>
       </view>
 
       <!-- ====== 中部滚动区:搜索联想 / 分类骨架 / 自定义表单共用同一滚动容器 ====== -->
       <view class="relative min-h-0 flex-1 px-3 pb-2">
-        <scroll-view scroll-y class="h-full box-border rounded-2xl border border-[#e4e9ec] bg-[#f6f8fa] px-2.5 pt-2.5 pb-5 shadow-sm">
+        <scroll-view scroll-y
+          class="h-full box-border rounded-2xl border border-[#e4e9ec] bg-[#f6f8fa] px-2.5 pt-2.5 pb-5 shadow-sm">
           <!-- 搜索态:联想列表 -->
           <template v-if="query.trim()">
             <view v-if="suggestions.length === 0 && !loading" class="flex flex-col items-center pt-12">
               <view class="text-sm text-[#999]">
                 未找到"{{ query.trim() }}"相关标签,试试
-                <wd-button variant="text" size="small" @click="requireLoginThen(() => customOpen = true)">自定义添加</wd-button>
+                <wd-button variant="text" size="small"
+                  @click="requireLoginThen(() => customOpen = true)">自定义添加</wd-button>
               </view>
             </view>
             <view v-else class="overflow-hidden rounded-2xl bg-white shadow-sm">
-              <view
-                v-for="tag in suggestions"
-                :key="tag.id"
+              <view v-for="tag in suggestions" :key="tag.id"
                 class="flex items-center justify-between border-b border-[#f2f2f2] px-4 py-3 last:border-b-0"
-                :class="selectedTags.includes(tag.name) ? 'bg-[#e8f5f1]' : ''"
-                @click="handleToggleTag(tag)"
-              >
+                :class="selectedTags.includes(tag.name) ? 'bg-[#e8f5f1]' : ''" @click="handleToggleTag(tag)">
                 <view class="flex flex-col">
                   <text class="text-sm text-[#333]">
                     {{ tag.name }}
@@ -380,10 +381,8 @@ async function handleSubmitCustom() {
                     {{ tag.category }}
                   </text>
                 </view>
-                <text
-                  class="text-xs"
-                  :class="selectedTags.includes(tag.name) ? 'text-[#018d71]' : reachedMax ? 'text-[#999]' : 'text-[#018d71]'"
-                >
+                <text class="text-xs"
+                  :class="selectedTags.includes(tag.name) ? 'text-[#018d71]' : reachedMax ? 'text-[#999]' : 'text-[#018d71]'">
                   {{ selectedTags.includes(tag.name) ? '✓ 已选' : reachedMax ? `上限${max}` : '+ 选择' }}
                 </text>
               </view>
@@ -414,15 +413,13 @@ async function handleSubmitCustom() {
                   {{ expandedCategory === node.category ? '收起' : '展开' }}
                 </text>
               </view>
-              <view v-if="expandedCategory === node.category && node.subCategories.length > 0" class="border-t border-[#f5f6f7] px-4 py-3">
+              <view v-if="expandedCategory === node.category && node.subCategories.length > 0"
+                class="border-t border-[#f5f6f7] px-4 py-3">
                 <view class="flex flex-wrap gap-2">
-                  <text
-                    v-for="sub in node.subCategories"
-                    :key="sub"
+                  <text v-for="sub in node.subCategories" :key="sub"
                     class="rounded-full px-3 py-1 text-xs active:scale-95"
                     :class="selectedTags.includes(sub) ? 'bg-[#e8f5f1] text-[#018d71]' : 'bg-[#f5f6f7] text-[#666]'"
-                    @click="handleToggleSub(sub)"
-                  >
+                    @click="handleToggleSub(sub)">
                     {{ selectedTags.includes(sub) ? `✓ ${sub}` : sub }}
                   </text>
                 </view>
@@ -431,72 +428,56 @@ async function handleSubmitCustom() {
           </template>
         </scroll-view>
         <!-- 底部渐隐遮罩:提示下方仍有内容可滚动 -->
-        <view class="pointer-events-none absolute inset-x-3 bottom-2 h-6 rounded-b-2xl bg-gradient-to-b from-transparent to-[#f6f8fa]"></view>
+        <view
+          class="pointer-events-none absolute inset-x-3 bottom-2 h-6 rounded-b-2xl bg-gradient-to-b from-transparent to-[#f6f8fa]">
+        </view>
       </view>
 
       <!-- ====== 底部固定区:自定义添加开关(始终可见,仅一行,不占滚动空间) ====== -->
       <view class="shrink-0 border-t border-[#f2f2f2] bg-white px-4 py-3">
-                <!-- 自定义添加表单(卡片式,头部点击展开/收起,与分类块样式一致) -->
-       
-          <view class="flex items-center justify-between px-4 py-3" @click="requireLoginThen(() => customOpen = !customOpen)">
-            <text class="text-sm text-[#333] font-medium">
-               没找到?创建一个新标签
-            </text>
-            <text class="text-xs text-[#999]">
-              {{ customOpen ? '收起' : '展开' }}
-            </text>
-          </view>
-          <view v-if="customOpen" class="border-t border-[#f5f6f7] px-4 py-3">
-            <view class="flex flex-col gap-3">
-              <view
-                class="h-10 flex items-center justify-between rounded-full bg-[#f5f6f7] px-4 active:scale-[0.98]"
-                @click="customCategoryPickerVisible = true"
-              >
-                <text class="text-sm" :class="customCategory ? 'text-[#333]' : 'text-[#bbb]'">
-                  {{ customCategory || '请选择分类' }}
-                </text>
-                <text class="text-xs text-[#999]">
-                  ▾
-                </text>
-              </view>
-              <view class="flex items-center gap-3">
-                <view class="h-10 flex flex-1 items-center rounded-full bg-[#f5f6f7] px-4">
-                  <input
-                    :value="customName"
-                    class="flex-1 text-sm"
-                    :maxlength="CUSTOM_NAME_MAX"
-                    placeholder="输入标签名(1-30 字)"
-                    placeholder-class="text-[#bbb]"
-                    @input="handleCustomNameChange"
-                  >
-                </view>
-                <button
-                  class="rounded-full bg-[#018d71] px-4 py-2 text-sm text-white active:scale-95 disabled:opacity-50"
-                  :disabled="!customName.trim() || customSubmitting"
-                  :loading="customSubmitting"
-                  @click="handleSubmitCustom"
-                >
-                  添加
-                </button>
-              </view>
+        <!-- 自定义添加表单(卡片式,头部点击展开/收起,与分类块样式一致) -->
+
+        <view class="flex items-center justify-between px-4 py-3"
+          @click="requireLoginThen(() => customOpen = !customOpen)">
+          <text class="text-sm text-[#333] font-medium">
+            没找到?创建一个新标签
+          </text>
+          <text class="text-xs text-[#999]">
+            {{ customOpen ? '收起' : '展开' }}
+          </text>
+        </view>
+        <view v-if="customOpen" class="border-t border-[#f5f6f7] px-4 py-3">
+          <view class="flex flex-col gap-3">
+            <view class="h-10 flex items-center justify-between rounded-full bg-[#f5f6f7] px-4 active:scale-[0.98]"
+              @click="customCategoryPickerVisible = true">
+              <text class="text-sm" :class="customCategory ? 'text-[#333]' : 'text-[#bbb]'">
+                {{ customCategory || '请选择分类' }}
+              </text>
+              <text class="text-xs text-[#999]">
+                ▾
+              </text>
             </view>
-      
+            <view class="flex items-center gap-3">
+              <view class="h-10 flex flex-1 items-center rounded-full bg-[#f5f6f7] px-4">
+                <input :value="customName" class="flex-1 text-sm" :maxlength="CUSTOM_NAME_MAX"
+                  placeholder="输入标签名(1-30 字)" placeholder-class="text-[#bbb]" @input="handleCustomNameChange">
+              </view>
+              <button class="rounded-full bg-[#018d71] px-4 py-2 text-sm text-white active:scale-95 disabled:opacity-50"
+                :disabled="!customName.trim() || customSubmitting" :loading="customSubmitting"
+                @click="handleSubmitCustom">
+                添加
+              </button>
+            </view>
+          </view>
+
         </view>
       </view>
     </view>
 
     <!-- 自定义分类选择(wd-picker 底部弹层,层级需高于外层 wd-popup 的 2000) -->
-    <wd-picker
-      v-model="customCategoryPickerValue"
-      :columns="customCategoryOptions"
-      :visible="customCategoryPickerVisible"
-      :z-index="2100"
-      title="选择分类"
-      confirm-button-text="确定"
-      cancel-button-text="取消"
-      @confirm="handleCategoryConfirm"
-      @update:visible="customCategoryPickerVisible = $event"
-    />
+    <wd-picker v-model="customCategoryPickerValue" :columns="customCategoryOptions"
+      :visible="customCategoryPickerVisible" :z-index="2100" title="选择分类" confirm-button-text="确定"
+      cancel-button-text="取消" @confirm="handleCategoryConfirm" @update:visible="customCategoryPickerVisible = $event" />
 
     <!-- 未登录确认弹窗(root-portal 脱离外层 popup,z-index 2200 覆盖在其上) -->
     <wd-dialog root-portal />

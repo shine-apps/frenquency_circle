@@ -28,7 +28,8 @@ export type MatchPeopleParams = {
   lng: number
   tags: string[]
   rangeKm: number
-  currentUserId: string
+  /** 当前登录用户 id,用于排除自身;未登录(游客)时传 undefined */
+  currentUserId?: string
   page: number
   pageSize: number
 }
@@ -70,6 +71,18 @@ export async function matchPeople(
   const tagNameSet = new Set(tags)
 
   // 1. 查询范围内的候选用户(排除自身、需要有位置、隐私允许匹配,直接取 users.tags)
+  const whereConditions = [
+    isNotNull(users.latitude),
+    isNotNull(users.longitude),
+    withinRangeSql(users.latitude, users.longitude, lat, lng, rangeKm),
+    // 隐私过滤:allowMatch 缺失或为 'true' 时允许匹配
+    sql`(users.privacy_settings->>'allowMatch' IS NULL OR users.privacy_settings->>'allowMatch' = 'true')`,
+  ]
+  // 登录用户排除自身;游客(未登录)不排除
+  if (currentUserId) {
+    whereConditions.push(ne(users.id, currentUserId))
+  }
+
   const candidates = await db
     .select({
       id: users.id,
@@ -83,16 +96,7 @@ export async function matchPeople(
       tags: users.tags,
     })
     .from(users)
-    .where(
-      and(
-        ne(users.id, currentUserId),
-        isNotNull(users.latitude),
-        isNotNull(users.longitude),
-        withinRangeSql(users.latitude, users.longitude, lat, lng, rangeKm),
-        // 隐私过滤:allowMatch 缺失或为 'true' 时允许匹配
-        sql`(users.privacy_settings->>'allowMatch' IS NULL OR users.privacy_settings->>'allowMatch' = 'true')`
-      )
-    )
+    .where(and(...whereConditions))
 
   if (candidates.length === 0) {
     return { list: [], total: 0, page, pageSize }

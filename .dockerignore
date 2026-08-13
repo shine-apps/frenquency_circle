@@ -41,6 +41,8 @@ docs
 Dockerfile
 .dockerignore
 **/docker-compose*.yml
+# nginx.conf 为宿主机/网关部署参考配置,不进镜像
+nginx.conf
 
 # 日志与临时文件
 **/*.log
@@ -52,3 +54,8 @@ Dockerfile
 # Taro / 小程序本地缓存
 **/.swc
 **/.taro
+
+# 前端 H5 构建需读取 frontend_uniapp/env 下的 .env / .env.production
+# (其中仅含暴露给客户端的 VITE_ 变量,无密钥;构建期需要以确定 base 等配置)
+!frontend_uniapp/env/.env
+!frontend_uniapp/env/.env.production

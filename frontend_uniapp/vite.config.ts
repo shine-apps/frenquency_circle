@@ -136,12 +136,13 @@ export default defineConfig(({ command, mode }) => {
             .replace('%VITE_APP_TITLE%', VITE_APP_TITLE)
         },
       },
-      // 打包分析插件，h5 + 生产环境才弹出
+      // 打包分析插件，h5 + 生产环境才启用
+      // open 仅在本地启用(CI=true 时跳过),避免无头容器内找不到浏览器导致构建崩溃
       UNI_PLATFORM === 'h5'
       && mode === 'production'
       && visualizer({
         filename: './node_modules/.cache/visualizer/stats.html',
-        open: true,
+        open: !process.env.CI,
         gzipSize: true,
         brotliSize: true,
       }),

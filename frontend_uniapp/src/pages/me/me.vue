@@ -237,8 +237,8 @@ const roleChipClass = computed(() => {
       </text>
     </view>
 
-    <!-- 兴趣标签选择弹窗 -->
-    <TagSelectorPopup v-model="tagPopupVisible" />
+    <!-- 兴趣标签选择弹窗(打开时预填当前用户的兴趣,完成时由组件内部自动提交到后台并同步 store) -->
+    <TagSelectorPopup v-model="tagPopupVisible" :initial-tags="user?.tags ?? []" />
   </view>
 </template>
 

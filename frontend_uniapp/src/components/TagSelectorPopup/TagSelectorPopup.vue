@@ -1,7 +1,9 @@
 <script lang="ts" setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { createCustomTag, getCategories, searchTags } from '@/api/tags'
+import { updateMyTags } from '@/api/auth'
 import { useDialog } from '@wot-ui/ui/components/wd-dialog'
+import { useToast } from '@wot-ui/ui/components/wd-toast'
 import { useUserStore } from '@/store/user'
 import { toLoginPage } from '@/utils/toLoginPage'
 import type { CategoryNode, TagDTO } from '@/types'
@@ -12,8 +14,10 @@ import type { CategoryNode, TagDTO } from '@/types'
  * 由原 `pages/search/search` 页面迁移而来:
  * - 使用 wot-ui `wd-popup` 从底部弹出,自带圆角、遮罩与滑入/滑出动画;
  * - 内部三段式布局(顶部固定 / 中部滚动 / 底部固定),统一滚动行为;
- * - 打开时通过 `initialTags` 预填,不读写用户 store,不参与用户标签持久化;
- * - 确认:仅把选择结果通过 `confirm` 交回父组件;取消/点遮罩关闭:不保存。
+ * - 打开时通过 `initialTags` 预填(autoSave=false 时不参与持久化);
+ * - autoSave=true(默认):完成时自动 PUT /api/users/me/hobby-tags 并同步到 userStore;
+ *   autoSave=false:仅把选择结果通过 `confirm` 交回父组件(向后兼容旧逻辑)。
+ * - 取消/点遮罩关闭:不保存。
  *
  * 滚动行为设计(避免多层滚动不协调):
  * - 弹窗总高度 `h-screen`(100vh) + flex 纵向排列,配合 `:z-index="2000"` 覆盖底部自定义 tabbar(z-index:1000);
@@ -29,15 +33,20 @@ const props = withDefaults(defineProps<{
   max?: number
   /** 打开时预填的标签 */
   initialTags?: string[]
+  /** 完成时是否自动提交到后台保存 + 同步到用户 store(默认 true) */
+  autoSave?: boolean
 }>(), {
   max: 10,
   initialTags: () => [],
+  autoSave: true,
 })
 
 const emit = defineEmits<{
   (e: 'update:modelValue', visible: boolean): void
   (e: 'confirm', tags: string[]): void
   (e: 'cancel'): void
+  (e: 'saved', tags: string[]): void
+  (e: 'save-error', error: Error): void
 }>()
 
 /** 已选标签名称列表(打开时用 initialTags 预填,存 hobby_tags.name) */
@@ -56,14 +65,48 @@ watch(
 const count = computed(() => selectedTags.value.length)
 const reachedMax = computed(() => selectedTags.value.length >= props.max)
 
-/** 完成:仅把选择结果交回父组件并关闭弹窗(不持久化) */
-function handleComplete() {
+const userStore = useUserStore()
+const toast = useToast()
+/** 自动保存请求进行中(用于禁用按钮 + 显示 loading) */
+const submitting = ref(false)
+
+/**
+ * 完成:同时支持两种模式。
+ * - autoSave=true(默认):调用 PUT /api/users/me/hobby-tags 全量替换用户兴趣标签,
+ *   成功后再 setTags 同步到本地 store 与持久化缓存,最后 emit confirm + 关闭弹窗;
+ *   失败时 toast 错误并保留弹窗,不提交任何关闭动作。
+ * - autoSave=false:仅把当前选择 emit 给父组件,由父组件决定如何处理(向后兼容)。
+ */
+async function handleComplete() {
   if (count.value === 0) {
     uni.showToast({ title: '请至少选择 1 个兴趣', icon: 'none' })
     return
   }
-  emit('confirm', selectedTags.value)
-  emit('update:modelValue', false)
+  if (!props.autoSave) {
+    emit('confirm', selectedTags.value)
+    emit('update:modelValue', false)
+    return
+  }
+  if (submitting.value)
+    return
+  submitting.value = true
+  try {
+    const tags = await updateMyTags(selectedTags.value)
+    userStore.setTags(tags)
+    toast.show({ msg: '兴趣已保存', iconName: 'success' })
+    // 仍然 emit saved + confirm,父组件若有"标签变化后刷新"等副作用可继续使用
+    emit('saved', tags)
+    emit('confirm', tags)
+    emit('update:modelValue', false)
+  }
+  catch (e) {
+    const err = e as Error
+    toast.show({ msg: err.message || '保存失败,请稍后重试', iconName: 'error' })
+    emit('save-error', err)
+  }
+  finally {
+    submitting.value = false
+  }
 }
 
 /** 取消:直接关闭,不保存 */
@@ -82,7 +125,6 @@ function handleVisibleChange(v: boolean) {
 }
 
 // ====== 登录守卫:未登录禁止自定义标签 ======
-const userStore = useUserStore()
 const isLoggedIn = computed(() => userStore.isLoggedIn)
 const dialog = useDialog()
 
@@ -293,8 +335,8 @@ async function handleSubmitCustom() {
             <text class="text-lg text-white font-semibold">
               选择你的兴趣
             </text>
-            <!-- 完成:顶部右侧 -->
-            <wd-button round @click="handleComplete" type="primary" variant="subtle">完成{{ count > 0 ? `(${count})` : ''
+            <!-- 完成:顶部右侧(auto-save 模式下点击会先调后端接口,完成按钮显示 loading) -->
+            <wd-button round :loading="submitting" :disabled="submitting" @click="handleComplete" type="primary" variant="subtle">完成{{ count > 0 ? `(${count})` : ''
               }}</wd-button>
           </view>
         </view>

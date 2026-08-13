@@ -406,7 +406,7 @@ function formatDateTime(iso: string | null): string {
     </view>
 
     <!-- 兴趣标签选择弹窗 -->
-    <TagSelectorPopup v-model="tagPopupVisible" @confirm="handleTagsConfirmed" />
+    <TagSelectorPopup v-model="tagPopupVisible" :initial-tags="userStore.userInfo?.tags ?? []" @confirm="handleTagsConfirmed" />
   </view>
 </template>
 

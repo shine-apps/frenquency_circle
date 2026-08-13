@@ -7,15 +7,12 @@ import { uploadFile } from '@/api/upload'
 import { LOGIN_PAGE } from '@/router/config'
 import { useToast } from '@wot-ui/ui/components/wd-toast'
 import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue'
-import type { UpdateMyProfileInput, UpdateProfileInput } from '@/api/types/login'
-import type { FormInstance, FormSchema } from '@wot-ui/ui/components/wd-form/types'
-
 // #ifdef H5
 import H5LocationPicker from '@/components/H5LocationPicker/H5LocationPicker.vue'
-
-/** 标签展示最大数量 */
-const TAG_VISIBLE_LIMIT = 8
 // #endif
+
+/** 标签展示最大数量(所有端通用,不应被包在 H5 条件编译内) */
+const TAG_VISIBLE_LIMIT = 8
 
 definePage({
   style: {
@@ -38,14 +35,12 @@ const toast = useToast()
 
 // ===== 页面状态 =====
 const loading = ref(true)
-const editMode = ref(false)
-const submitting = ref(false)
 const uploading = ref(false)
+/** 当前正在保存的字段名(同一字段防重复提交;不同字段允许并发) */
+const savingField = ref<string | null>(null)
 
-// ===== 表单状态(编辑模式回填;手机号走独立弹层流程) =====
+// ===== 表单状态(地址选择用;昵称/邮箱走独立弹层即时保存) =====
 const form = reactive({
-  name: '',
-  email: '',
   address: '',
   latitude: null as number | null,
   longitude: null as number | null,
@@ -55,7 +50,6 @@ const avatarUrl = ref('')
 // ===== 头像裁剪状态 =====
 const cropVisible = ref(false)
 const cropSrc = ref('')
-const formRef = ref<FormInstance>()
 
 // ===== 地址选择状态(H5 弹层 / 小程序原生) =====
 const pickerVisible = ref(false)
@@ -69,34 +63,11 @@ const sendingCode = ref(false)
 const bindingPhone = ref(false)
 let countdownTimer: ReturnType<typeof setInterval> | null = null
 
-/** wd-form 校验 schema(与后端 zod 规则对齐;手机号不在此表单内) */
-const formSchema: FormSchema = {
-  validate: (model) => {
-    const issues: Array<{ path: Array<string | number>, message: string }> = []
-    const name = String(model.name ?? '').trim()
-    if (!name) {
-      issues.push({ path: ['name'], message: '昵称不能为空' })
-    }
-    else if (name.length > 100) {
-      issues.push({ path: ['name'], message: '昵称最长 100 字符' })
-    }
-    const email = String(model.email ?? '').trim()
-    if (email && !EMAIL_RE.test(email)) {
-      issues.push({ path: ['email'], message: '邮箱格式不正确' })
-    }
-    // 地址由地图选点组件回填,无需格式校验(选点返回的地址天然 <=200 字符)
-    return issues
-  },
-  isRequired: path => path === 'name',
-}
-
 /** 从 store 回填表单初值 */
 function fillFromUser() {
   const u = user.value
   if (!u)
     return
-  form.name = u.name ?? ''
-  form.email = u.email ?? ''
   form.address = u.address ?? ''
   form.latitude = u.location?.latitude ?? null
   form.longitude = u.location?.longitude ?? null
@@ -140,13 +111,13 @@ function deriveFilenameFromPath(p: string): string {
   return seg.includes('.') ? seg : `${seg}.jpg`
 }
 
-/** 执行头像上传(裁剪后路径 → 后端 → 回填预览) */
+/** 执行头像上传(裁剪后路径 → 后端 → 回填预览 → 立即保存) */
 async function doUpload(file: string | File, filename: string) {
   uploading.value = true
   try {
     const { url } = await uploadFile({ file, name: filename, purpose: 'avatar' })
     avatarUrl.value = url
-    toast.show({ msg: '头像已上传,保存后生效', iconName: 'success' })
+    await saveField('avatar', '头像', () => updateMyProfile({ avatarUrl: url }))
   }
   catch (e) {
     toast.show({ msg: (e as Error).message || '头像上传失败', iconName: 'error' })
@@ -208,9 +179,12 @@ function handleCropConfirm(result: { tempFilePath: string, width: number, height
   doUpload(tempPath, filename)
 }
 
-/** 清除头像(空串在保存时由后端归一为 null) */
+/** 清除头像(空串由后端归一为 null,立即保存) */
 function handleClearAvatar() {
+  if (savingField.value === 'avatar')
+    return
   avatarUrl.value = ''
+  saveField('avatar', '头像', () => updateMyProfile({ avatarUrl: '' }))
 }
 
 // ===== 查看模式展示 =====
@@ -236,12 +210,13 @@ const roleChipClass = computed(() => {
 const displayPhone = computed(() => {
   if (user.value?.phone)
     return user.value.phone
-  // 手机号登录用户 email 形如 13800138000@phonedomain.com
-  const m = /^(\d{11})@/.exec(user.value?.email ?? '')
-  return m ? m[1] : '未绑定'
+  // 手机号登录用户 email 形如 13800138000@phonedomain.com。
+  // 注意:必须用解构而不能写 m[1],否则 dcloudio uni-mp-compiler + unocss
+  // 会把 `m[1]` 误识别为 arbitrary class 语法,编译产物里变成 m_a_1_a_ 而运行报错。
+  const match = /^(\d{11})@/.exec(user.value?.email ?? '')
+  const [, phone] = match ?? []
+  return phone ?? '未绑定'
 })
-
-const displayAddress = computed(() => user.value?.address || '未设置')
 
 /** 我的兴趣展示(最多 8 个 + "+N") */
 const myTags = computed(() => user.value?.tags || [])
@@ -256,100 +231,119 @@ function handleGoTags() {
   tagPopupVisible.value = true
 }
 
-// ===== 编辑模式 =====
-function enterEdit() {
-  fillFromUser()
-  editMode.value = true
-}
-
-function cancelEdit() {
-  formRef.value?.reset()
-  fillFromUser()
-  editMode.value = false
-}
-
-/** 是否有未保存变更(无变更时禁用保存按钮;手机号走独立弹层即时保存) */
-const isDirty = computed(() => {
-  const u = user.value
-  if (!u)
-    return false
-  return (
-    form.name.trim() !== (u.name ?? '')
-    || form.email.trim() !== (u.email ?? '')
-    || form.address.trim() !== (u.address ?? '')
-    || avatarUrl.value !== (u.avatarUrl ?? u.avatar ?? '')
-  )
-})
-
-/** 提交保存:表单校验 → 按字段分流 → 并行请求 → 同步 store */
-async function handleSave() {
-  if (submitting.value)
+// ===== 逐项即时保存 =====
+/** 逐项保存通用封装:执行 task → 成功刷新 store 并回填本字段;失败 toast + 静默刷新 store */
+async function saveField(field: string, label: string, task: () => Promise<unknown>) {
+  if (savingField.value === field)
     return
-
-  // 1. 表单校验(失败时 toast 首个错误 + 行内错误提示)
-  const result = formRef.value ? await formRef.value.validate() : { valid: true, errors: [] as Array<{ prop: string, message: string }> }
-  if (!result.valid) {
-    toast.show({ msg: result.errors[0]?.message ?? '请检查表单内容', iconName: 'error' })
-    return
-  }
-
-  // 2. 按字段分组:name/email/avatarUrl → PATCH /api/auth/me;address → PATCH /api/users/me/profile
-  const trimmedName = form.name.trim()
-  const trimmedEmail = form.email.trim()
-  const trimmedAddress = form.address.trim()
-
-  const authPatch: UpdateMyProfileInput = {}
-  if (trimmedName !== (user.value?.name ?? ''))
-    authPatch.name = trimmedName
-  if (trimmedEmail !== (user.value?.email ?? ''))
-    authPatch.email = trimmedEmail
-  if (avatarUrl.value !== (user.value?.avatarUrl ?? user.value?.avatar ?? '')) {
-    authPatch.avatarUrl = avatarUrl.value
-  }
-
-  const profilePatch: UpdateProfileInput = {}
-  if (trimmedAddress !== (user.value?.address ?? '')) {
-    profilePatch.address = trimmedAddress
-    // 地址变更时同步经纬度;地址被清空则一并清空坐标
-    profilePatch.latitude = form.latitude
-    profilePatch.longitude = form.longitude
-  }
-
-  if (Object.keys(authPatch).length === 0 && Object.keys(profilePatch).length === 0) {
-    toast.show({ msg: '未做修改', iconName: 'info' })
-    return
-  }
-
-  // 3. 并行提交两个独立请求
-  submitting.value = true
+  savingField.value = field
   try {
-    const tasks: Array<Promise<unknown>> = []
-    if (Object.keys(authPatch).length > 0)
-      tasks.push(updateMyProfile(authPatch))
-    if (Object.keys(profilePatch).length > 0)
-      tasks.push(updateProfile(profilePatch))
-    await Promise.all(tasks)
-
-    // 4. 用后端最新资料同步 store(避免两端不一致),并回填表单
+    await task()
     const fresh = await getMyProfile()
     userStore.setProfile(fresh)
-    fillFromUser()
-    toast.show({ msg: '保存成功', iconName: 'success' })
-    editMode.value = false
+    syncFieldFrom(field, fresh)
+    toast.show({ msg: `${label}已保存`, iconName: 'success' })
   }
   catch (e) {
-    toast.show({ msg: (e as Error).message || '保存失败,请重试', iconName: 'error' })
-    // 任一失败即刷新,避免表单与 store 数据不一致
-    getMyProfile()
-      .then((p) => {
-        userStore.setProfile(p)
-        fillFromUser()
-      })
-      .catch(() => {})
+    toast.show({ msg: (e as Error).message || `${label}保存失败,请重试`, iconName: 'error' })
+    // 失败只静默刷新 store,不覆盖用户正在编辑的表单值
+    getMyProfile().then(p => userStore.setProfile(p)).catch(() => {})
   }
   finally {
-    submitting.value = false
+    savingField.value = null
   }
+}
+
+/** 按字段将最新值回填到 form(只回填当前字段,避免覆盖其它正在编辑的输入) */
+function syncFieldFrom(
+  field: string,
+  fresh: {
+    name?: string
+    email?: string
+    avatarUrl?: string | null
+    avatar?: string | null
+    address?: string | null
+    location?: { latitude: number, longitude: number } | null
+  },
+) {
+  if (field === 'address') {
+    form.address = fresh.address ?? ''
+    form.latitude = fresh.location?.latitude ?? null
+    form.longitude = fresh.location?.longitude ?? null
+  }
+  else if (field === 'avatar') {
+    avatarUrl.value = fresh.avatarUrl ?? fresh.avatar ?? ''
+  }
+}
+
+// ===== 昵称/邮箱编辑弹层 =====
+const namePopupVisible = ref(false)
+const editName = ref('')
+const emailPopupVisible = ref(false)
+const editEmail = ref('')
+
+/** 打开昵称编辑弹层(预填当前值) */
+function openNamePopup() {
+  editName.value = user.value?.name ?? ''
+  namePopupVisible.value = true
+}
+
+/** 确认保存昵称:校验 → 有变更则立即保存 */
+function handleNameSave() {
+  const name = editName.value.trim()
+  if (!name) {
+    toast.show({ msg: '昵称不能为空', iconName: 'error' })
+    return
+  }
+  if (name.length > 100) {
+    toast.show({ msg: '昵称最长 100 字符', iconName: 'error' })
+    return
+  }
+  if (name === (user.value?.name ?? '')) {
+    namePopupVisible.value = false
+    return
+  }
+  if (savingField.value === 'name') {
+    toast.show({ msg: '昵称保存中,请稍候', iconName: 'info' })
+    return
+  }
+  namePopupVisible.value = false
+  saveField('name', '昵称', () => updateMyProfile({ name }))
+}
+
+/** 打开邮箱编辑弹层(预填当前值) */
+function openEmailPopup() {
+  editEmail.value = user.value?.email ?? ''
+  emailPopupVisible.value = true
+}
+
+/** 确认保存邮箱:校验 → 有变更则立即保存 */
+function handleEmailSave() {
+  const email = editEmail.value.trim()
+  if (email && !EMAIL_RE.test(email)) {
+    toast.show({ msg: '邮箱格式不正确', iconName: 'error' })
+    return
+  }
+  if (email === (user.value?.email ?? '')) {
+    emailPopupVisible.value = false
+    return
+  }
+  if (savingField.value === 'email') {
+    toast.show({ msg: '邮箱保存中,请稍候', iconName: 'info' })
+    return
+  }
+  emailPopupVisible.value = false
+  saveField('email', '邮箱', () => updateMyProfile({ email }))
+}
+
+/** 地址保存(选点确认 / 清除后调用,地址+经纬度一起提交) */
+function saveAddress() {
+  saveField('address', '地址', () =>
+    updateProfile({
+      address: form.address,
+      latitude: form.latitude,
+      longitude: form.longitude,
+    }))
 }
 
 // ===== 地址选择(H5 用地图选点弹层,小程序用原生 chooseLocation) =====
@@ -364,6 +358,7 @@ async function handleChooseLocation() {
     form.address = res.address || res.name || '已选择位置'
     form.latitude = res.latitude
     form.longitude = res.longitude
+    saveAddress()
   }
   catch (e) {
     const err = e as Error & { errMsg?: string }
@@ -381,13 +376,15 @@ function handlePickerConfirm(loc: { latitude: number, longitude: number, address
   form.latitude = loc.latitude
   form.longitude = loc.longitude
   pickerVisible.value = false
+  saveAddress()
 }
 
-/** 清除地址(连同经纬度) */
+/** 清除地址(连同经纬度,立即保存) */
 function handleClearAddress() {
   form.address = ''
   form.latitude = null
   form.longitude = null
+  saveAddress()
 }
 
 // ===== 手机号修改弹层 =====
@@ -489,7 +486,7 @@ async function handleBindPhone() {
         <view class="pointer-events-none absolute size-[160px] rounded-full bg-white/[0.06] -bottom-[50px] -left-10" />
 
         <!-- 头像 -->
-        <view class="relative mb-4 h-24 w-24 flex items-center justify-center overflow-hidden border-4 border-white rounded-full bg-white shadow-[0_8px_24px_rgba(0,0,0,0.12)] transition-transform duration-200 active:scale-[0.96]">
+        <view class="relative mb-4 h-24 w-24 flex items-center justify-center overflow-hidden border-4 border-white rounded-full bg-white shadow-[0_8px_24px_rgba(0,0,0,0.12)] transition-transform duration-200 active:scale-[0.96]" @click="handlePickAvatar">
           <image v-if="avatarUrl" :src="avatarUrl" class="h-full w-full" mode="aspectFill" />
           <text v-else class="text-[40px] text-[#018d71] font-semibold leading-none">
             {{ avatarFallback }}
@@ -497,7 +494,7 @@ async function handleBindPhone() {
           <view v-if="uploading" class="absolute inset-0 flex items-center justify-center rounded-full bg-black/30">
             <wd-loading color="#ffffff" size="20" />
           </view>
-          <view v-if="editMode" class="absolute h-7 w-7 flex items-center justify-center rounded-full bg-white text-sm shadow-[0_2px_8px_rgba(0,0,0,0.15)] -bottom-[2px] -right-[2px]">
+          <view class="absolute h-7 w-7 flex items-center justify-center rounded-full bg-white text-sm shadow-[0_2px_8px_rgba(0,0,0,0.15)] -bottom-[2px] -right-[2px]">
             <text>📷</text>
           </view>
         </view>
@@ -517,7 +514,7 @@ async function handleBindPhone() {
         </text>
 
         <!-- 提示语 -->
-        <view v-if="editMode" class="mt-3 flex items-center gap-3 text-[12px] text-white/70">
+        <view class="mt-3 flex items-center gap-3 text-[12px] text-white/70">
           <text>点击头像更换照片</text>
           <text
             v-if="avatarUrl"
@@ -527,7 +524,6 @@ async function handleBindPhone() {
             移除头像
           </text>
         </view>
-        <text v-else class="mt-3 text-[12px] text-white/70">点击头像更换照片</text>
       </view>
 
       <!-- ===== 我的兴趣卡片(浮在 Header 底部) ===== -->
@@ -559,14 +555,30 @@ async function handleBindPhone() {
         </view>
       </view>
 
-      <!-- ===== 信息卡片(浮在 Header 底部,负 margin) ===== -->
+      <!-- ===== 信息卡片:常驻行内编辑,失焦/确认即保存 ===== -->
       <view class="mx-4 mt-3 md:mx-6">
         <view class="rounded-[20px] bg-white shadow-[0_6px_24px_rgba(0,0,0,0.06)]">
-          <!-- 查看模式 -->
-          <view v-if="!editMode" class="px-5 pb-3 pt-5">
+          <view class="px-5 pb-3 pt-5">
             <text class="mb-3 text-[13px] text-[#999] font-semibold tracking-[0.5px]">基本信息</text>
 
-            <view class="flex items-center gap-3.5 py-3">
+            <!-- 昵称行:点击右侧编辑图标弹层修改 -->
+            <view class="flex items-center gap-3.5 py-2">
+              <view class="h-10 w-10 flex shrink-0 items-center justify-center rounded-xl bg-[#e8f5f1] text-[18px] text-[#018d71]">
+                <text>昵</text>
+              </view>
+              <view class="min-w-0 flex flex-1 flex-col gap-0.5">
+                <text class="text-xs text-[#999]">昵称</text>
+                <text class="break-all text-[15px] text-[#333] font-medium">{{ user?.name }}</text>
+              </view>
+              <view class="flex shrink-0 cursor-pointer items-center gap-1 text-xs text-[#018d71]" @click="openNamePopup">
+                <text class="text-sm leading-none">✎</text>
+                <text>编辑</text>
+              </view>
+            </view>
+            <view class="mx-3 h-px bg-[#f5f5f5]" />
+
+            <!-- 邮箱行:点击右侧编辑图标弹层修改 -->
+            <view class="flex items-center gap-3.5 py-2">
               <view class="h-10 w-10 flex shrink-0 items-center justify-center rounded-xl bg-[#e8f5f1] text-[18px] text-[#018d71]">
                 <text>✉</text>
               </view>
@@ -574,10 +586,35 @@ async function handleBindPhone() {
                 <text class="text-xs text-[#999]">邮箱</text>
                 <text class="break-all text-[15px] text-[#333] font-medium">{{ user?.email }}</text>
               </view>
+              <view class="flex shrink-0 cursor-pointer items-center gap-1 text-xs text-[#018d71]" @click="openEmailPopup">
+                <text class="text-sm leading-none">✎</text>
+                <text>编辑</text>
+              </view>
             </view>
             <view class="mx-3 h-px bg-[#f5f5f5]" />
 
-            <view class="flex items-center gap-3.5 py-3">
+            <!-- 地址行:点击调起地图选点,确认即保存 -->
+            <view class="flex items-center gap-3.5 py-2" @click="handleChooseLocation">
+              <view class="h-10 w-10 flex shrink-0 items-center justify-center rounded-xl bg-[#e6f0ff] text-[18px] text-[#1677ff]">
+                <text>◉</text>
+              </view>
+              <view class="min-w-0 flex flex-1 flex-col gap-0.5">
+                <text class="text-xs text-[#999]">地址</text>
+                <text class="line-clamp-2 break-all text-sm text-[#333] font-medium">
+                  {{ form.address || '点击选择地址' }}
+                </text>
+              </view>
+              <view class="flex shrink-0 items-center gap-2">
+                <text v-if="form.address" class="cursor-pointer text-xs text-[#ff4d4f]" @click.stop="handleClearAddress">
+                  清除
+                </text>
+                <text class="cursor-pointer text-xs text-[#018d71]">选择 ›</text>
+              </view>
+            </view>
+            <view class="mx-3 h-px bg-[#f5f5f5]" />
+
+            <!-- 手机号行:点击弹层经短信验证码绑定 -->
+            <view class="flex items-center gap-3.5 py-2">
               <view class="h-10 w-10 flex shrink-0 items-center justify-center rounded-xl bg-[#fff7e6] text-[18px] text-[#e68a00]">
                 <text>☎</text>
               </view>
@@ -585,114 +622,16 @@ async function handleBindPhone() {
                 <text class="text-xs text-[#999]">手机号</text>
                 <text class="break-all text-[15px] text-[#333] font-medium">{{ displayPhone }}</text>
               </view>
-            </view>
-            <view class="mx-3 h-px bg-[#f5f5f5]" />
-
-            <view class="flex items-center gap-3.5 py-3">
-              <view class="h-10 w-10 flex shrink-0 items-center justify-center rounded-xl bg-[#e6f0ff] text-[18px] text-[#1677ff]">
-                <text>◉</text>
-              </view>
-              <view class="min-w-0 flex flex-1 flex-col gap-0.5">
-                <text class="text-xs text-[#999]">地址</text>
-                <text class="break-all text-[15px] text-[#333] font-medium">{{ displayAddress }}</text>
-              </view>
-            </view>
-          </view>
-
-          <!-- 编辑模式:表单卡片 -->
-          <view v-else class="px-5 pb-3 pt-5">
-            <text class="mb-3 text-[13px] text-[#999] font-semibold tracking-[0.5px]">编辑资料</text>
-            <wd-form ref="formRef" :model="form" :schema="formSchema" error-type="message">
-              <wd-form-item prop="name" title="昵称" required>
-                <wd-input v-model="form.name" placeholder="请输入昵称" :maxlength="100" clearable compact />
-              </wd-form-item>
-              <wd-form-item prop="email" title="邮箱">
-                <wd-input v-model="form.email" placeholder="请输入邮箱" inputmode="email" clearable compact />
-              </wd-form-item>
-            </wd-form>
-
-            <!-- 地址独立区块:点击打开地图选点组件(非手动输入) -->
-            <view class="my-2 border-t border-[#f5f5f5] pt-2">
-              <view class="flex items-center justify-between py-2" @click="handleChooseLocation">
-                <view class="flex items-center gap-2">
-                  <view class="h-8 w-8 flex shrink-0 items-center justify-center rounded-lg bg-[#e6f0ff] text-sm text-[#1677ff]">
-                    <text>◉</text>
-                  </view>
-                  <view class="min-w-0 flex flex-1 flex-col gap-0.5">
-                    <text class="text-xs text-[#999]">地址</text>
-                    <text class="line-clamp-2 break-all text-sm text-[#333] font-medium">
-                      {{ form.address || '点击选择地址' }}
-                    </text>
-                  </view>
-                </view>
-                <view class="flex shrink-0 items-center gap-2">
-                  <text v-if="form.address" class="cursor-pointer text-xs text-[#ff4d4f]" @click.stop="handleClearAddress">
-                    清除
-                  </text>
-                  <text class="cursor-pointer text-xs text-[#018d71]">选择 ›</text>
-                </view>
-              </view>
+              <text class="cursor-pointer text-xs text-[#018d71]" @click="openPhonePopup">
+                修改手机号
+              </text>
             </view>
 
-            <!-- 手机号独立区块:点击弹层经短信验证码绑定 -->
-            <view class="my-2 border-t border-[#f5f5f5] pt-2">
-              <view class="flex items-center justify-between py-2">
-                <view class="flex items-center gap-2">
-                  <view class="h-8 w-8 flex shrink-0 items-center justify-center rounded-lg bg-[#fff7e6] text-sm text-[#e68a00]">
-                    <text>☎</text>
-                  </view>
-                  <view class="flex flex-col">
-                    <text class="text-xs text-[#999]">手机号</text>
-                    <text class="text-sm text-[#333] font-medium">{{ displayPhone }}</text>
-                  </view>
-                </view>
-                <text class="cursor-pointer text-xs text-[#018d71]" @click="openPhonePopup">
-                  修改手机号
-                </text>
-              </view>
-            </view>
-
-            <view class="pb-1 pt-1 text-xs text-[#999] leading-[1.6]">
-              修改邮箱后再次登录将使用新邮箱;昵称最长 100 字符;地址点击地图选点,保存后同步定位。
+            <view class="pb-1 pt-2 text-xs text-[#999] leading-[1.6]">
+              昵称、邮箱点击右侧编辑图标修改,保存后即时生效;地址点击地图选点,保存后同步定位。
             </view>
           </view>
         </view>
-      </view>
-
-      <!-- ===== 底部操作区 ===== -->
-      <view class="flex gap-3 px-4 pt-6 md:px-6">
-        <wd-button
-          v-if="!editMode"
-
-          round block
-          size="large"
-          class="border-0 from-[#018d71] to-[#0aa07f] bg-gradient-to-br shadow-[0_6px_18px_rgba(1,141,113,0.28)] transition-(transform,box-shadow) duration-200 active:translate-y-px text-white! active:shadow-[0_2px_8px_rgba(1,141,113,0.32)]"
-          @click="enterEdit"
-        >
-          编辑资料
-        </wd-button>
-        <template v-else>
-          <wd-button
-            class="flex-1 border border-[#e5e5e5]! bg-white! text-[#666]!"
-            round
-            size="large"
-            variant="plain"
-            @click="cancelEdit"
-          >
-            取消
-          </wd-button>
-          <wd-button
-
-            round block
-            size="large"
-            class="flex-1 border-0 from-[#018d71] to-[#0aa07f] bg-gradient-to-br shadow-[0_6px_18px_rgba(1,141,113,0.28)] transition-(transform,box-shadow) duration-200 active:translate-y-px text-white! disabled:opacity-50 active:shadow-[0_2px_8px_rgba(1,141,113,0.32)]"
-            :loading="submitting"
-            :disabled="!isDirty"
-            @click="handleSave"
-          >
-            保存
-          </wd-button>
-        </template>
       </view>
     </template>
 
@@ -780,6 +719,96 @@ async function handleBindPhone() {
       </view>
     </wd-popup>
 
+    <!-- 修改昵称弹层 -->
+    <wd-popup
+      v-model="namePopupVisible"
+      position="center"
+      round
+      :modal="true"
+      close-on-click-modal
+    >
+      <view class="w-[320px] px-5 pb-6 pt-5 md:w-[380px]">
+        <text class="block text-center text-base text-[#333] font-semibold">修改昵称</text>
+        <text class="mt-1 block text-center text-xs text-[#999]">
+          昵称最长 100 字符,保存后即时生效
+        </text>
+
+        <view class="mt-5">
+          <wd-input
+            v-model="editName"
+            :maxlength="100"
+            placeholder="请输入昵称"
+            clearable
+          />
+        </view>
+
+        <view class="mt-6 flex gap-3">
+          <wd-button
+            class="flex-1 border border-[#e5e5e5]! bg-white! text-[#666]!"
+            round
+            size="medium"
+            variant="plain"
+            @click="namePopupVisible = false"
+          >
+            取消
+          </wd-button>
+          <wd-button
+            class="flex-1 border-0 from-[#018d71] to-[#0aa07f] bg-gradient-to-br shadow-[0_6px_18px_rgba(1,141,113,0.28)] text-white!"
+            round
+            size="medium"
+            @click="handleNameSave"
+          >
+            保存
+          </wd-button>
+        </view>
+      </view>
+    </wd-popup>
+
+    <!-- 修改邮箱弹层 -->
+    <wd-popup
+      v-model="emailPopupVisible"
+      position="center"
+      round
+      :modal="true"
+      close-on-click-modal
+    >
+      <view class="w-[320px] px-5 pb-6 pt-5 md:w-[380px]">
+        <text class="block text-center text-base text-[#333] font-semibold">修改邮箱</text>
+        <text class="mt-1 block text-center text-xs text-[#999]">
+          修改后再次登录将使用新邮箱
+        </text>
+
+        <view class="mt-5">
+          <wd-input
+            v-model="editEmail"
+            inputmode="email"
+            placeholder="请输入邮箱"
+            clearable
+          />
+        </view>
+
+        <view class="mt-6 flex gap-3">
+          <wd-button
+            class="flex-1 border border-[#e5e5e5]! bg-white! text-[#666]!"
+            round
+            size="medium"
+            variant="plain"
+            @click="emailPopupVisible = false"
+          >
+            取消
+          </wd-button>
+          <wd-button
+            class="flex-1 border-0 from-[#018d71] to-[#0aa07f] bg-gradient-to-br shadow-[0_6px_18px_rgba(1,141,113,0.28)] text-white!"
+            round
+            size="medium"
+            @click="handleEmailSave"
+          >
+            保存
+          </wd-button>
+        </view>
+      </view>
+    </wd-popup>
+
     <!-- H5 端地图选点弹层 -->
     <!-- #ifdef H5 -->
     <H5LocationPicker
@@ -791,7 +820,7 @@ async function handleBindPhone() {
     />
     <!-- #endif -->
 
-    <!-- 兴趣标签选择弹窗 -->
-    <TagSelectorPopup v-model="tagPopupVisible" />
+    <!-- 兴趣标签选择弹窗(打开时预填当前用户的兴趣,完成时由组件内部自动提交到后台并同步 store) -->
+    <TagSelectorPopup v-model="tagPopupVisible" :initial-tags="myTags" />
   </view>
 </template>

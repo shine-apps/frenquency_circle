@@ -1,7 +1,9 @@
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
+import { onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { getCircle, contactCircle } from '@/api/circles'
 import { useUserStore } from '@/store/user'
+import { useShare } from '@/composables/useShare'
 import type { CircleDetailDTO } from '@/types'
 
 definePage({
@@ -22,6 +24,21 @@ const notFound = ref(false)
 const contactOpen = ref(false)
 const contactInfo = ref<{ phone: string | null; wechat: string | null } | null>(null)
 const contactLoading = ref(false)
+
+/** 分享:小程序(好友/朋友圈) + H5 微信浏览器 JSSDK。内容在触发/配置时实时读取,兼容详情异步加载 */
+const { share, shareAppMessage, shareTimeline } = useShare({
+  title: () => (circle.value ? `${circle.value.title}｜${circle.value.description.slice(0, 40)}` : '文艺同频圈'),
+  path: '/pages/circle/circle',
+  query: () => (circleId.value ? { id: circleId.value } : {}),
+  imageUrl: () => circle.value?.coverImages?.[0] ?? '',
+  desc: () => (circle.value ? circle.value.description.slice(0, 80) : ''),
+})
+
+// 分享钩子必须在页面顶层直接注册, 编译器才能生成微信小程序 Page 配置
+// #ifdef MP-WEIXIN
+onShareAppMessage(shareAppMessage)
+onShareTimeline(shareTimeline)
+// #endif
 
 /** 拉取圈子详情 */
 async function fetchCircle(id: string) {
@@ -151,35 +168,6 @@ function formatDate(iso: string | null): string {
 
 const maxMembersText = computed(() => (circle.value?.maxMembers ? String(circle.value.maxMembers) : '不限'))
 
-// ====== 微信分享:分享给好友 ======
-onShareAppMessage(() => {
-  const title = circle.value
-    ? `${circle.value.title}｜${circle.value.description.slice(0, 40)}`
-    : '文艺同频圈'
-  return {
-    title,
-    path: `/pages/circle/circle?id=${circleId.value}`,
-    ...(circle.value?.coverImages?.[0]
-      ? { imageUrl: circle.value.coverImages[0] }
-      : {}),
-  }
-})
-
-// #ifdef MP-WEIXIN
-// 朋友圈分享(仅小程序端)
-onShareTimeline(() => {
-  const title = circle.value
-    ? `${circle.value.title}｜${circle.value.description.slice(0, 40)}`
-    : '文艺同频圈'
-  return {
-    title,
-    query: `id=${circleId.value}`,
-    ...(circle.value?.coverImages?.[0]
-      ? { imageUrl: circle.value.coverImages[0] }
-      : {}),
-  }
-})
-// #endif
 </script>
 
 <template>
@@ -330,12 +318,18 @@ onShareTimeline(() => {
           >
             {{ isCreator ? '编辑圈子信息' : '联系老师' }}
           </wd-button>
-          <wd-button
-            plain
-            open-type="share"
-          >
+          <!-- 小程序:原生转发按钮 -->
+          <!-- #ifdef MP-WEIXIN -->
+          <wd-button plain custom-class="shrink-0" open-type="share">
             分享
           </wd-button>
+          <!-- #endif -->
+          <!-- H5 微信浏览器:点击引导右上角分享 -->
+          <!-- #ifdef H5 -->
+          <wd-button plain custom-class="shrink-0" @click="share">
+            分享
+          </wd-button>
+          <!-- #endif -->
         </view>
       </view>
 

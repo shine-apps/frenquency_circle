@@ -12,7 +12,7 @@ import { logger, LOG_PREFIX } from "@/lib/logger"
  * 配置从环境变量 WECHAT_MP_APP_ID / WECHAT_MP_APP_SECRET / WECHAT_MP_API_BASE 读取。
  */
 
-type Stage = "code2session" | "token" | "phone"
+export type Stage = "code2session" | "token" | "phone" | "ticket"
 
 /** 序列化原始响应到 errmsg 时最多保留的字符数，防止日志爆炸 */
 const RAW_PAYLOAD_LOG_LIMIT = 500
@@ -59,7 +59,7 @@ function readConfig() {
   return { appId, appSecret, apiBase }
 }
 
-async function wechatFetch(
+export async function wechatFetch(
   url: string,
   init: RequestInit,
   stage: Stage,
@@ -130,7 +130,7 @@ async function wechatFetch(
  *
  * 之前实现要求 `errcode === 0`，会把 `code2session`、`stable_token` 的成功响应当错误抛出。
  */
-function assertNoWechatError(
+export function assertNoWechatError(
   payload: unknown,
   stage: Stage
 ): asserts payload is Record<string, unknown> {

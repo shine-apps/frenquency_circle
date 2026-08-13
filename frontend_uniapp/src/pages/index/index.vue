@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onShareAppMessage, onShareTimeline, onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
 import { useMatchStore } from '@/store/match'
 import { updateMyTags } from '@/api/auth'
@@ -8,6 +8,7 @@ import { matchCircles, matchPeople } from '@/api/locations'
 import { LOGIN_PAGE } from '@/router/config'
 import { useDialog } from '@wot-ui/ui/components/wd-dialog'
 import { getCurrentLocation } from '@/utils/location'
+import { useShare } from '@/composables/useShare'
 import LocationSetter from '@/components/LocationSetter/LocationSetter.vue'
 import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue'
 import type { MatchCircleDTO, MatchPersonDTO } from '@/types'
@@ -46,6 +47,19 @@ interface MixedItem {
 const userStore = useUserStore()
 const matchStore = useMatchStore()
 const dialog = useDialog()
+
+// 首页分享(右上角菜单:好友/朋友圈)
+const { shareAppMessage, shareTimeline } = useShare({
+  title: '文艺同频圈',
+  path: '/pages/index/index',
+})
+
+// 分享钩子必须在页面顶层直接注册, 编译器才能生成微信小程序 Page 配置
+// #ifdef MP-WEIXIN
+onShareAppMessage(shareAppMessage)
+onShareTimeline(shareTimeline)
+// #endif
+
 const user = computed(() => userStore.userInfo)
 const userTags = computed(() => user.value?.tags || [])
 
@@ -286,18 +300,6 @@ function activityText(level: string): string {
   return '活跃度:高'
 }
 
-// ====== 微信分享:分享给好友 ======
-onShareAppMessage(() => ({
-  title: '文艺同频圈',
-  path: '/pages/index/index',
-}))
-
-// #ifdef MP-WEIXIN
-// 朋友圈分享(仅小程序端)
-onShareTimeline(() => ({
-  title: '文艺同频圈',
-}))
-// #endif
 </script>
 
 <template>

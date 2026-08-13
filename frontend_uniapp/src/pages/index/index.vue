@@ -54,14 +54,10 @@ const rangeKm = ref<number>(5)
 const loading = ref(false)
 const items = ref<MixedItem[]>([])
 
-/** 兴趣/位置完备性(用于状态引导卡) */
+/** 兴趣/位置完备性 */
 const tagsReady = computed(() => userTags.value.length > 0)
 const locationReady = computed(() => latitude.value != null && longitude.value != null)
 const ready = computed(() => tagsReady.value && locationReady.value)
-
-/** 提示用户去补齐的内容(同时缺→两条;只缺一→一条) */
-const needTags = computed(() => !tagsReady.value)
-const needLocation = computed(() => !locationReady.value)
 
 /** 匹配请求序号,丢弃过期请求结果 */
 let loadSeq = 0
@@ -295,35 +291,6 @@ onShareTimeline(() => ({
       </view>
     </view>
 
-    <!-- ====== 状态引导卡(兴趣/位置未完备时) ====== -->
-    <view
-      v-if="!ready"
-      class="mx-4 mt-3 rounded-2xl bg-white p-4 shadow-sm"
-    >
-      <view class="flex items-center gap-2">
-        <view class="i-carbon:information text-[16px] text-[#e68a00]" />
-        <text class="text-sm text-[#333] font-medium">
-          完善信息,开启自动匹配
-        </text>
-      </view>
-      <view v-if="needTags" class="mt-2 flex items-center justify-between">
-        <text class="text-sm text-[#666]">
-          · 选择 1~10 个兴趣标签
-        </text>
-        <text class="text-sm text-[#018d71]" @click="handleEditTags">
-          去选择 ›
-        </text>
-      </view>
-      <view v-if="needLocation" class="mt-2 flex items-center justify-between">
-        <text class="text-sm text-[#666]">
-          · 设置当前位置以发现附近的人与圈子
-        </text>
-        <text class="text-sm text-[#018d71]">
-          ↓ 在下方设置
-        </text>
-      </view>
-    </view>
-
     <!-- ====== 我的兴趣卡片 ====== -->
     <view class="mx-4 mt-3 rounded-2xl bg-white p-4 shadow-sm">
       <view class="flex items-center justify-between">
@@ -357,7 +324,7 @@ onShareTimeline(() => ({
         </text>
       </view>
       <text v-else class="mt-3 block text-sm text-[#999] leading-6">
-        未选择任何兴趣,匹配结果将为空
+         选择 1~10 个兴趣标签, 以便为你推荐同频的人与圈子
       </text>
     </view>
 

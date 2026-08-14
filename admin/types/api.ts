@@ -292,3 +292,22 @@ export type AdminTeacherApplicationItem = TeacherApplicationDTO & {
   userName: string
   reviewerName?: string | null
 }
+
+// ---- 分类（categories） ----
+
+export interface CategoryDTO {
+  id: string
+  name: string
+  slug: string
+  level: number
+  parentId: string | null
+  sortOrder: number
+}
+
+export interface CategoryNode extends CategoryDTO {
+  children: CategoryNode[]
+}
+
+export interface CategoryTreeResponse {
+  tree: CategoryNode[]
+}

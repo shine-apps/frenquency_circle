@@ -40,4 +40,6 @@ export const LOG_PREFIX = {
   CIRCLE: "CIRCLE",
   ADMIN: "ADMIN",
   GEO: "GEO",
+  CATEGORY: "CATEGORY",
+  TAG: "TAG",
 } as const

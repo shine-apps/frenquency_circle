@@ -2,6 +2,8 @@ import { and, asc, eq } from "drizzle-orm"
 
 import { db } from "@/lib/db"
 import { hobbyTags, categories } from "@/db/schema"
+import { buildCategoryTree } from "@/lib/categories"
+import type { CategoryNode as ApiCategoryNode } from "@/types/api"
 import { corsOptions, ok, withCors } from "@/lib/api"
 
 /**
@@ -50,29 +52,15 @@ export async function OPTIONS(req: Request) {
 }
 
 export async function GET(req: Request) {
-  // 1. 读取分类树骨架:一级大类 + 其下二级中类
-  const catRows = await db
-    .select({
-      id: categories.id,
-      name: categories.name,
-      slug: categories.slug,
-      level: categories.level,
-      parentId: categories.parentId,
-      sortOrder: categories.sortOrder,
-    })
-    .from(categories)
-    .orderBy(asc(categories.sortOrder))
-
-  // 一级大类
-  const topCats = catRows
-    .filter((c) => c.level === 1)
-    .sort((a, b) => a.sortOrder - b.sortOrder)
+  // 1. 读取分类树骨架(复用共享 helper):一级大类 + 其下二级中类
+  const tree = await buildCategoryTree()
   // 二级中类按 parentId 分组
-  const subByParent = new Map<string, typeof catRows>()
-  for (const c of catRows) {
-    if (c.level !== 2 || !c.parentId) continue
-    if (!subByParent.has(c.parentId)) subByParent.set(c.parentId, [])
-    subByParent.get(c.parentId)!.push(c)
+  const subByParent = new Map<string, ApiCategoryNode[]>()
+  for (const top of tree) {
+    for (const sub of top.children) {
+      if (!subByParent.has(top.id)) subByParent.set(top.id, [])
+      subByParent.get(top.id)!.push(sub)
+    }
   }
 
   // 2. 读取 approved 叶子标签,按 category_id(二级中类) 分组
@@ -105,7 +93,7 @@ export async function GET(req: Request) {
 
   // 3. 组装分类树(兼容旧 subCategory 为空的标签:归属到 category_id 对应中类)
   //    分类灵活化:标签可直挂 level=1 叶子大类;此类大类以其自身同名节点呈现直挂标签。
-  const categoriesNode: CategoryNode[] = topCats.map((top) => {
+  const categoriesNode: CategoryNode[] = tree.map((top) => {
     const children = (subByParent.get(top.id) ?? []).sort(
       (a, b) => a.sortOrder - b.sortOrder
     )

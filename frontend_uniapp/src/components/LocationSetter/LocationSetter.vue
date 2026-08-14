@@ -7,18 +7,13 @@
  * - full:作为页面主体展示(目前等同 compact;预留扩展)
  * - H5:选点交互走 H5LocationPicker 弹层(高德地图)
  * - 小程序端:选点走 uni.chooseLocation
- * - 选中后调 PATCH /api/users/me/profile 保存位置与地址,
- *   并同步 store/user 的 setLocation,触发首页自动匹配刷新
+ * - 组件仅提供选点能力,通过 update:location 把选中位置 emit 给父级;
+ *   是否保存到用户资料由父级决定
  *
  * 注意:
- * - 仅在保存成功后 emit update:location,失败时不更新 store,
- *   避免 UI 与持久化状态不一致
  * - 组件本身不控制定位授权,定位失败时由调用方降级引导手动选择
  */
 import { computed, ref } from 'vue'
-import { useToast } from '@wot-ui/ui/components/wd-toast'
-import { updateProfile } from '@/api/auth'
-import { useUserStore } from '@/store/user'
 
 // #ifdef H5
 import H5LocationPicker from '@/components/H5LocationPicker/H5LocationPicker.vue'
@@ -44,12 +39,9 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
-  /** 位置已更新(后端持久化成功后触发) */
+  /** 用户选点完成(仅携带位置信息,是否保存由父级决定) */
   (e: 'update:location', loc: { latitude: number, longitude: number, address: string }): void
 }>()
-
-const toast = useToast()
-const userStore = useUserStore()
 
 /** H5 端选点弹层显隐 */
 const h5PickerVisible = ref(false)
@@ -72,7 +64,7 @@ async function chooseByMiniProgram(): Promise<void> {
   try {
     // #ifdef MP-WEIXIN
     const res = await uni.chooseLocation({})
-    await saveLocation({
+    emitLocation({
       latitude: res.latitude,
       longitude: res.longitude,
       address: res.address || '已定位',
@@ -91,32 +83,9 @@ async function chooseByMiniProgram(): Promise<void> {
   }
 }
 
-/** 保存位置:调 PATCH /api/users/me/profile,同步 store,emit 给父组件 */
-async function saveLocation(loc: { latitude: number, longitude: number, address: string }): Promise<void> {
-  try {
-    const profile = await updateProfile({
-      address: loc.address,
-      latitude: loc.latitude,
-      longitude: loc.longitude,
-    })
-    // 同步 store,使用后端权威返回值
-    userStore.setLocation(
-      profile.location ?? { latitude: loc.latitude, longitude: loc.longitude },
-      profile.address ?? loc.address,
-    )
-    emit('update:location', loc)
-    toast.show({
-      msg: '位置已更新',
-      iconName: 'success',
-    })
-  }
-  catch (err) {
-    console.error('[LocationSetter] 保存位置失败:', err)
-    toast.show({
-      msg: '位置保存失败,请稍后重试',
-      iconName: 'error',
-    })
-  }
+/** 选中位置:仅将位置信息 emit 给父级,由父级决定是否持久化 */
+function emitLocation(loc: { latitude: number, longitude: number, address: string }): void {
+  emit('update:location', loc)
 }
 
 /** 统一处理选点入口(根据平台分发) */
@@ -132,7 +101,7 @@ function handleChoose(): void {
 /** H5 端弹层确认 */
 function handleH5Confirm(loc: { latitude: number, longitude: number, address: string }): void {
   h5PickerVisible.value = false
-  void saveLocation(loc)
+  emitLocation(loc)
 }
 
 /** H5 端弹层关闭 */

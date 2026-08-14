@@ -8,6 +8,9 @@ import { matchCircles, matchPeople } from '@/api/locations'
 import { LOGIN_PAGE } from '@/router/config'
 import { useDialog } from '@wot-ui/ui/components/wd-dialog'
 import { getCurrentLocation } from '@/utils/location'
+import { reverseGeocode } from '@/utils/geo'
+import { activityLevelText, formatDateTime, formatDistance } from '@/utils/format'
+import { canCreateCircle } from '@/utils/role'
 import { useShare } from '@/composables/useShare'
 import LocationSetter from '@/components/LocationSetter/LocationSetter.vue'
 import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue'
@@ -160,8 +163,12 @@ onShow(() => {
       .then((res) => {
         latitude.value = res.latitude
         longitude.value = res.longitude
-        address.value = res.address || '已定位'
         loadAll(res.latitude, res.longitude, rangeKm.value)
+        // getCurrentLocation 仅返回坐标,地址由各端逆地理编码补全
+        // (H5 走高德 JS API,小程序/其他端走后端 /api/geo/reverse)
+        reverseGeocode(res.latitude, res.longitude).then((addr) => {
+          address.value = addr || '已定位'
+        })
       })
       .catch((err) => {
         console.warn('[index] getCurrentLocation failed:', err?.message || err)
@@ -213,15 +220,6 @@ function handleCreateCircle(): void {
   uni.navigateTo({ url: '/pages/create-circle/create-circle' })
 }
 
-/** 顶部"立即匹配"按钮:强制刷新当前结果(不依赖列表是否为空) */
-function handleRefreshMatch(): void {
-  if (!ready.value) {
-    uni.showToast({ title: '请先完善兴趣与位置', icon: 'none' })
-    return
-  }
-  loadAll(latitude.value!, longitude.value!, rangeKm.value)
-}
-
 /** 范围切换 */
 function handleRangeChange(range: number): void {
   if (range === rangeKm.value)
@@ -268,38 +266,6 @@ function handleCircleClick(circleId: string): void {
   uni.navigateTo({ url: `/pages/circle/circle?id=${circleId}` })
 }
 
-/** 距离格式化 */
-function formatDistance(km: number): string {
-  if (km < 1)
-    return `${(km * 1000).toFixed(0)}m`
-  return `${km.toFixed(1)}km`
-}
-
-/** 活动时间格式化 */
-function formatDateTime(iso: string | null): string {
-  if (!iso)
-    return '时间待定'
-  try {
-    const d = new Date(iso)
-    if (Number.isNaN(d.getTime()))
-      return '时间待定'
-    const pad = (n: number) => String(n).padStart(2, '0')
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-  }
-  catch {
-    return '时间待定'
-  }
-}
-
-/** 活跃度文案 */
-function activityText(level: string): string {
-  if (level === 'low')
-    return '活跃度:低'
-  if (level === 'medium')
-    return '活跃度:中'
-  return '活跃度:高'
-}
-
 </script>
 
 <template>
@@ -319,8 +285,7 @@ function activityText(level: string): string {
           </text>
         </view>
         <view class="flex gap-2">
-          <wd-button  v-if="user?.role === 'TEACHER' || user?.role === 'ADMIN'" 
-            variant="subtle" round @click="handleCreateCircle">
+          <wd-button v-if="canCreateCircle(user?.role)" variant="subtle" round @click="handleCreateCircle">
             创建圈子
           </wd-button>
           
@@ -434,7 +399,7 @@ function activityText(level: string): string {
                 </view>
                 <view class="mt-1">
                   <text class="text-xs text-[#999]">
-                    {{ activityText(item.person.activityLevel) }}
+                    {{ activityLevelText(item.person.activityLevel) }}
                     <template v-if="item.person.practiceYears !== null && item.person.practiceYears !== undefined">
                       · {{ item.person.practiceYears }}年
                     </template>

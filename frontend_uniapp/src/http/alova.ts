@@ -5,6 +5,7 @@ import { createAlova } from 'alova'
 import { createServerTokenAuthentication } from 'alova/client'
 import VueHook from 'alova/vue'
 import { toLoginPage } from '@/utils/toLoginPage'
+import { useTokenStore } from '@/store/token'
 import { ContentTypeEnum, ResultEnum, ShowMessage } from './tools/enum'
 
 // 配置动态Tag
@@ -27,7 +28,9 @@ const { onAuthRequired, onResponseRefreshToken } = createServerTokenAuthenticati
     },
     handler: async () => {
       try {
-        // await authLogin();
+        // 双 token 模式下由 http.ts 的队列统一刷新;此处仅做登录态兜底
+        const tokenStore = useTokenStore()
+        await tokenStore.refreshToken()
       }
       catch (error) {
         // 切换到登录页
@@ -57,20 +60,19 @@ const alovaInstance = createAlova({
 
     const { config } = method
     const ignoreAuth = !config.meta?.ignoreAuth
-    console.log('ignoreAuth===>', ignoreAuth)
-    // 处理认证信息   自行处理认证问题
+    // 处理认证信息,注入当前有效 token
     if (ignoreAuth) {
-      const token = 'getToken()'
+      const tokenStore = useTokenStore()
+      const token = tokenStore.updateNowTime().validToken
       if (!token) {
         throw new Error('[请求错误]：未登录')
       }
-      // method.config.headers.token = token;
+      method.config.headers.Authorization = `Bearer ${token}`
     }
 
     // 处理动态域名
     if (config.meta?.domain) {
       method.baseURL = config.meta.domain
-      console.log('当前域名', method.baseURL)
     }
   }),
 

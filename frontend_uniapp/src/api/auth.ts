@@ -54,7 +54,7 @@ export function fetchCurrentUser() {
 
 /** 更新当前登录用户自己的资料(昵称 / 邮箱 / 头像 URL) */
 export function updateMyProfile(patch: UpdateMyProfileInput) {
-  return http.patch<UserDTO>('/api/auth/me', patch as Record<string, unknown>)
+  return http.patch<UserDTO>('/api/auth/me', { ...patch })
 }
 
 /**
@@ -89,10 +89,7 @@ export async function updateMyTags(tags: string[]): Promise<string[]> {
  * @returns 后端实际持久化的 PrivacySettings
  */
 export async function updatePrivacy(settings: PrivacySettings): Promise<PrivacySettings> {
-  const res = await http.put<{ privacySettings: PrivacySettings }>(
-    '/api/users/me/privacy',
-    settings as unknown as Record<string, unknown>,
-  )
+  const res = await http.put<{ privacySettings: PrivacySettings }>('/api/users/me/privacy', { ...settings })
   return res.privacySettings
 }
 
@@ -104,7 +101,7 @@ export async function updatePrivacy(settings: PrivacySettings): Promise<PrivacyS
  * @returns 更新后的 UserProfile
  */
 export function updateProfile(patch: UpdateProfileInput) {
-  return http.patch<UserProfile>('/api/users/me/profile', patch as Record<string, unknown>)
+  return http.patch<UserProfile>('/api/users/me/profile', { ...patch })
 }
 
 /**

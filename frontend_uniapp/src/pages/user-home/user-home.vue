@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { ref } from 'vue'
 import { getUserProfile } from '@/api/search'
+import { activityLevelShortText, formatDate, practiceYearsText } from '@/utils/format'
 import type { PublicUserProfileDTO } from '@/types'
 
 definePage({
@@ -45,37 +46,15 @@ onLoad((options) => {
   fetchProfile(userId.value)
 })
 
-function activityLevelText(level: string): string {
-  if (level === 'low') return '低活跃'
-  if (level === 'medium') return '中活跃'
-  return '高活跃'
-}
-
 function activityLevelColor(level: string): string {
   if (level === 'low') return '#f56c6c'
   if (level === 'medium') return '#e68a00'
   return '#018d71'
 }
 
-function practiceYearsText(years: number | null): string {
-  if (years === null || years === undefined) return '未设置'
-  return `${years}年`
-}
-
 function renderTags(tags: string[]): { visible: string[]; rest: number } {
   const visible = tags.slice(0, MAX_TAG_VISIBLE)
   return { visible, rest: tags.length - visible.length }
-}
-
-function formatDate(iso: string): string {
-  try {
-    const d = new Date(iso)
-    if (Number.isNaN(d.getTime())) return '未知'
-    return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
-  }
-  catch {
-    return '未知'
-  }
 }
 </script>
 
@@ -120,7 +99,7 @@ function formatDate(iso: string): string {
         <view class="flex items-center justify-between border-b border-[#f5f5f5] pb-3.5">
           <text class="text-sm text-[#999]">活跃度</text>
           <text class="text-sm font-medium" :style="{ color: activityLevelColor(profile.activityLevel) }">
-            {{ activityLevelText(profile.activityLevel) }}
+            {{ activityLevelShortText(profile.activityLevel) }}
           </text>
         </view>
 
@@ -128,7 +107,7 @@ function formatDate(iso: string): string {
         <view class="flex items-center justify-between border-b border-[#f5f5f5] py-3.5">
           <text class="text-sm text-[#999]">练习年限</text>
           <text class="text-sm font-medium text-[#333]">
-            {{ practiceYearsText(profile.practiceYears) }}
+            {{ practiceYearsText(profile.practiceYears, '未设置') }}
           </text>
         </view>
 
@@ -144,7 +123,7 @@ function formatDate(iso: string): string {
         <view class="flex items-center justify-between pt-3.5">
           <text class="text-sm text-[#999]">加入时间</text>
           <text class="text-sm text-[#333]">
-            {{ formatDate(profile.createdAt) }}
+            {{ formatDate(profile.createdAt, '未知', '/') }}
           </text>
         </view>
       </view>

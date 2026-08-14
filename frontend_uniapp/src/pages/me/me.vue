@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useUserStore } from '@/store/user'
 import { useTokenStore } from '@/store/token'
 import { getMyProfile, updateMyTags } from '@/api/auth'
+import { canCreateCircle } from '@/utils/role'
 import { LOGIN_PAGE } from '@/router/config'
 import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue'
 import type { UserRole } from '@/types'
@@ -74,9 +75,9 @@ function handleMyCircles() {
   uni.navigateTo({ url: '/pages/my-circles/my-circles' })
 }
 
-/** 跳我发布的圈子页(TEACHER 专属) */
+/** 跳我发布的圈子页(TEACHER / ADMIN 专属) */
 function handleMyPublished() {
-  if (user.value?.role !== 'TEACHER') {
+  if (!canCreateCircle(user.value?.role)) {
     uni.showToast({ title: '仅传承人可访问', icon: 'none' })
     return
   }
@@ -202,7 +203,7 @@ const roleChipClass = computed(() => {
       </view>
 
       <view
-        v-if="user?.role === 'TEACHER'"
+        v-if="canCreateCircle(user?.role)"
         class="flex items-center justify-between border-b border-[#f5f5f5] px-4 py-4"
         @click="handleMyPublished"
       >
@@ -220,7 +221,7 @@ const roleChipClass = computed(() => {
       </view>
 
       <view
-        v-if="user?.role !== 'TEACHER' && user?.role !== 'ADMIN'"
+        v-if="!canCreateCircle(user?.role)"
         class="flex items-center justify-between border-b border-[#f5f5f5] px-4 py-4"
         @click="handleTeacherCert"
       >

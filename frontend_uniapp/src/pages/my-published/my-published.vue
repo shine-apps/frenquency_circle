@@ -2,6 +2,8 @@
 import { ref } from 'vue'
 import { useUserStore } from '@/store/user'
 import { getMyCircles, deleteCircle } from '@/api/circles'
+import { formatDate } from '@/utils/format'
+import { canCreateCircle } from '@/utils/role'
 import type { CircleDTO } from '@/types'
 
 definePage({
@@ -43,7 +45,7 @@ async function fetchList() {
 // 进入时权限校验 + 拉取
 onShow(() => {
   const role = userStore.userInfo?.role
-  if (role !== 'TEACHER') {
+  if (!canCreateCircle(role)) {
     uni.showToast({ title: '仅传承人可访问', icon: 'none' })
     setTimeout(() => uni.navigateBack(), 800)
     return
@@ -89,20 +91,6 @@ function handleOffline(id: string, title: string) {
         })
     },
   })
-}
-
-/** 创建时间格式化(只到日) */
-function formatDate(iso: string | null): string {
-  if (!iso) return ''
-  try {
-    const d = new Date(iso)
-    if (Number.isNaN(d.getTime())) return ''
-    const pad = (n: number) => String(n).padStart(2, '0')
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-  }
-  catch {
-    return ''
-  }
 }
 
 /** 渲染状态 chip */

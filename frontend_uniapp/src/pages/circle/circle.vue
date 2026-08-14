@@ -4,6 +4,7 @@ import { onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { getCircle, contactCircle } from '@/api/circles'
 import { useUserStore } from '@/store/user'
 import { useShare } from '@/composables/useShare'
+import { formatDate, formatDateTime } from '@/utils/format'
 import type { CircleDetailDTO } from '@/types'
 
 definePage({
@@ -136,34 +137,6 @@ function handleBack() {
       uni.reLaunch({ url: '/pages/index/index' })
     },
   })
-}
-
-/** 活动时间格式化 */
-function formatDateTime(iso: string | null): string {
-  if (!iso) return '时间待定'
-  try {
-    const d = new Date(iso)
-    if (Number.isNaN(d.getTime())) return '时间待定'
-    const pad = (n: number) => String(n).padStart(2, '0')
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-  }
-  catch {
-    return '时间待定'
-  }
-}
-
-/** 创建时间格式化(只到日) */
-function formatDate(iso: string | null): string {
-  if (!iso) return ''
-  try {
-    const d = new Date(iso)
-    if (Number.isNaN(d.getTime())) return ''
-    const pad = (n: number) => String(n).padStart(2, '0')
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-  }
-  catch {
-    return ''
-  }
 }
 
 const maxMembersText = computed(() => (circle.value?.maxMembers ? String(circle.value.maxMembers) : '不限'))

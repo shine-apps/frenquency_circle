@@ -48,7 +48,7 @@ export default function useRequest<T, P = undefined>(
   }
 
   if (options.immediate) {
-    (run as (args: P) => Promise<T | undefined>)({} as P)
+    void run(undefined)
   }
   return { loading, error, data, run }
 }

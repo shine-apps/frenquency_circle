@@ -44,7 +44,7 @@ export function http<T>(options: CustomRequestOptions) {
           }
 
           /* -------- 无感刷新 token ----------- */
-          const { refreshToken } = tokenStore.tokenInfo as IDoubleTokenRes || {}
+          const { refreshToken } = (tokenStore.tokenInfo as IDoubleTokenRes) || {}
           // token 失效的，且有刷新 token 的，才放到请求队列里
           if (refreshToken) {
             taskQueue.push(() => {

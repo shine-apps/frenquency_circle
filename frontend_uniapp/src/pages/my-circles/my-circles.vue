@@ -1,6 +1,11 @@
 <script lang="ts" setup>
 import { computed } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { useMatchStore } from '@/store/match'
+import { useUserStore } from '@/store/user'
+import { matchCircles } from '@/api/locations'
+import { formatDateTime, formatDistance } from '@/utils/format'
+import type { LocationPoint } from '@/types'
 
 definePage({
   style: {
@@ -12,6 +17,7 @@ definePage({
 const MAX_TAG_VISIBLE = 3
 
 const matchStore = useMatchStore()
+const userStore = useUserStore()
 const circles = computed(() => matchStore.circles)
 
 /** 跳圈子详情 */
@@ -29,27 +35,42 @@ function handleViewMatch() {
   uni.navigateTo({ url: '/pages/match/match' })
 }
 
-/** 距离格式化 */
-function formatDistance(km: number): string {
-  if (km < 1) return `${(km * 1000).toFixed(0)}m`
-  return `${km.toFixed(1)}km`
+/** 解析可用的定位(优先 match store,兜底用户资料) */
+function resolveLocation(): LocationPoint | null {
+  if (matchStore.location)
+    return matchStore.location
+  return userStore.userInfo?.location ?? null
 }
 
-/** 活动时间格式化 */
-function formatDateTime(iso: string | null): string {
-  if (!iso) return '时间待定'
-  try {
-    const d = new Date(iso)
-    if (Number.isNaN(d.getTime())) return '时间待定'
-    const pad = (n: number) => String(n).padStart(2, '0')
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-  }
-  catch {
-    return '时间待定'
-  }
+/** 解析可用的标签(优先 match store,兜底用户资料) */
+function resolveTagNames(): string[] {
+  if (matchStore.tags.length > 0)
+    return matchStore.tags
+  return userStore.userInfo?.tags ?? []
 }
 
-
+// 进入时若无缓存结果,则按用户当前位置/标签兜底拉取一次圈子
+onShow(() => {
+  if (circles.value.length > 0)
+    return
+  const loc = resolveLocation()
+  const tags = resolveTagNames()
+  if (!loc || tags.length === 0)
+    return
+  matchCircles({ latitude: loc.latitude, longitude: loc.longitude, tags, rangeKm: matchStore.rangeKm || 5, page: 1, pageSize: 20 })
+    .then((res) => {
+      matchStore.setMatchResult({
+        circles: res.list || [],
+        rangeKm: matchStore.rangeKm || 5,
+        location: loc,
+        tags,
+        totalCircles: res.total,
+      })
+    })
+    .catch(() => {
+      // 静默:保持空态,引导用户去首页完善兴趣/位置
+    })
+})
 </script>
 
 <template>

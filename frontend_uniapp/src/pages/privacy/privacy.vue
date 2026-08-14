@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { onBeforeUnmount, ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
 import { updatePrivacy } from '@/api/auth'
 import type { PrivacySettings } from '@/types'
@@ -43,10 +44,12 @@ onBeforeUnmount(() => {
   if (debounceTimer) clearTimeout(debounceTimer)
 })
 
-// 进入时从 store 预填
-const user = userStore.userInfo
-settings.value = user?.privacySettings ? { ...user.privacySettings } : { ...DEFAULT_PRIVACY }
-initialized.value = true
+// 每次展示时从 store 预填,避免读取到过期快照
+onShow(() => {
+  const user = userStore.userInfo
+  settings.value = user?.privacySettings ? { ...user.privacySettings } : { ...DEFAULT_PRIVACY }
+  initialized.value = true
+})
 
 /** 任意字段变更 → 防抖调 updatePrivacy */
 function handleChange(next: PrivacySettings) {
@@ -78,12 +81,12 @@ async function doSave(next: PrivacySettings) {
 }
 
 /** 切换公开联系方式 */
-function handlePublicContactChange(e: any) {
+function handlePublicContactChange(e: { detail: { value: boolean } }) {
   handleChange({ ...settings.value, publicContact: e.detail.value })
 }
 
 /** 切换允许被匹配 */
-function handleAllowMatchChange(e: any) {
+function handleAllowMatchChange(e: { detail: { value: boolean } }) {
   handleChange({ ...settings.value, allowMatch: e.detail.value })
 }
 

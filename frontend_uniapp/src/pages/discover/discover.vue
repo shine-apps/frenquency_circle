@@ -4,6 +4,7 @@ import { searchUsers, searchCircles } from '@/api/search'
 import { searchTags } from '@/api/tags'
 import { highlightText, isFieldMatched } from '@/utils/highlight'
 import { debounce } from '@/utils/debounce'
+import { activityLevelShortText, formatActivityTime, practiceYearsText } from '@/utils/format'
 import type { CircleSearchResultDTO, SearchQueryParams, TagDTO, UserSearchResultDTO } from '@/types'
 
 definePage({
@@ -145,28 +146,6 @@ function onCircleClick(circleId: string) {
 }
 
 // ====== 辅助函数 ======
-function activityLevelText(level: string): string {
-  if (level === 'low') return '低活跃'
-  if (level === 'medium') return '中活跃'
-  return '高活跃'
-}
-
-function practiceYearsText(years: number | null): string {
-  if (years === null || years === undefined) return ''
-  return `${years}年`
-}
-
-function formatActivityTime(iso: string | null): string {
-  if (!iso) return '时间待定'
-  try {
-    const d = new Date(iso)
-    if (Number.isNaN(d.getTime())) return '时间待定'
-    return `${d.getMonth() + 1}月${d.getDate()}日 ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
-  }
-  catch {
-    return '时间待定'
-  }
-}
 
 /** 渲染标签(最多 MAX_TAG_VISIBLE + "+N") */
 function renderTags(tags: string[]): { visible: string[]; rest: number } {
@@ -313,7 +292,7 @@ onHide(() => {
                   </view>
                   <view class="mt-1 flex items-center gap-1">
                     <text class="text-xs text-[#999]">
-                      {{ activityLevelText((item as UserSearchResultDTO).activityLevel) }}
+                      {{ activityLevelShortText((item as UserSearchResultDTO).activityLevel) }}
                     </text>
                     <template v-if="(item as UserSearchResultDTO).practiceYears !== null && (item as UserSearchResultDTO).practiceYears !== undefined">
                       <text class="text-xs text-[#ccc]">·</text>

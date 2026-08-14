@@ -5,6 +5,7 @@ import { useMatchStore } from '@/store/match'
 import { useLocationStore } from '@/store/location'
 import { useUserStore } from '@/store/user'
 import { matchCircles, matchPeople } from '@/api/locations'
+import { activityLevelText, formatDateTime, formatDistance, practiceYearsText } from '@/utils/format'
 import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue'
 import type { LocationPoint, MatchCircleDTO, MatchPersonDTO } from '@/types'
 
@@ -174,45 +175,6 @@ function handleCircleClick(circleId: string) {
 /** 去首页完善信息(空态一键回首页) */
 function handleGoHome() {
   uni.reLaunch({ url: '/pages/index/index' })
-}
-
-/** 距离格式化 */
-function formatDistance(km: number): string {
-  if (km < 1)
-    return `${(km * 1000).toFixed(0)}m`
-  return `${km.toFixed(1)}km`
-}
-
-/** 活跃度中文映射 */
-function activityLevelText(level: string): string {
-  if (level === 'low')
-    return '活跃度:低'
-  if (level === 'medium')
-    return '活跃度:中'
-  return '活跃度:高'
-}
-
-/** 练习时长格式化 */
-function practiceYearsText(years: number | null): string {
-  if (years === null || years === undefined)
-    return ''
-  return `${years}年`
-}
-
-/** 活动时间格式化(简化:YYYY-MM-DD HH:mm) */
-function formatDateTime(iso: string | null): string {
-  if (!iso)
-    return '时间待定'
-  try {
-    const d = new Date(iso)
-    if (Number.isNaN(d.getTime()))
-      return '时间待定'
-    const pad = (n: number) => String(n).padStart(2, '0')
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-  }
-  catch {
-    return '时间待定'
-  }
 }
 </script>
 

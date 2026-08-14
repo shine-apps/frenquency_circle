@@ -73,7 +73,6 @@ export const useUserStore = defineStore(
 
     /** 设置用户信息(全量替换) */
     function setUserInfo(val: UserInfo) {
-      console.log('设置用户信息', val)
       // 若头像为空 则使用默认头像
       if (!val.avatar) {
         val.avatar = '/static/images/default-avatar.png'
@@ -84,8 +83,6 @@ export const useUserStore = defineStore(
     /** 设置用户头像 */
     function setUserAvatar(avatar: string) {
       userInfo.value.avatar = avatar
-      console.log('设置用户头像', avatar)
-      console.log('userInfo', userInfo.value)
     }
 
     /** 删除用户信息 */

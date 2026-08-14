@@ -103,6 +103,11 @@ onShow(() => {
 })
 
 // ===== 头像上传与裁剪 =====
+/** uni.chooseMedia / uni.chooseImage 返回的临时文件(仅取本页用到的字段) */
+interface ChosenMediaFile {
+  tempFilePath: string
+}
+
 /** 从 tempFilePath 推断文件名(裁剪后无扩展名时兜底) */
 function deriveFilenameFromPath(p: string): string {
   if (!p)
@@ -142,8 +147,8 @@ async function handlePickAvatar() {
       maxDuration: 30,
       camera: 'back',
     })
-    const f = (res as any)?.tempFiles?.[0]
-    src = f?.tempFilePath ?? ''
+    const tempFiles = (res as unknown as { tempFiles?: ChosenMediaFile[] }).tempFiles ?? []
+    src = tempFiles[0]?.tempFilePath ?? ''
     // #endif
     // #ifdef H5
     const h5Res = await uni.chooseImage({
@@ -151,7 +156,7 @@ async function handlePickAvatar() {
       sizeType: ['compressed'],
       sourceType: ['album', 'camera'],
     })
-    const h5Path = (h5Res as any)?.tempFilePaths?.[0] ?? ''
+    const h5Path = h5Res.tempFilePaths?.[0] ?? ''
     // H5 端 chooseImage 的 path 是 blob URL,可直接用于 image 与上传
     src = h5Path
     // #endif

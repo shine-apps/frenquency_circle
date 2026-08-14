@@ -6,7 +6,7 @@ import {
   LayoutDashboardIcon,
   UsersIcon,
   AudioWaveformIcon,
-  TagIcon,
+  FolderTreeIcon,
   CircleIcon,
   FileCheckIcon,
 } from "lucide-react"
@@ -28,7 +28,7 @@ import { SignOutButton } from "@/components/sign-out-button"
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboardIcon, exact: true },
   { href: "/admin/users", label: "Users", icon: UsersIcon },
-  { href: "/admin/tags", label: "标签管理", icon: TagIcon },
+  { href: "/admin/taxonomy", label: "分类与标签", icon: FolderTreeIcon },
   { href: "/admin/circles", label: "圈子审核", icon: CircleIcon },
   { href: "/admin/teacher-applications", label: "教师认证", icon: FileCheckIcon },
 ]

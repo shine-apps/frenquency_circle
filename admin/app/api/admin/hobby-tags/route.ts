@@ -7,6 +7,8 @@ import { hobbyTags, categories } from "@/db/schema"
 import { fail, ok, parsePagination } from "@/lib/api"
 import { requireAdmin } from "@/lib/auth-utils"
 import { toTagDTO, selectTagsWithCategory, type TagRowWithCategory, nodeAlias, parentAlias } from "@/lib/search/tag-search"
+import { toPinyin, toPinyinInitials } from "@/lib/search/pinyin"
+import { logger, LOG_PREFIX } from "@/lib/logger"
 import type { TagDTO, Paginated } from "@/types/api"
 
 /**
@@ -66,14 +68,14 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  // 分类灵活化:category 匹配「标签所在一级大类(parent)的 name/slug」,
-  // 或「标签直挂的 level=1 叶子大类(node)的 name/slug」
+  // 分类灵活化:category 匹配「标签直挂分类(node,任意层级)的 name/slug」,
+  // 或「其一级大类(parent)的 name/slug」
   const categoryCond = category
     ? or(
+        eq(nodeAlias.name, category),
+        eq(nodeAlias.slug, category),
         eq(parentAlias.name, category),
         eq(parentAlias.slug, category),
-        and(eq(nodeAlias.level, 1), eq(nodeAlias.name, category)),
-        and(eq(nodeAlias.level, 1), eq(nodeAlias.slug, category))
       )!
     : undefined
 
@@ -111,4 +113,55 @@ export async function GET(req: NextRequest) {
     pageSize,
   }
   return ok(payload)
+}
+
+const createTagSchema = z.object({
+  name: z.string().trim().min(1).max(64),
+  categorySlug: z.string().trim().min(1).max(64),
+  status: z.enum(["pending", "approved", "rejected"]).optional(),
+})
+
+/**
+ * POST /api/admin/hobby-tags
+ *
+ * 管理后台新建标签。categorySlug 指定所属分类(必填),
+ * pinyin / pinyinInitials 由名称自动生成,status 默认 pending。
+ */
+export async function POST(req: Request) {
+  const guard = await requireAdmin()
+  if (!guard.ok) return guard.response
+
+  const body = await req.json().catch(() => null)
+  const parsed = createTagSchema.safeParse(body)
+  if (!parsed.success) {
+    return fail(400, "参数校验失败", parsed.error.flatten())
+  }
+  const { name, categorySlug, status } = parsed.data
+
+  const category = await db.query.categories.findFirst({
+    where: eq(categories.slug, categorySlug),
+  })
+  if (!category) return fail(404, "所属分类不存在")
+
+  const pinyin = toPinyin(name)
+  const pinyinInitials = toPinyinInitials(name)
+  const existing = await db.query.hobbyTags.findFirst({
+    where: eq(hobbyTags.name, name),
+  })
+  if (existing) return fail(409, "同名标签已存在")
+
+  const [row] = await db
+    .insert(hobbyTags)
+    .values({
+      name,
+      categoryId: category.id,
+      pinyin,
+      pinyinInitials,
+      status: status ?? "pending",
+      createdBy: guard.userId,
+    })
+    .returning()
+
+  logger.info(LOG_PREFIX.TAG, "新建标签", { id: row.id, by: guard.userId })
+  return ok({ tag: toTagDTO(row) }, { status: 201 })
 }

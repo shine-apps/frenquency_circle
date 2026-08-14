@@ -124,8 +124,8 @@ const loading = ref(false)
 const categories = ref<CategoryNode[]>([])
 // 当前展开的一级大类(空表示全部收起)
 const expandedCategory = ref<string | null>(null)
-// 当前展开的二级中类(复合键 `${category}::${sub}`,空表示全部收起)
-const expandedSubKey = ref<string | null>(null)
+// 当前选中的二级中类名称;null 表示"全部"(默认),展示该大类下所有标签
+const selectedSub = ref<string | null>(null)
 
 // 自定义添加相关状态
 const customOpen = ref(false)
@@ -220,26 +220,44 @@ function handleRemoveAll() {
   selectedTags.value = []
 }
 
-// ====== 分类展开/收起 ======
+// ====== 分类展开/收起 + 二级中类单选 ======
 function handleToggleCategory(cat: string) {
   expandedCategory.value = expandedCategory.value === cat ? null : cat
-  // 切换一级大类时收起二级展开态与自定义添加
+  // 展开一级大类时,默认选中"全部"并收起自定义添加
   if (expandedCategory.value !== null) {
-    expandedSubKey.value = null
+    selectedSub.value = null
     customOpen.value = false
   }
 }
 
-/** 二级中类是否展开 */
-function isSubExpanded(category: string, sub: string) {
-  return expandedSubKey.value === `${category}::${sub}`
+/** 点击二级中类单选按钮:选中后以单选形式展示其下标签;null 表示"全部" */
+function selectSub(sub: string | null) {
+  selectedSub.value = sub
 }
 
-/** 点击二级中类:展开/收起其下的三级具体标签(不直接加入) */
-function handleToggleSub(category: string, sub: string) {
-  const key = `${category}::${sub}`
-  expandedSubKey.value = expandedSubKey.value === key ? null : key
-}
+/** 当前展开大类下应展示的标签:选中"全部"时合并所有二级中类标签(按 name 去重);否则仅该二级中类的标签 */
+const visibleTags = computed<TagBrief[]>(() => {
+  if (!expandedCategory.value)
+    return []
+  const node = categories.value.find(c => c.category === expandedCategory.value)
+  if (!node)
+    return []
+  if (selectedSub.value === null) {
+    const seen = new Set<string>()
+    const list: TagBrief[] = []
+    for (const sub of node.subCategories) {
+      for (const t of sub.tags) {
+        if (!seen.has(t.name)) {
+          seen.add(t.name)
+          list.push(t)
+        }
+      }
+    }
+    return list
+  }
+  const sub = node.subCategories.find(s => s.name === selectedSub.value)
+  return sub ? sub.tags : []
+})
 
 /** 点击三级具体标签:加入/移除兴趣标签 */
 function handleToggleTag3(t: TagBrief) {
@@ -287,13 +305,13 @@ async function handleSubmitCustom() {
     // 若所选分类不在骨架中,按需注入占位节点(用后端返回的 category/subCategory)
     let target = categories.value.find(c => c.category === tag.category)
     if (!target) {
-      target = { category: tag.category, subCategories: [] }
+      target = { category: tag.category, categoryId: tag.categoryId ?? '', subCategories: [] }
       categories.value = [...categories.value, target]
     }
     const subName = tag.subCategory ?? tag.name
     let sub = target.subCategories.find(s => s.name === subName)
     if (!sub) {
-      sub = { name: subName, categoryId: tag.categoryId ?? '', tags: [] }
+      sub = { name: subName, categoryId: tag.categoryId ?? '', slug: tag.categoryId ?? `${tag.category}/${subName}`, tags: [] }
       target.subCategories = [...target.subCategories, sub]
     }
     if (!sub.tags.some(t => t.name === tag.name)) {
@@ -331,10 +349,10 @@ async function handleSubmitCustom() {
             <wd-button @click="handleCancel" type="info" round variant="subtle">取消</wd-button>
             <!-- 标题 -->
             <view class="flex flex-col items-center">
-              <text class="text-lg text-white font-semibold">
+              <text class="text-xl text-white font-semibold">
                 选择你的兴趣
               </text>
-              <text class="text-sm text-[#eee]">
+              <text class="text-base text-[#eee]">
                 可以选择 1-{{ max }} 个兴趣标签
               </text>
             </view>
@@ -349,25 +367,25 @@ async function handleSubmitCustom() {
 
         <!-- 操作栏:已选数量 + 全部清除(原 TagSelector 内部重复文案已合并去重) -->
         <view class="flex items-center justify-between px-4 py-3">
-          <text class="text-sm text-[#999]">
+          <text class="text-base text-[#666]">
             已选 {{ count }}/{{ max }}
           </text>
-          <text v-if="count > 0" class="text-xs text-[#018d71]" @click="handleRemoveAll">
+          <text v-if="count > 0" class="text-sm text-[#018d71]" @click="handleRemoveAll">
             全部清除
           </text>
         </view>
 
         <!-- 已选胶囊区(限高约 2 行,超出内部滚动,不撑高挤压中部滚动区) -->
-        <scroll-view v-if="selectedTags.length > 0" scroll-y class="max-h-[104px] px-4 pb-3 box-border">
+        <scroll-view v-if="selectedTags.length > 0" scroll-y class="max-h-[120px] px-4 pb-3 box-border">
           <view class="flex flex-wrap gap-2">
             <view v-for="name in selectedTags" :key="name"
-              class="inline-flex items-center gap-1 border border-[#cdeae2] rounded-full bg-[#e8f5f1] py-1 pl-3 pr-1.5 active:scale-95">
-              <text class="text-xs text-[#018d71]">
+              class="inline-flex items-center gap-1.5 border border-[#cdeae2] rounded-full bg-[#e8f5f1] py-1.5 pl-3.5 pr-2 active:scale-95">
+              <text class="text-sm text-[#018d71]">
                 {{ name }}
               </text>
-              <view class="h-4 w-4 flex items-center justify-center rounded-full bg-[#018d71]"
+              <view class="h-5 w-5 flex items-center justify-center rounded-full bg-[#018d71]"
                 @click="handleRemoveSelected(name)">
-                <text class="text-[10px] text-white leading-none">
+                <text class="text-xs text-white leading-none">
                   ✕
                 </text>
               </view>
@@ -377,8 +395,8 @@ async function handleSubmitCustom() {
 
         <!-- 搜索框 -->
         <view class="flex items-center gap-2 px-4 pb-1">
-          <view class="h-10 flex flex-1 items-center rounded-full bg-[#f5f6f7] px-4 b-solid b-[#e5e5e5]">
-            <input v-model="query" class="flex-1 text-sm" placeholder="搜索兴趣/标签" placeholder-class="text-[#bbb]">
+          <view class="h-11 flex flex-1 items-center rounded-full bg-[#f5f6f7] px-4 b-solid b-[#e5e5e5]">
+            <input v-model="query" class="flex-1 text-base" placeholder="搜索兴趣/标签" placeholder-class="text-[#bbb]">
           </view>
           <text v-if="loading" class="shrink-0 text-xs text-[#999]">
             搜索中...
@@ -393,25 +411,25 @@ async function handleSubmitCustom() {
           <!-- 搜索态:联想列表 -->
           <template v-if="query.trim()">
             <view v-if="suggestions.length === 0 && !loading" class="flex flex-col items-center pt-12">
-              <view class="text-sm text-[#999]">
+              <view class="text-base text-[#999]">
                 未找到"{{ query.trim() }}"相关标签,试试
-                <wd-button variant="text" size="small"
+                <wd-button variant="text" size="medium"
                   @click="requireLoginThen(() => customOpen = true)">自定义添加</wd-button>
               </view>
             </view>
             <view v-else class="overflow-hidden rounded-2xl bg-white shadow-sm">
               <view v-for="tag in suggestions" :key="tag.id"
-                class="flex items-center justify-between border-b border-[#f2f2f2] px-4 py-3 last:border-b-0"
+                class="flex items-center justify-between border-b border-[#f2f2f2] px-4 py-4 last:border-b-0"
                 :class="selectedTags.includes(tag.name) ? 'bg-[#e8f5f1]' : ''" @click="handleToggleTag(tag)">
                 <view class="flex flex-col">
-                  <text class="text-sm text-[#333]">
+                  <text class="text-base text-[#333]">
                     {{ tag.name }}
                   </text>
-                  <text v-if="tag.category" class="mt-0.5 text-xs text-[#999]">
+                  <text v-if="tag.category" class="mt-0.5 text-sm text-[#999]">
                     {{ tag.category }}
                   </text>
                 </view>
-                <text class="text-xs"
+                <text class="text-sm"
                   :class="selectedTags.includes(tag.name) ? 'text-[#018d71]' : reachedMax ? 'text-[#999]' : 'text-[#018d71]'">
                   {{ selectedTags.includes(tag.name) ? '✓ 已选' : reachedMax ? `上限${max}` : '+ 选择' }}
                 </text>
@@ -422,11 +440,11 @@ async function handleSubmitCustom() {
           <!-- 分类态:兴趣分类树(三级) -->
           <template v-else>
             <view class="flex items-center justify-between">
-              <text class="text-sm text-[#333] font-medium">
+              <text class="text-base text-[#333] font-medium">
                 全部兴趣大类
               </text>
-              <text class="text-xs text-[#999]">
-                点击大类展开子类
+              <text class="text-sm text-[#999]">
+                展开子类后，现在兴趣标签
               </text>
             </view>
             <view v-if="categories.length === 0" class="flex flex-col items-center pt-12">
@@ -434,36 +452,41 @@ async function handleSubmitCustom() {
                 分类加载中...
               </text>
             </view>
-            <view v-for="node in categories" :key="node.category" class="mt-3 rounded-2xl bg-white shadow-sm">
-              <view class="flex items-center justify-between px-4 py-3" @click="handleToggleCategory(node.category)">
-                <text class="text-sm text-[#333] font-medium">
+            <view v-for="node in categories" :key="node.category" class="mt-3 rounded-2xl bg-white shadow-sm overflow-hidden">
+              <view class="flex items-center justify-between px-4 pt-4 pb-2 bg-[#eef6f3]" @click="handleToggleCategory(node.category)">
+                <text class="text-base text-[#1a1a1a] font-semibold">
                   {{ node.category }}
                 </text>
-                <text class="text-xs text-[#999]">
+                <text class="text-sm text-[#018d71]">
                   {{ expandedCategory === node.category ? '收起' : '展开' }}
                 </text>
               </view>
-              <view v-if="expandedCategory === node.category && node.subCategories.length > 0"
-                class="border-t border-[#f5f6f7] px-4 py-3">
-                <!-- 二级中类 -->
-                <view v-for="sub in node.subCategories" :key="sub.name" class="mb-3 last:mb-0">
-                  <view class="flex items-center justify-between" @click="handleToggleSub(node.category, sub.name)">
-                    <text class="text-xs text-[#666] font-medium">
-                      {{ sub.name }}
-                    </text>
-                    <text class="text-[10px] text-[#999]">
-                      {{ isSubExpanded(node.category, sub.name) ? '收起' : `展开(${sub.tags.length})` }}
-                    </text>
-                  </view>
-                  <!-- 三级具体标签 -->
-                  <view v-if="isSubExpanded(node.category, sub.name)" class="mt-2 flex flex-wrap gap-2">
-                    <text v-for="t in sub.tags" :key="t.name"
-                      class="rounded-full px-3 py-1 text-xs active:scale-95"
-                      :class="selectedTags.includes(t.name) ? 'bg-[#e8f5f1] text-[#018d71]' : 'bg-[#f5f6f7] text-[#666]'"
-                      @click="handleToggleTag3(t)">
-                      {{ selectedTags.includes(t.name) ? `✓ ${t.name}` : t.name }}
-                    </text>
-                  </view>
+              <view v-if="expandedCategory === node.category" class="border-t-2 border-[#018d71]/20 bg-[#fafbfb]">
+                <!-- 二级中类单选按钮(含"全部"):紧凑小字,与标签区分,独立浅色块背景 -->
+                <view class="flex flex-wrap gap-2 rounded-md bg-[#f2f7f5] px-4 py-3">
+                  <text class="rounded-md px-2.5 py-1 text-xs active:scale-95 b-solid b-[#e0e0e0]"
+                    :class="selectedSub === null ? 'bg-[#018d71] text-white border-[#018d71]' : 'bg-[#fafafa] text-[#888]'"
+                    @click="selectSub(null)">
+                    全部
+                  </text>
+                  <text v-for="sub in node.subCategories" :key="sub.name"
+                    class="rounded-md px-2.5 py-1 text-xs active:scale-95 b-solid b-[#e0e0e0]"
+                    :class="selectedSub === sub.name ? 'bg-[#018d71] text-white border-[#018d71]' : 'bg-[#fafafa] text-[#888]'"
+                    @click="selectSub(sub.name)">
+                    {{ sub.name }}
+                  </text>
+                </view>
+                <!-- 三级具体标签:选中二级中类后展示其下标签,默认"全部"展示该大类全部标签 -->
+                <view class="py-3 flex flex-wrap gap-2.5">
+                  <text v-for="t in visibleTags" :key="t.name"
+                    class="rounded-full px-4 py-2 text-sm active:scale-95"
+                    :class="selectedTags.includes(t.name) ? 'bg-[#e8f5f1] text-[#018d71]' : 'bg-[#f5f6f7] text-[#666]'"
+                    @click="handleToggleTag3(t)">
+                    {{ selectedTags.includes(t.name) ? `✓ ${t.name}` : t.name }}
+                  </text>
+                  <text v-if="visibleTags.length === 0" class="text-sm text-[#999]">
+                    该类暂无标签
+                  </text>
                 </view>
               </view>
             </view>
@@ -479,32 +502,32 @@ async function handleSubmitCustom() {
       <view class="shrink-0 border-t border-[#f2f2f2] bg-white px-4 py-3">
         <!-- 自定义添加表单(卡片式,头部点击展开/收起,与分类块样式一致) -->
 
-        <view class="flex items-center justify-between px-4 py-3"
+        <view class="flex items-center justify-between px-4"
           @click="requireLoginThen(() => customOpen = !customOpen)">
-          <text class="text-sm text-[#333] font-medium">
+          <text class="text-base text-[#333] font-medium">
             没找到?创建一个新标签
           </text>
-          <text class="text-xs text-[#999]">
+          <text class="text-sm text-[#999]">
             {{ customOpen ? '收起' : '展开' }}
           </text>
         </view>
         <view v-if="customOpen" class="border-t border-[#f5f6f7] px-4 py-3">
           <view class="flex flex-col gap-3">
-            <view class="h-10 flex items-center justify-between rounded-full bg-[#f5f6f7] px-4 active:scale-[0.98]"
+            <view class="h-11 flex items-center justify-between rounded-full bg-[#f5f6f7] px-4 active:scale-[0.98]"
               @click="customCategoryPickerVisible = true">
-              <text class="text-sm" :class="customCategoryLabel ? 'text-[#333]' : 'text-[#bbb]'">
+              <text class="text-base" :class="customCategoryLabel ? 'text-[#333]' : 'text-[#bbb]'">
                 {{ customCategoryLabel || '请选择分类' }}
               </text>
-              <text class="text-xs text-[#999]">
+              <text class="text-sm text-[#999]">
                 ▾
               </text>
             </view>
             <view class="flex items-center gap-3">
-              <view class="h-10 flex flex-1 items-center rounded-full bg-[#f5f6f7] px-4">
-                <input :value="customName" class="flex-1 text-sm" :maxlength="CUSTOM_NAME_MAX"
+              <view class="h-11 flex flex-1 items-center rounded-full bg-[#f5f6f7] px-4">
+                <input :value="customName" class="flex-1 text-base" :maxlength="CUSTOM_NAME_MAX"
                   placeholder="输入标签名(1-30 字)" placeholder-class="text-[#bbb]" @input="handleCustomNameChange">
               </view>
-              <button class="rounded-full bg-[#018d71] px-4 py-2 text-sm text-white active:scale-95 disabled:opacity-50"
+              <button class="rounded-full bg-[#018d71] px-5 py-2.5 text-base text-white active:scale-95 disabled:opacity-50"
                 :disabled="!customName.trim() || customSubmitting" :loading="customSubmitting"
                 @click="handleSubmitCustom">
                 添加

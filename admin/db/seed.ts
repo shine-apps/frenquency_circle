@@ -115,16 +115,33 @@ type TagDefinition = {
 
 const TAG_DEFINITIONS: TagDefinition[] = [
   // === 武术养生 → 健身气功 ===
-  { name: "气功功法", subCategorySlug: "fitness-qigong" },
+  { name: "八段锦", subCategorySlug: "fitness-qigong" },
+  { name: "五禽戏", subCategorySlug: "fitness-qigong" },
+  { name: "易筋经", subCategorySlug: "fitness-qigong" },
+  { name: "六字诀", subCategorySlug: "fitness-qigong" },
 
-  // === 武术养生 → 太极拳 ===
+  // === 武术养生 → 太极拳(具体流派) ===
   { name: "太极拳", subCategorySlug: "taiji" },
+  { name: "陈式太极拳", subCategorySlug: "taiji" },
+  { name: "杨式太极拳", subCategorySlug: "taiji" },
+  { name: "武式太极拳", subCategorySlug: "taiji" },
+  { name: "吴式太极拳", subCategorySlug: "taiji" },
+  { name: "孙式太极拳", subCategorySlug: "taiji" },
+  { name: "和式太极拳", subCategorySlug: "taiji" },
 
-  // === 武术养生 → 其他传统武术 ===
-  { name: "器械功法", subCategorySlug: "other-wushu" },
+  // === 武术养生 → 其他传统武术(具体拳种) ===
+  { name: "少林拳", subCategorySlug: "other-wushu" },
+  { name: "咏春", subCategorySlug: "other-wushu" },
+  { name: "形意拳", subCategorySlug: "other-wushu" },
+  { name: "八卦掌", subCategorySlug: "other-wushu" },
+  { name: "南拳", subCategorySlug: "other-wushu" },
+  { name: "长拳", subCategorySlug: "other-wushu" },
 
   // === 视觉艺术 → 书画篆刻 ===
   { name: "书法", subCategorySlug: "calligraphy" },
+  { name: "楷书", subCategorySlug: "calligraphy" },
+  { name: "行书", subCategorySlug: "calligraphy" },
+  { name: "硬笔书法", subCategorySlug: "calligraphy" },
   { name: "国画", subCategorySlug: "calligraphy" },
   { name: "篆刻", subCategorySlug: "calligraphy" },
 
@@ -132,7 +149,11 @@ const TAG_DEFINITIONS: TagDefinition[] = [
   { name: "油画", subCategorySlug: "painting" },
   { name: "水彩", subCategorySlug: "painting" },
   { name: "素描", subCategorySlug: "painting" },
+  { name: "速写", subCategorySlug: "painting" },
   { name: "雕塑", subCategorySlug: "painting" },
+  { name: "版画", subCategorySlug: "painting" },
+  { name: "插画", subCategorySlug: "painting" },
+  { name: "漫画", subCategorySlug: "painting" },
 
   // === 视觉艺术 → 数字绘画 ===
   { name: "板绘", subCategorySlug: "digital-paint" },
@@ -144,55 +165,99 @@ const TAG_DEFINITIONS: TagDefinition[] = [
   { name: "刺绣", subCategorySlug: "handcraft" },
   { name: "编织", subCategorySlug: "handcraft" },
   { name: "木作", subCategorySlug: "handcraft" },
+  { name: "扎染", subCategorySlug: "handcraft" },
+  { name: "皮具", subCategorySlug: "handcraft" },
+  { name: "面塑", subCategorySlug: "handcraft" },
 
   // === 传统工艺 → 陶瓷塑造 ===
   { name: "陶艺", subCategorySlug: "ceramics" },
+  { name: "紫砂", subCategorySlug: "ceramics" },
+  { name: "青花瓷", subCategorySlug: "ceramics" },
+  { name: "建盏", subCategorySlug: "ceramics" },
 
-  // === 表演艺术 → 民族器乐 ===
-  { name: "弹拨乐器", subCategorySlug: "folk-instrument" },
-  { name: "拉弦乐器", subCategorySlug: "folk-instrument" },
-  { name: "吹管乐器", subCategorySlug: "folk-instrument" },
-  { name: "打击乐器", subCategorySlug: "folk-instrument" },
+  // === 表演艺术 → 民族器乐(具体乐器) ===
+  { name: "古琴", subCategorySlug: "folk-instrument" },
+  { name: "古筝", subCategorySlug: "folk-instrument" },
+  { name: "琵琶", subCategorySlug: "folk-instrument" },
+  { name: "阮", subCategorySlug: "folk-instrument" },
+  { name: "月琴", subCategorySlug: "folk-instrument" },
+  { name: "二胡", subCategorySlug: "folk-instrument" },
+  { name: "板胡", subCategorySlug: "folk-instrument" },
+  { name: "京胡", subCategorySlug: "folk-instrument" },
+  { name: "马头琴", subCategorySlug: "folk-instrument" },
+  { name: "笛子", subCategorySlug: "folk-instrument" },
+  { name: "箫", subCategorySlug: "folk-instrument" },
+  { name: "唢呐", subCategorySlug: "folk-instrument" },
+  { name: "葫芦丝", subCategorySlug: "folk-instrument" },
+  { name: "笙", subCategorySlug: "folk-instrument" },
+  { name: "埙", subCategorySlug: "folk-instrument" },
+  { name: "扬琴", subCategorySlug: "folk-instrument" },
 
   // === 表演艺术 → 西洋乐器 ===
   { name: "钢琴", subCategorySlug: "western-instrument" },
   { name: "小提琴", subCategorySlug: "western-instrument" },
+  { name: "大提琴", subCategorySlug: "western-instrument" },
   { name: "吉他", subCategorySlug: "western-instrument" },
+  { name: "尤克里里", subCategorySlug: "western-instrument" },
   { name: "架子鼓", subCategorySlug: "western-instrument" },
+  { name: "长笛", subCategorySlug: "western-instrument" },
+  { name: "萨克斯", subCategorySlug: "western-instrument" },
+  { name: "手风琴", subCategorySlug: "western-instrument" },
 
   // === 表演艺术 → 戏曲曲艺 ===
   { name: "京剧", subCategorySlug: "opera-quyi" },
   { name: "昆曲", subCategorySlug: "opera-quyi" },
   { name: "越剧", subCategorySlug: "opera-quyi" },
+  { name: "黄梅戏", subCategorySlug: "opera-quyi" },
+  { name: "豫剧", subCategorySlug: "opera-quyi" },
+  { name: "川剧", subCategorySlug: "opera-quyi" },
   { name: "相声", subCategorySlug: "opera-quyi" },
   { name: "评书", subCategorySlug: "opera-quyi" },
+  { name: "评弹", subCategorySlug: "opera-quyi" },
   { name: "鼓曲", subCategorySlug: "opera-quyi" },
+  { name: "快板", subCategorySlug: "opera-quyi" },
 
   // === 表演艺术 → 舞蹈戏剧 ===
   { name: "芭蕾", subCategorySlug: "dance-drama" },
   { name: "现代舞", subCategorySlug: "dance-drama" },
+  { name: "民族民间舞", subCategorySlug: "dance-drama" },
+  { name: "古典舞", subCategorySlug: "dance-drama" },
+  { name: "街舞", subCategorySlug: "dance-drama" },
+  { name: "拉丁舞", subCategorySlug: "dance-drama" },
   { name: "话剧", subCategorySlug: "dance-drama" },
   { name: "音乐剧", subCategorySlug: "dance-drama" },
 
   // === 生活美学 → 茶道花艺 ===
   { name: "茶艺", subCategorySlug: "tea-flower" },
+  { name: "工夫茶", subCategorySlug: "tea-flower" },
   { name: "花道", subCategorySlug: "tea-flower" },
+  { name: "中式插花", subCategorySlug: "tea-flower" },
   { name: "香道", subCategorySlug: "tea-flower" },
   { name: "茶具", subCategorySlug: "tea-flower" },
 
   // === 生活美学 → 饮品手作 ===
   { name: "咖啡", subCategorySlug: "drink-craft" },
+  { name: "手冲咖啡", subCategorySlug: "drink-craft" },
   { name: "调酒", subCategorySlug: "drink-craft" },
+  { name: "精酿", subCategorySlug: "drink-craft" },
   { name: "烘焙", subCategorySlug: "drink-craft" },
+  { name: "奶茶", subCategorySlug: "drink-craft" },
 
   // === 生活美学 → 园艺香氛 ===
   { name: "园艺", subCategorySlug: "garden-fragrance" },
+  { name: "多肉", subCategorySlug: "garden-fragrance" },
+  { name: "盆景", subCategorySlug: "garden-fragrance" },
   { name: "香薰", subCategorySlug: "garden-fragrance" },
+  { name: "香水", subCategorySlug: "garden-fragrance" },
+  { name: "香薰蜡烛", subCategorySlug: "garden-fragrance" },
 
   // === 数字新媒体 → 影像音频 ===
   { name: "视频剪辑", subCategorySlug: "media-audio" },
   { name: "电子音乐", subCategorySlug: "media-audio" },
   { name: "Vlog", subCategorySlug: "media-audio" },
+  { name: "摄影", subCategorySlug: "media-audio" },
+  { name: "播客", subCategorySlug: "media-audio" },
+  { name: "配音", subCategorySlug: "media-audio" },
 ]
 
 /**
@@ -266,7 +331,7 @@ async function main() {
       latitude: 39.94,
       longitude: 116.49,
       address: "北京市朝阳区朝阳公园南路1号",
-      tagNames: ["太极拳", "气功功法", "书法"],
+      tagNames: ["陈式太极拳", "八段锦", "书法"],
     },
     {
       email: "lilaoshi@example.com",
@@ -292,7 +357,7 @@ async function main() {
       latitude: 39.93,
       longitude: 116.47,
       address: "北京市朝阳区团结湖路",
-      tagNames: ["太极拳", "气功功法"],
+      tagNames: ["陈式太极拳", "八段锦"],
     },
     {
       email: "chentongxue@example.com",
@@ -316,7 +381,7 @@ async function main() {
       latitude: 39.92,
       longitude: 116.45,
       address: "北京市朝阳区建国门外大街",
-      tagNames: ["弹拨乐器"],
+      tagNames: ["琵琶"],
     },
   ]
 
@@ -334,7 +399,7 @@ async function main() {
       wechat: "wangshifu_taiji",
       activityTime: "每周六、日 07:00-08:30",
       maxMembers: 20,
-      tagNames: ["太极拳", "气功功法"],
+      tagNames: ["陈式太极拳", "八段锦"],
     },
     {
       title: "同频书法交流圈",

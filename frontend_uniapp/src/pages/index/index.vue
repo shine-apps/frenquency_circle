@@ -237,7 +237,7 @@ async function handleLocationUpdated(loc: { latitude: number, longitude: number,
   longitude.value = loc.longitude
   address.value = loc.address
 
-  // 已登录:自动保存到我的资料(与兴趣标签保存逻辑 handleTagsConfirmed 一致)
+  // 已登录:自动保存到我的资料(与兴趣标签保存逻辑 handleTagsConfirmed 的分支结构一致)
   if (userStore.isLoggedIn) {
     try {
       const profile = await updateProfile({
@@ -253,6 +253,7 @@ async function handleLocationUpdated(loc: { latitude: number, longitude: number,
     }
     catch (e) {
       console.error('[index] updateProfile failed:', e)
+      // 保存失败不写 store,避免持久化错误坐标;本地 ref 仅本次会话有效
       uni.showToast({ title: '位置保存失败,请重试', icon: 'none' })
     }
   }
@@ -265,7 +266,7 @@ async function handleLocationUpdated(loc: { latitude: number, longitude: number,
   }
 
   if (userTags.value.length > 0) {
-    loadAll(latitude.value, longitude.value, rangeKm.value)
+    loadAll(loc.latitude, loc.longitude, rangeKm.value)
   }
 }
 

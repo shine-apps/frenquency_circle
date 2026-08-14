@@ -339,7 +339,7 @@ async function handleSubmitCustom() {
   <wd-popup :model-value="modelValue" position="bottom" round :duration="300" :safe-area-inset-bottom="true"
     :close-on-click-modal="true" :lazy-render="false" :z-index="2000" @update:model-value="handleVisibleChange"
     custom-class="tag-popup">
-    <view class="h-[85vh] flex flex-col bg-[#f7f8fa]">
+    <view class="h-[90vh] flex flex-col bg-[#f7f8fa]">
       <!-- ====== 顶部固定区:品牌头 + 操作栏 + 搜索 + 已选胶囊 ====== -->
       <view class="shrink-0 bg-white">
         <!-- 品牌渐变头:取消(左) + 标题 + 完成(右) -->
@@ -453,7 +453,7 @@ async function handleSubmitCustom() {
               </text>
             </view>
             <view v-for="node in categories" :key="node.category" class="mt-3 rounded-2xl bg-white shadow-sm overflow-hidden">
-              <view class="flex items-center justify-between px-4 pt-4 pb-2 bg-[#eef6f3]" @click="handleToggleCategory(node.category)">
+              <view class="flex items-center justify-between px-4 pt-4 pb-4 bg-[#eef6f3]" @click="handleToggleCategory(node.category)">
                 <text class="text-base text-[#1a1a1a] font-semibold">
                   {{ node.category }}
                 </text>
@@ -463,7 +463,7 @@ async function handleSubmitCustom() {
               </view>
               <view v-if="expandedCategory === node.category" class="border-t-2 border-[#018d71]/20 bg-[#fafbfb]">
                 <!-- 二级中类单选按钮(含"全部"):紧凑小字,与标签区分,独立浅色块背景 -->
-                <view class="flex flex-wrap gap-2 rounded-md bg-[#f2f7f5] px-4 py-3">
+                <view class="flex flex-wrap gap-2 rounded-md bg-[#f2f7f5] px-4 pb-3">
                   <text class="rounded-md px-2.5 py-1 text-xs active:scale-95 b-solid b-[#e0e0e0]"
                     :class="selectedSub === null ? 'bg-[#018d71] text-white border-[#018d71]' : 'bg-[#fafafa] text-[#888]'"
                     @click="selectSub(null)">

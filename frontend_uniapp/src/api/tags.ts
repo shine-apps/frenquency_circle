@@ -32,12 +32,12 @@ export function getCategories() {
  * - 名称重复返回 409
  *
  * @param name 标签名(1-30 字符)
- * @param categorySlug 可选,所属分类(一级叶子或二级中类)的稳定 slug;不传时归到全局"自定义标签"兜底中类
+ * @param categorySlug 必填,所属分类(一级叶子或二级中类)的稳定 slug;自定义标签必须归属到一个真实分类
  * @returns 新创建的 TagDTO
  */
 export function createCustomTag(
   name: string,
-  categorySlug?: string
+  categorySlug: string
 ) {
   return http.post<TagDTO>('/api/hobby-tags/custom', {
     name,

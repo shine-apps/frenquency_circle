@@ -1,6 +1,6 @@
 "use client"
 
-import { PlusIcon, PencilIcon, TrashIcon } from "lucide-react"
+import { PlusIcon, PencilIcon, TrashIcon, EyeIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import type { CategoryNode } from "@/types/api"
@@ -10,6 +10,7 @@ export function CategoryTree({
   tree,
   selectedId,
   onSelect,
+  onViewTags,
   onEdit,
   onAdd,
   onDeleted,
@@ -17,6 +18,7 @@ export function CategoryTree({
   tree: CategoryNode[]
   selectedId: string | null
   onSelect: (c: SelectedCategory) => void
+  onViewTags: (node: CategoryNode) => void
   onEdit: (node: CategoryNode, parentId: string | null) => void
   onAdd: (parentId: string | null) => void
   onDeleted: (id: string) => void
@@ -65,6 +67,14 @@ export function CategoryTree({
               <span className="ml-2 text-xs text-muted-foreground">{top.slug}</span>
             </button>
             <div className="flex gap-1">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => onViewTags(top)}
+                aria-label="查看全部标签"
+              >
+                <EyeIcon />
+              </Button>
               <Button
                 variant="ghost"
                 size="icon-sm"
@@ -121,6 +131,14 @@ export function CategoryTree({
                     </span>
                   </button>
                   <div className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => onViewTags(sub)}
+                      aria-label="查看全部标签"
+                    >
+                      <EyeIcon />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon-sm"

@@ -345,12 +345,7 @@ async function handleSubmitCustom() {
           </view>
         </view>
 
-        <!-- 操作提示 -->
-        <view class="px-4 pt-1">
-          <text class="text-sm text-[#bbb]">
-            可以选择 1-{{ max }} 个兴趣标签
-          </text>
-        </view>
+
 
         <!-- 操作栏:已选数量 + 全部清除(原 TagSelector 内部重复文案已合并去重) -->
         <view class="flex items-center justify-between px-4 py-3">

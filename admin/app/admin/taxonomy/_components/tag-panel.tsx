@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { PlusIcon, PencilIcon, TrashIcon, CheckIcon, XIcon } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -13,11 +14,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { TagDTO } from "@/types/api"
 import type { SelectedCategory } from "./taxonomy-manager"
 
 type StatusTab = "all" | "pending" | "approved" | "rejected"
+
+const STATUS_TABS: { value: StatusTab; label: string }[] = [
+  { value: "all", label: "全部" },
+  { value: "pending", label: "待审核" },
+  { value: "approved", label: "已通过" },
+  { value: "rejected", label: "已拒绝" },
+]
 
 const STATUS_LABEL: Record<TagDTO["status"], string> = {
   pending: "待审核",
@@ -44,29 +51,42 @@ export function TagPanel({
 
   const categorySlug = selected?.slug ?? ""
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const params = new URLSearchParams()
-    params.set("page", String(page))
-    params.set("pageSize", String(pageSize))
-    if (categorySlug) params.set("category", categorySlug)
-    if (q.trim()) params.set("q", q.trim())
-    if (statusTab !== "all") params.set("status", statusTab)
-    const res = await fetch(`/api/admin/hobby-tags?${params.toString()}`)
-    const data = await res.json()
-    setLoading(false)
-    if (res.ok) {
-      setItems(data.list ?? [])
-      setTotal(data.total ?? 0)
-    } else {
-      setItems([])
-      setTotal(0)
-    }
-  }, [page, categorySlug, q, statusTab])
+  const fetchTags = useCallback(
+    async (signal?: AbortSignal) => {
+      setLoading(true)
+      const params = new URLSearchParams()
+      params.set("page", String(page))
+      params.set("pageSize", String(pageSize))
+      if (categorySlug) params.set("category", categorySlug)
+      if (q.trim()) params.set("q", q.trim())
+      if (statusTab !== "all") params.set("status", statusTab)
+      try {
+        const res = await fetch(`/api/admin/hobby-tags?${params.toString()}`, { signal })
+        const body = await res.json()
+        setLoading(false)
+        if (res.ok && body.data) {
+          setItems(body.data.list ?? [])
+          setTotal(body.data.total ?? 0)
+        } else {
+          setItems([])
+          setTotal(0)
+        }
+      } catch (e) {
+        if ((e as Error)?.name !== "AbortError") {
+          setLoading(false)
+          setItems([])
+          setTotal(0)
+        }
+      }
+    },
+    [page, categorySlug, q, statusTab],
+  )
 
   useEffect(() => {
-    load()
-  }, [load])
+    const controller = new AbortController()
+    fetchTags(controller.signal)
+    return () => controller.abort()
+  }, [fetchTags])
 
   // 切换分类 / 状态 / 关键词时回到第 1 页
   useEffect(() => {
@@ -80,7 +100,7 @@ export function TagPanel({
       body: JSON.stringify({ status }),
     })
     if (res.ok) {
-      load()
+      fetchTags()
     } else {
       const d = await res.json().catch(() => ({}))
       alert(d.message || "操作失败")
@@ -93,7 +113,7 @@ export function TagPanel({
       method: "DELETE",
     })
     if (res.ok) {
-      load()
+      fetchTags()
     } else {
       const d = await res.json().catch(() => ({}))
       alert(d.message || "删除失败")
@@ -114,138 +134,145 @@ export function TagPanel({
         </Button>
       </div>
 
-      <Tabs value={statusTab} onValueChange={(v) => setStatusTab(v as StatusTab)}>
-        <TabsList>
-          <TabsTrigger value="all">全部</TabsTrigger>
-          <TabsTrigger value="pending">待审核</TabsTrigger>
-          <TabsTrigger value="approved">已通过</TabsTrigger>
-          <TabsTrigger value="rejected">已拒绝</TabsTrigger>
-        </TabsList>
-
-        <div className="mt-3 flex items-center gap-2">
-          <Input
-            placeholder="搜索名称 / 拼音"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            className="max-w-xs"
-          />
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="inline-flex rounded-lg border bg-muted p-1">
+          {STATUS_TABS.map((t) => (
+            <button
+              key={t.value}
+              type="button"
+              onClick={() => setStatusTab(t.value)}
+              className={cn(
+                "rounded-md px-3 py-1 text-sm font-medium transition-colors",
+                statusTab === t.value
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
 
-        <TabsContent value={statusTab} className="mt-3">
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>名称</TableHead>
-                  <TableHead>分类</TableHead>
-                  <TableHead>拼音</TableHead>
-                  <TableHead>状态</TableHead>
-                  <TableHead className="text-right">操作</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
-                      {loading ? "加载中…" : "暂无标签"}
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  items.map((tag) => (
-                    <TableRow key={tag.id}>
-                      <TableCell className="font-medium">{tag.name}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {tag.subCategory ? `${tag.subCategory} / ` : ""}
-                        {tag.category}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {tag.pinyin}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            tag.status === "approved"
-                              ? "default"
-                              : tag.status === "rejected"
-                                ? "destructive"
-                                : "secondary"
-                          }
-                        >
-                          {STATUS_LABEL[tag.status]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          {tag.status !== "approved" ? (
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() => patchTag(tag.id, "approved")}
-                              aria-label="通过"
-                            >
-                              <CheckIcon />
-                            </Button>
-                          ) : null}
-                          {tag.status !== "rejected" ? (
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() => patchTag(tag.id, "rejected")}
-                              aria-label="拒绝"
-                            >
-                              <XIcon />
-                            </Button>
-                          ) : null}
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            onClick={() => onEditTag(tag)}
-                            aria-label="编辑"
-                          >
-                            <PencilIcon />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            onClick={() => deleteTag(tag)}
-                            aria-label="删除"
-                          >
-                            <TrashIcon />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+        <Input
+          placeholder="搜索名称 / 拼音"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          className="max-w-xs"
+        />
+      </div>
 
-          <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
-            <span>
-              第 {page} / {totalPages} 页
-            </span>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                上一页
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              >
-                下一页
-              </Button>
-            </div>
-          </div>
-        </TabsContent>
-      </Tabs>
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>名称</TableHead>
+              <TableHead>分类</TableHead>
+              <TableHead>拼音</TableHead>
+              <TableHead>状态</TableHead>
+              <TableHead className="text-right">操作</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {items.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                  {loading ? "加载中…" : "暂无标签"}
+                </TableCell>
+              </TableRow>
+            ) : (
+              items.map((tag) => (
+                <TableRow key={tag.id}>
+                  <TableCell className="font-medium">{tag.name}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {tag.subCategory ? `${tag.subCategory} / ` : ""}
+                    {tag.category}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {tag.pinyin}
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={
+                        tag.status === "approved"
+                          ? "default"
+                          : tag.status === "rejected"
+                            ? "destructive"
+                            : "secondary"
+                      }
+                    >
+                      {STATUS_LABEL[tag.status]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-1">
+                      {tag.status !== "approved" ? (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => patchTag(tag.id, "approved")}
+                          aria-label="通过"
+                        >
+                          <CheckIcon />
+                        </Button>
+                      ) : null}
+                      {tag.status !== "rejected" ? (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => patchTag(tag.id, "rejected")}
+                          aria-label="拒绝"
+                        >
+                          <XIcon />
+                        </Button>
+                      ) : null}
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => onEditTag(tag)}
+                        aria-label="编辑"
+                      >
+                        <PencilIcon />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => deleteTag(tag)}
+                        aria-label="删除"
+                      >
+                        <TrashIcon />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
+        <span>
+          第 {page} / {totalPages} 页
+        </span>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            上一页
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          >
+            下一页
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }

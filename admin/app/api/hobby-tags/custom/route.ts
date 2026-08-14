@@ -9,18 +9,15 @@ import { logger, LOG_PREFIX } from "@/lib/logger"
 import { toPinyin, toPinyinInitials } from "@/lib/search/pinyin"
 import { toTagDTO } from "@/lib/search/tag-search"
 
-/** 自定义标签默认归属的兜底分类 slug(全局"其他兴趣 → 自定义标签") */
-const DEFAULT_CATEGORY_SLUG = "custom-other"
-
 /**
  * 自定义标签请求体 schema。
  * - name: 1-30 字符,trim 后校验
- * - categorySlug: 可选,用户所选分类(一级叶子或二级中类)的稳定 slug;
- *   不传时归到全局"自定义标签"兜底中类
+ * - categorySlug: 必填,用户所选分类(一级叶子或二级中类)的稳定 slug;
+ *   自定义标签必须归属到一个真实存在的分类节点
  */
 const createCustomTagSchema = z.object({
   name: z.string().trim().min(1).max(30),
-  categorySlug: z.string().trim().min(1).max(64).optional(),
+  categorySlug: z.string().trim().min(1).max(64),
 })
 
 /**
@@ -28,9 +25,9 @@ const createCustomTagSchema = z.object({
  *
  * 用户自定义标签创建接口(需登录)。
  *
- * - zod 校验 `name`(1-30 字符,trim)、可选 `categorySlug`(分类稳定键,可为一级或二级)
+ * - zod 校验 `name`(1-30 字符,trim)、必填 `categorySlug`(分类稳定键,可为一级或二级)
  * - 用 `toPinyin` 与 `toPinyinInitials` 自动计算 pinyin 字段
- * - 通过 `categorySlug` 解析出 `categoryId`;不传则归到全局"自定义标签"兜底中类
+ * - 通过 `categorySlug` 解析出 `categoryId`;分类不存在则返回 400
  * - 设置 `status='pending'`、`createdBy=当前用户ID`
  * - 插入 `hobby_tags` 表(若 name 已存在则返回 409)
  * - 返回 `IResponse<TagDTO>`(包含新创建的 tagId)
@@ -59,7 +56,7 @@ export async function POST(req: Request) {
   }
 
   const name = parsed.data.name
-  const categorySlug = parsed.data.categorySlug ?? DEFAULT_CATEGORY_SLUG
+  const categorySlug = parsed.data.categorySlug
 
   // 3. 解析所属分类(可为 level=1 叶子大类或 level=2 二级中类)
   const subCat = await db.query.categories.findFirst({

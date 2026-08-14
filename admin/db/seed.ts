@@ -45,28 +45,19 @@ type CategorySeed = {
 
 const CATEGORY_TREE: CategorySeed[] = [
   {
-    slug: "traditional",
-    name: "传统与民族文化",
+    slug: "visual-arts",
+    name: "视觉艺术",
     sortOrder: 1,
     subCategories: [
-      { slug: "martial", name: "武术养生", sortOrder: 1 },
-      { slug: "folk-craft", name: "传统手工", sortOrder: 2 },
-    ],
-  },
-  {
-    slug: "visual",
-    name: "视觉与造型艺术",
-    sortOrder: 2,
-    subCategories: [
       { slug: "calligraphy", name: "书画篆刻", sortOrder: 1 },
-      { slug: "digital-paint", name: "数字绘画", sortOrder: 2 },
-      { slug: "painting", name: "绘画雕塑", sortOrder: 3 },
+      { slug: "painting", name: "绘画雕塑", sortOrder: 2 },
+      { slug: "digital-paint", name: "数字绘画", sortOrder: 3 },
     ],
   },
   {
-    slug: "performing",
-    name: "表演与音乐艺术",
-    sortOrder: 3,
+    slug: "performing-arts",
+    name: "表演艺术",
+    sortOrder: 2,
     subCategories: [
       { slug: "folk-instrument", name: "民族器乐", sortOrder: 1 },
       { slug: "western-instrument", name: "西洋乐器", sortOrder: 2 },
@@ -75,15 +66,18 @@ const CATEGORY_TREE: CategorySeed[] = [
     ],
   },
   {
-    slug: "craft",
-    name: "手作与匠艺",
-    sortOrder: 4,
-    subCategories: [],
+    slug: "crafts",
+    name: "传统工艺",
+    sortOrder: 3,
+    subCategories: [
+      { slug: "handcraft", name: "手工技艺", sortOrder: 1 },
+      { slug: "ceramics", name: "陶瓷塑造", sortOrder: 2 },
+    ],
   },
   {
     slug: "lifestyle",
-    name: "生活美学与休闲",
-    sortOrder: 5,
+    name: "生活美学",
+    sortOrder: 4,
     subCategories: [
       { slug: "tea-flower", name: "茶道花艺", sortOrder: 1 },
       { slug: "drink-craft", name: "饮品手作", sortOrder: 2 },
@@ -91,8 +85,18 @@ const CATEGORY_TREE: CategorySeed[] = [
     ],
   },
   {
-    slug: "digital",
-    name: "数字与新媒体",
+    slug: "martial-wellness",
+    name: "武术养生",
+    sortOrder: 5,
+    subCategories: [
+      { slug: "fitness-qigong", name: "健身气功", sortOrder: 1 },
+      { slug: "taiji", name: "太极拳", sortOrder: 2 },
+      { slug: "other-wushu", name: "其他传统武术", sortOrder: 3 },
+    ],
+  },
+  {
+    slug: "digital-media",
+    name: "数字新媒体",
     sortOrder: 6,
     subCategories: [{ slug: "media-audio", name: "影像音频", sortOrder: 1 }],
   },
@@ -110,29 +114,53 @@ type TagDefinition = {
 }
 
 const TAG_DEFINITIONS: TagDefinition[] = [
-  // === 传统与民族文化 → 武术养生 ===
-  { name: "太极拳", subCategorySlug: "martial" },
-  { name: "气功功法", subCategorySlug: "martial" },
-  { name: "器械功法", subCategorySlug: "martial" },
+  // === 武术养生 → 健身气功 ===
+  { name: "气功功法", subCategorySlug: "fitness-qigong" },
 
-  // === 表演与音乐艺术 → 民族器乐 ===
+  // === 武术养生 → 太极拳 ===
+  { name: "太极拳", subCategorySlug: "taiji" },
+
+  // === 武术养生 → 其他传统武术 ===
+  { name: "器械功法", subCategorySlug: "other-wushu" },
+
+  // === 视觉艺术 → 书画篆刻 ===
+  { name: "书法", subCategorySlug: "calligraphy" },
+  { name: "国画", subCategorySlug: "calligraphy" },
+  { name: "篆刻", subCategorySlug: "calligraphy" },
+
+  // === 视觉艺术 → 绘画雕塑 ===
+  { name: "油画", subCategorySlug: "painting" },
+  { name: "水彩", subCategorySlug: "painting" },
+  { name: "素描", subCategorySlug: "painting" },
+  { name: "雕塑", subCategorySlug: "painting" },
+
+  // === 视觉艺术 → 数字绘画 ===
+  { name: "板绘", subCategorySlug: "digital-paint" },
+  { name: "像素画", subCategorySlug: "digital-paint" },
+  { name: "AI绘画", subCategorySlug: "digital-paint" },
+
+  // === 传统工艺 → 手工技艺 ===
+  { name: "剪纸", subCategorySlug: "handcraft" },
+  { name: "刺绣", subCategorySlug: "handcraft" },
+  { name: "编织", subCategorySlug: "handcraft" },
+  { name: "木作", subCategorySlug: "handcraft" },
+
+  // === 传统工艺 → 陶瓷塑造 ===
+  { name: "陶艺", subCategorySlug: "ceramics" },
+
+  // === 表演艺术 → 民族器乐 ===
   { name: "弹拨乐器", subCategorySlug: "folk-instrument" },
   { name: "拉弦乐器", subCategorySlug: "folk-instrument" },
   { name: "吹管乐器", subCategorySlug: "folk-instrument" },
   { name: "打击乐器", subCategorySlug: "folk-instrument" },
 
-  // === 视觉与造型艺术 → 书画篆刻 ===
-  { name: "书法", subCategorySlug: "calligraphy" },
-  { name: "国画", subCategorySlug: "calligraphy" },
-  { name: "篆刻", subCategorySlug: "calligraphy" },
+  // === 表演艺术 → 西洋乐器 ===
+  { name: "钢琴", subCategorySlug: "western-instrument" },
+  { name: "小提琴", subCategorySlug: "western-instrument" },
+  { name: "吉他", subCategorySlug: "western-instrument" },
+  { name: "架子鼓", subCategorySlug: "western-instrument" },
 
-  // === 生活美学与休闲 → 茶道花艺 ===
-  { name: "茶艺", subCategorySlug: "tea-flower" },
-  { name: "花道", subCategorySlug: "tea-flower" },
-  { name: "香道", subCategorySlug: "tea-flower" },
-  { name: "茶具", subCategorySlug: "tea-flower" },
-
-  // === 表演与音乐艺术 → 戏曲曲艺 ===
+  // === 表演艺术 → 戏曲曲艺 ===
   { name: "京剧", subCategorySlug: "opera-quyi" },
   { name: "昆曲", subCategorySlug: "opera-quyi" },
   { name: "越剧", subCategorySlug: "opera-quyi" },
@@ -140,49 +168,31 @@ const TAG_DEFINITIONS: TagDefinition[] = [
   { name: "评书", subCategorySlug: "opera-quyi" },
   { name: "鼓曲", subCategorySlug: "opera-quyi" },
 
-  // === 传统与民族文化 → 传统手工 ===
-  { name: "剪纸", subCategorySlug: "folk-craft" },
-  { name: "刺绣", subCategorySlug: "folk-craft" },
-  { name: "陶艺", subCategorySlug: "folk-craft" },
-  { name: "编织", subCategorySlug: "folk-craft" },
-  { name: "木作", subCategorySlug: "folk-craft" },
-
-  // === 视觉与造型艺术 → 绘画雕塑 ===
-  { name: "油画", subCategorySlug: "painting" },
-  { name: "水彩", subCategorySlug: "painting" },
-  { name: "素描", subCategorySlug: "painting" },
-  { name: "雕塑", subCategorySlug: "painting" },
-
-  // === 表演与音乐艺术 → 西洋乐器 ===
-  { name: "钢琴", subCategorySlug: "western-instrument" },
-  { name: "小提琴", subCategorySlug: "western-instrument" },
-  { name: "吉他", subCategorySlug: "western-instrument" },
-  { name: "架子鼓", subCategorySlug: "western-instrument" },
-
-  // === 表演与音乐艺术 → 舞蹈戏剧 ===
+  // === 表演艺术 → 舞蹈戏剧 ===
   { name: "芭蕾", subCategorySlug: "dance-drama" },
   { name: "现代舞", subCategorySlug: "dance-drama" },
   { name: "话剧", subCategorySlug: "dance-drama" },
   { name: "音乐剧", subCategorySlug: "dance-drama" },
 
-  // === 视觉与造型艺术 → 数字绘画 ===
-  { name: "板绘", subCategorySlug: "digital-paint" },
-  { name: "像素画", subCategorySlug: "digital-paint" },
-  { name: "AI绘画", subCategorySlug: "digital-paint" },
+  // === 生活美学 → 茶道花艺 ===
+  { name: "茶艺", subCategorySlug: "tea-flower" },
+  { name: "花道", subCategorySlug: "tea-flower" },
+  { name: "香道", subCategorySlug: "tea-flower" },
+  { name: "茶具", subCategorySlug: "tea-flower" },
 
-  // === 数字与新媒体 → 影像音频 ===
-  { name: "视频剪辑", subCategorySlug: "media-audio" },
-  { name: "电子音乐", subCategorySlug: "media-audio" },
-  { name: "Vlog", subCategorySlug: "media-audio" },
-
-  // === 生活美学与休闲 → 饮品手作 ===
+  // === 生活美学 → 饮品手作 ===
   { name: "咖啡", subCategorySlug: "drink-craft" },
   { name: "调酒", subCategorySlug: "drink-craft" },
   { name: "烘焙", subCategorySlug: "drink-craft" },
 
-  // === 生活美学与休闲 → 园艺香氛 ===
+  // === 生活美学 → 园艺香氛 ===
   { name: "园艺", subCategorySlug: "garden-fragrance" },
   { name: "香薰", subCategorySlug: "garden-fragrance" },
+
+  // === 数字新媒体 → 影像音频 ===
+  { name: "视频剪辑", subCategorySlug: "media-audio" },
+  { name: "电子音乐", subCategorySlug: "media-audio" },
+  { name: "Vlog", subCategorySlug: "media-audio" },
 ]
 
 /**
@@ -398,6 +408,15 @@ async function main() {
         set: { updatedAt: new Date() },
       })
   }
+
+  // === 0. 全量重建分类与标签(清掉旧数据,保证分类结构干净) ===
+  // 本次对分类树做了全新 slug 重组,旧分类/标签已无对应 slug,若不清理会沦为孤儿行。
+  // 注意 hobby_tags.category_id 对 categories 为 onDelete: restrict,故必须先删标签、再删分类。
+  // users.tags / circles.tags 为独立 text[] 数组(按标签名引用),重建后同名标签仍存在,
+  // 不会丢失用户/圈子的兴趣关联。仅在需要重置分类结构时执行,生产环境请谨慎。
+  console.log("→ 清理旧分类与标签(全量重建)…")
+  await db.delete(hobbyTags)
+  await db.delete(categories)
 
   // === 6. 插入分类树(幂等:按 slug upsert,保证 categoryId 关联稳定) ===
   console.log("→ 插入分类树…")

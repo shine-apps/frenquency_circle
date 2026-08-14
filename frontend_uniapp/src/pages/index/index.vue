@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { onShareAppMessage, onShareTimeline, onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
 import { useMatchStore } from '@/store/match'
-import { updateMyTags } from '@/api/auth'
+import { updateMyTags, updateProfile } from '@/api/auth'
 import { matchCircles, matchPeople } from '@/api/locations'
 import { LOGIN_PAGE } from '@/router/config'
 import { useDialog } from '@wot-ui/ui/components/wd-dialog'
@@ -230,13 +230,42 @@ function handleRangeChange(range: number): void {
   }
 }
 
-/** LocationSetter 持久化成功后回调 */
-function handleLocationUpdated(loc: { latitude: number, longitude: number, address: string }): void {
+/** LocationSetter 选点完成后:保存到当前用户资料(已登录)、同步 store、刷新匹配 */
+async function handleLocationUpdated(loc: { latitude: number, longitude: number, address: string }): Promise<void> {
+  // 先更新本地坐标/地址,让 UI 立即回显
   latitude.value = loc.latitude
   longitude.value = loc.longitude
   address.value = loc.address
+
+  // 已登录:自动保存到我的资料(与兴趣标签保存逻辑 handleTagsConfirmed 一致)
+  if (userStore.isLoggedIn) {
+    try {
+      const profile = await updateProfile({
+        address: loc.address,
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+      })
+      // 同步 store,使用后端权威返回值
+      userStore.setLocation(
+        profile.location ?? { latitude: loc.latitude, longitude: loc.longitude },
+        profile.address ?? loc.address,
+      )
+    }
+    catch (e) {
+      console.error('[index] updateProfile failed:', e)
+      uni.showToast({ title: '位置保存失败,请重试', icon: 'none' })
+    }
+  }
+  else {
+    // 未登录:仅更新本地状态用于本次匹配展示,不发起后端保存
+    userStore.setLocation(
+      { latitude: loc.latitude, longitude: loc.longitude },
+      loc.address,
+    )
+  }
+
   if (userTags.value.length > 0) {
-    loadAll(loc.latitude, loc.longitude, rangeKm.value)
+    loadAll(latitude.value, longitude.value, rangeKm.value)
   }
 }
 

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
  * GET /api/locations/match-people 与 match-circles 集成测试。
  *
  * 覆盖:
- * - 未登录返回 401
+ * - 未登录(游客)允许匹配,返回 200(路由不强校验登录态)
  * - 成功返回 Paginated<MatchPersonDTO> / Paginated<MatchCircleDTO>
  * - 缺少 latitude 返回 400
  * - 缺少 tags 返回 400
@@ -133,8 +133,10 @@ beforeEach(() => {
 })
 
 describe("GET /api/locations/match-people", () => {
-  it("returns 401 when not logged in", async () => {
+  it("allows guest (not logged in) to match and returns 200", async () => {
     readUserFromTokenMock.mockResolvedValue(null)
+    matchPeopleMock.mockResolvedValue(SAMPLE_PEOPLE_RESULT)
+
     const res = await matchPeopleGET(
       makeGetRequest("/api/locations/match-people", {
         latitude: "39.9042",
@@ -142,11 +144,13 @@ describe("GET /api/locations/match-people", () => {
         tags: TAG_NAME,
       })
     )
-    expect(res.status).toBe(401)
-    const body = (await res.json()) as IResponse<null>
-    expect(body.code).toBe(401)
-    expect(body.message).toBe("未登录或登录已过期")
-    expect(matchPeopleMock).not.toHaveBeenCalled()
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as IResponse<Paginated<MatchPersonDTO>>
+    expect(body.code).toBe(200)
+    expect(body.data.total).toBe(1)
+    expect(matchPeopleMock).toHaveBeenCalledTimes(1)
+    // 游客未登录:matcher 以 guest 身份匹配,不传 currentUserId(不排除自身)
+    expect(matchPeopleMock.mock.calls[0]?.[0].currentUserId).toBeUndefined()
   })
 
   it("returns 200 with Paginated<MatchPersonDTO> on success", async () => {
@@ -283,8 +287,10 @@ describe("GET /api/locations/match-people", () => {
 })
 
 describe("GET /api/locations/match-circles", () => {
-  it("returns 401 when not logged in", async () => {
+  it("allows guest (not logged in) to match and returns 200", async () => {
     readUserFromTokenMock.mockResolvedValue(null)
+    matchCirclesMock.mockResolvedValue(SAMPLE_CIRCLES_RESULT)
+
     const res = await matchCirclesGET(
       makeGetRequest("/api/locations/match-circles", {
         latitude: "39.9042",
@@ -292,11 +298,11 @@ describe("GET /api/locations/match-circles", () => {
         tags: TAG_NAME,
       })
     )
-    expect(res.status).toBe(401)
-    const body = (await res.json()) as IResponse<null>
-    expect(body.code).toBe(401)
-    expect(body.message).toBe("未登录或登录已过期")
-    expect(matchCirclesMock).not.toHaveBeenCalled()
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as IResponse<Paginated<MatchCircleDTO>>
+    expect(body.code).toBe(200)
+    expect(body.data.total).toBe(1)
+    expect(matchCirclesMock).toHaveBeenCalledTimes(1)
   })
 
   it("returns 200 with Paginated<MatchCircleDTO> on success", async () => {

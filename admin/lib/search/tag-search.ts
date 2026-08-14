@@ -1,7 +1,7 @@
-import { and, eq, ilike, like, or, desc } from "drizzle-orm"
+import { and, eq, ilike, like, or, desc, sql, aliasedTable } from "drizzle-orm"
 
 import { db } from "@/lib/db"
-import { hobbyTags } from "@/db/schema"
+import { hobbyTags, categories } from "@/db/schema"
 import type { TagDTO } from "@/types/api"
 import { toPinyin, toPinyinInitials } from "@/lib/search/pinyin"
 
@@ -20,13 +20,39 @@ import { toPinyin, toPinyinInitials } from "@/lib/search/pinyin"
  */
 
 /**
- * 将 hobby_tags 表行映射为 TagDTO。
+ * 分类灵活化后,标签的 categoryId 可指向任意层级的分类节点:
+ * - 指向 level=2 中类:上游一级大类为 parent,本节点为 node
+ * - 指向 level=1 叶子大类:无 parent,本节点即为 node(叶子分类)
+ *
+ * 据此计算(见 toTagDTO):
+ * - `categoryName`:展示用一级大类名(parent.name;叶子 level-1 时回退为自身名)
+ * - `subCategoryName`:中类名(本节点为 level=2 时 = node.name;level=1 时为 null)
+ * - `categoryLevel`:本节点层级(1/2)
  */
-export function toTagDTO(row: typeof hobbyTags.$inferSelect): TagDTO {
+export type TagRowWithCategory = typeof hobbyTags.$inferSelect & {
+  /** 展示用一级大类名(parent.name,叶子 level-1 时回退为自身名) */
+  categoryName?: string | null
+  /** 中类名(本节点为 level=2 时 = node.name;level=1 时为 null) */
+  subCategoryName?: string | null
+  /** 所属分类节点层级(1/2) */
+  categoryLevel?: number | null
+}
+
+/**
+ * 将带分类关联的行映射为 TagDTO。
+ *
+ * - category:展示用一级大类名(level-2 时为父级 level-1 名;level-1 叶子时为自身名)
+ * - subCategory:仅当本节点为 level=2 时存在中类名,否则为 null
+ * - categoryLevel:本节点层级(1/2),供前端区分「直挂一级」与「挂在二级」
+ */
+export function toTagDTO(row: TagRowWithCategory): TagDTO {
   return {
     id: row.id,
     name: row.name,
-    category: row.category,
+    category: row.categoryName ?? "",
+    subCategory: row.categoryLevel === 2 ? (row.subCategoryName ?? null) : null,
+    categoryLevel: (row.categoryLevel ?? null) as TagDTO["categoryLevel"],
+    categoryId: row.categoryId ?? null,
     pinyin: row.pinyin ?? null,
     pinyinInitials: row.pinyinInitials ?? null,
     status: row.status as "pending" | "approved" | "rejected",
@@ -35,6 +61,40 @@ export function toTagDTO(row: typeof hobbyTags.$inferSelect): TagDTO {
     updatedAt: row.updatedAt.toISOString(),
   }
 }
+
+/**
+ * 查询 hobby_tags 并 LEFT JOIN categories(本节点 + 父节点),一次拿到分类名称与层级。
+ */
+const nodeAlias = aliasedTable(categories, "node")
+const parentAlias = aliasedTable(categories, "parent")
+
+export function selectTagsWithCategory() {
+  return db
+    .select({
+      // hobby_tags 字段
+      id: hobbyTags.id,
+      name: hobbyTags.name,
+      categoryId: hobbyTags.categoryId,
+      pinyin: hobbyTags.pinyin,
+      pinyinInitials: hobbyTags.pinyinInitials,
+      status: hobbyTags.status,
+      createdBy: hobbyTags.createdBy,
+      createdAt: hobbyTags.createdAt,
+      updatedAt: hobbyTags.updatedAt,
+      // 一级大类名:优先父节点(parent),叶子 level-1 时回退为自身名(node)
+      categoryName: sql<string>`coalesce(${parentAlias.name}, ${nodeAlias.name})`,
+      // 中类名:仅当本节点为 level=2
+      subCategoryName: nodeAlias.name,
+      // 层级:本节点 level
+      categoryLevel: nodeAlias.level,
+    })
+    .from(hobbyTags)
+    .leftJoin(nodeAlias, eq(hobbyTags.categoryId, nodeAlias.id))
+    .leftJoin(parentAlias, eq(nodeAlias.parentId, parentAlias.id))
+}
+
+/** 供路由层复用:分类灵活化后的节点/父节点别名(用于按大类筛选与计数) */
+export { nodeAlias, parentAlias }
 
 /**
  * 按多策略搜索标签。
@@ -74,9 +134,7 @@ export async function searchTags(
     conditions.push(like(hobbyTags.pinyinInitials, `${queryInitials}%`))
   }
 
-  const rows = await db
-    .select()
-    .from(hobbyTags)
+  const rows = await selectTagsWithCategory()
     .where(and(eq(hobbyTags.status, "approved"), or(...conditions)))
     .limit(limit)
 
@@ -84,7 +142,7 @@ export async function searchTags(
   // 但由于 drizzle 的 select 默认不 DISTINCT,这里在内存中按 id 去重。
   // 同时按原始顺序(数据库返回顺序)保留首次出现的项。
   const seen = new Set<string>()
-  const unique: typeof hobbyTags.$inferSelect[] = []
+  const unique: TagRowWithCategory[] = []
   for (const row of rows) {
     if (seen.has(row.id)) continue
     seen.add(row.id)
@@ -102,9 +160,7 @@ export async function searchTags(
 export async function listPopularTags(
   limit: number = 10
 ): Promise<TagDTO[]> {
-  const rows = await db
-    .select()
-    .from(hobbyTags)
+  const rows = await selectTagsWithCategory()
     .where(eq(hobbyTags.status, "approved"))
     .orderBy(desc(hobbyTags.createdAt))
     .limit(limit)

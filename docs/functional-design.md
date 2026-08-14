@@ -679,7 +679,7 @@ flowchart TD
 | 表名 | 说明 | 关键字段 |
 |------|------|----------|
 | users | 用户表 | id, name, avatar, phone, tags(text[],兴趣标签名称), location(Point), created_at |
-| hobby_tags | 兴趣标签表 | id, name(二级分类名称), category(一级大类), pinyin, pinyin_initials, status |
+| hobby_tags | 兴趣标签表 | id, name(三级具体标签), category(一级大类), subCategory(二级中类), pinyin, pinyin_initials, status |
 | circles | 圈子表 | id, title, description, location(Point), address, contact_phone, wechat, activity_time, max_members, creator_id, tags(text[],兴趣标签名称), created_at |
 | circle_members | 圈子成员表 | circle_id, user_id, role, joined_at |
 | locations | 定位发布记录 | id, user_id, location(Point), address, tag_names(text[],发布时标签名称快照), published_at |

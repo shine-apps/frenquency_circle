@@ -18,7 +18,7 @@ export function searchTags(q: string, limit?: number) {
 }
 
 /**
- * 获取兴趣标签分类树(六大类与二级分类名称)。
+ * 获取兴趣标签三级分类树(一级大类 → 二级中类 → 三级具体标签)。
  * 用于兴趣选择页骨架。
  */
 export function getCategories() {
@@ -32,12 +32,15 @@ export function getCategories() {
  * - 名称重复返回 409
  *
  * @param name 标签名(1-30 字符)
- * @param category 可选兴趣大类;不传时后端回退为 "自定义"
+ * @param categorySlug 可选,所属分类(一级叶子或二级中类)的稳定 slug;不传时归到全局"自定义标签"兜底中类
  * @returns 新创建的 TagDTO
  */
-export function createCustomTag(name: string, category?: string) {
+export function createCustomTag(
+  name: string,
+  categorySlug?: string
+) {
   return http.post<TagDTO>('/api/hobby-tags/custom', {
     name,
-    ...(category ? { category } : {}),
+    ...(categorySlug ? { categorySlug } : {}),
   })
 }

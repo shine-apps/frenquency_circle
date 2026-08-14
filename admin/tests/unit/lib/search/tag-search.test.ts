@@ -18,20 +18,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 type TagRow = {
   id: string
   name: string
-  category: string
+  categoryId: string
   pinyin: string | null
   pinyinInitials: string | null
   status: string
   createdBy: string | null
   createdAt: Date
   updatedAt: Date
+  subCategoryName?: string | null
+  categoryName?: string | null
+  categoryLevel?: number | null
 }
 
 function makeTagRow(overrides: Partial<TagRow> = {}): TagRow {
   return {
     id: overrides.id ?? "tag-1",
     name: overrides.name ?? "太极拳",
-    category: overrides.category ?? "武术养生",
+    categoryId: overrides.categoryId ?? "sub-martial",
     pinyin: overrides.pinyin !== undefined ? overrides.pinyin : "taijiquan",
     pinyinInitials:
       overrides.pinyinInitials !== undefined ? overrides.pinyinInitials : "tjq",
@@ -39,17 +42,22 @@ function makeTagRow(overrides: Partial<TagRow> = {}): TagRow {
     createdBy: overrides.createdBy !== undefined ? overrides.createdBy : null,
     createdAt: overrides.createdAt ?? new Date("2026-01-01T00:00:00Z"),
     updatedAt: overrides.updatedAt ?? new Date("2026-01-01T00:00:00Z"),
+    subCategoryName: overrides.subCategoryName !== undefined ? overrides.subCategoryName : "武术养生",
+    categoryName: overrides.categoryName !== undefined ? overrides.categoryName : "传统与民族文化",
+    categoryLevel: overrides.categoryLevel !== undefined ? overrides.categoryLevel : 2,
   }
 }
 
 const { mockDb, chainSelect, whereSpy, limitSpy, orderBySpy } = vi.hoisted(() => {
   let selectResult: TagRow[] = []
 
-  // 链式 mock:支持 select().from().where().orderBy().limit() 与
-  // select().from().where().orderBy() (无 limit,listPopularTags 会调 limit,这里两者兼容)
+  // 链式 mock:支持 select().from().leftJoin().leftJoin().where().orderBy().limit()
   // 通过让 chain 本身 thenable,使 `await chain` 也能解析为 selectResult
   const chainSelect = {
     from: vi.fn(function (this: unknown) {
+      return chainSelect
+    }),
+    leftJoin: vi.fn(function (this: unknown) {
       return chainSelect
     }),
     where: vi.fn(function (this: unknown) {
@@ -91,6 +99,7 @@ const { mockDb, chainSelect, whereSpy, limitSpy, orderBySpy } = vi.hoisted(() =>
   }
   chainSelect: {
     from: ReturnType<typeof vi.fn>
+    leftJoin: ReturnType<typeof vi.fn>
     where: ReturnType<typeof vi.fn>
     orderBy: ReturnType<typeof vi.fn>
     limit: ReturnType<typeof vi.fn>
@@ -111,6 +120,7 @@ import { searchTags, listPopularTags, toTagDTO } from "@/lib/search/tag-search"
 beforeEach(() => {
   mockDb.select.mockClear()
   chainSelect.from.mockClear()
+  chainSelect.leftJoin.mockClear()
   chainSelect.where.mockClear()
   chainSelect.orderBy.mockClear()
   chainSelect.limit.mockClear()
@@ -119,13 +129,16 @@ beforeEach(() => {
 
 describe("lib/search/tag-search", () => {
   describe("toTagDTO", () => {
-    it("maps a tag row to TagDTO with ISO timestamps", () => {
+    it("maps a tag row to TagDTO with category names from join", () => {
       const row = makeTagRow()
       const dto = toTagDTO(row)
       expect(dto).toEqual({
         id: "tag-1",
         name: "太极拳",
-        category: "武术养生",
+        category: "传统与民族文化",
+        subCategory: "武术养生",
+        categoryLevel: 2,
+        categoryId: "sub-martial",
         pinyin: "taijiquan",
         pinyinInitials: "tjq",
         status: "approved",
@@ -141,6 +154,13 @@ describe("lib/search/tag-search", () => {
       expect(dto.pinyin).toBeNull()
       expect(dto.pinyinInitials).toBeNull()
       expect(dto.createdBy).toBeNull()
+    })
+
+    it("falls back to empty category when join names are missing", () => {
+      const row = makeTagRow({ categoryName: null, subCategoryName: null })
+      const dto = toTagDTO(row)
+      expect(dto.category).toBe("")
+      expect(dto.subCategory).toBeNull()
     })
   })
 

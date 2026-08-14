@@ -8,6 +8,8 @@ import {
   jsonb,
   index,
   uniqueIndex,
+  check,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
@@ -172,18 +174,74 @@ export const TAG_STATUSES = ["pending", "approved", "rejected"] as const
 export type TagStatus = (typeof TAG_STATUSES)[number]
 
 /**
- * 兴趣标签库(二级分类体系)。
- * category(一级大类)→ name(二级分类名称,如"太极拳""书法")。
+ * 兴趣分类树(最多两级:一级大类 或 二级中类;叶子分类可是一级也可二级)。
+ * 用 `parentId` 自引用支持两级树,`level` 标注层级深度,`slug` 为稳定排序/URL 键。
+ *
+ * 设计要点:
+ * - 一级大类:level=1,parentId=null(如"传统与民族文化""视觉与造型艺术");
+ *   一级大类也可作为「叶子分类」直接承载标签(无子节点的 level-1)。
+ * - 二级中类:level=2,parentId 指向一级大类(如"武术养生""民族器乐")
+ * - UNIQUE(parent_id, name):同一父节点下名称不重复,杜绝分类名拼写漂移
+ * - CHECK:level ∈ {1,2} 且 level 与 parentId 一致(level=1 必无父,level=2 必有父)
+ * - 分类结构由数据库外键保证一致,运营可在后台动态增删
+ */
+export const categories = pgTable(
+  "categories",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** 分类名称(一级大类名或二级中类名) */
+    name: text("name").notNull(),
+    /** 稳定键(用于排序 / URL / 前端分组),全局唯一 */
+    slug: text("slug").notNull().unique(),
+    /** 层级:1=一级大类,2=二级中类 */
+    level: integer("level").notNull(),
+    /** 父级分类 id;一级大类为 null,二级中类指向其所属一级大类 */
+    parentId: uuid("parent_id").references((): AnyPgColumn => categories.id, {
+      onDelete: "cascade",
+    }),
+    /** 后台拖拽排序权重,默认 0 */
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // 同父下名称唯一,防止分类节点分裂出幽灵节点
+    uniqueIndex("categories_parent_name_idx").on(table.parentId, table.name),
+    // 按父 + 排序查询分类树
+    index("categories_parent_sort_idx").on(table.parentId, table.sortOrder),
+    // 约束:categories 最多两级(level∈{1,2})
+    check("categories_level_check", sql`"level" in (1, 2)`),
+    // 约束:level 与 parentId 一致(level=1 必无父,level=2 必有父)
+    check(
+      "categories_level_parent_check",
+      sql`("level" = 1 and "parent_id" is null) or ("level" = 2 and "parent_id" is not null)`
+    ),
+  ]
+)
+
+export type Category = typeof categories.$inferSelect
+export type NewCategory = typeof categories.$inferInsert
+
+/**
+ * 兴趣标签库(叶子节点)。
+ * 分类归属通过 `categoryId` 外键指向 `categories`(二级中类节点),
+ * 不再把两级分类名塞进同一条记录,层级一致性由数据库保证。
  * 支持中文 / 拼音全拼 / 拼音首字母多维度检索。
+ *
+ * 说明:用户(users.tags)与圈子(circles.tags)仍按 `name` 引用标签,
+ * 因 `tags.name` 全局唯一,无需额外桥接表。
  */
 export const hobbyTags = pgTable(
   "hobby_tags",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    /** 二级分类名称(如"太极拳""书法"),同一 category 下唯一由业务保证 */
-    name: text("name").notNull(),
-    /** 一级大类(如"武术养生") */
-    category: text("category").notNull(),
+    /** 具体标签名称(如"太极拳""书法"),全局唯一 */
+    name: text("name").notNull().unique(),
+    /** 所属分类(指向 categories.id,可为 level=1 的叶子分类或 level=2 的中类) */
+    categoryId: uuid("category_id")
+      .notNull()
+      .references(() => categories.id, { onDelete: "restrict" }),
     pinyin: text("pinyin"),
     pinyinInitials: text("pinyin_initials"),
     status: text("status").notNull().default("pending"),
@@ -203,11 +261,8 @@ export const hobbyTags = pgTable(
     index("hobby_tags_name_idx").on(table.name),
     index("hobby_tags_pinyin_idx").on(table.pinyin),
     index("hobby_tags_pinyin_initials_idx").on(table.pinyinInitials),
-    // 大类 + 二级名称组合索引(分类树查询)
-    index("hobby_tags_category_name_idx").on(
-      table.category,
-      table.name
-    ),
+    // 按分类 + 名称查询(分类树末层)
+    index("hobby_tags_category_name_idx").on(table.categoryId, table.name),
     index("hobby_tags_status_idx").on(table.status),
   ]
 )

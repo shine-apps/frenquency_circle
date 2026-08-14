@@ -3,16 +3,16 @@ import { z } from "zod"
 import { and, desc, eq, ilike, or, sql } from "drizzle-orm"
 
 import { db } from "@/lib/db"
-import { hobbyTags } from "@/db/schema"
+import { hobbyTags, categories } from "@/db/schema"
 import { fail, ok, parsePagination } from "@/lib/api"
 import { requireAdmin } from "@/lib/auth-utils"
-import { toTagDTO } from "@/lib/search/tag-search"
+import { toTagDTO, selectTagsWithCategory, type TagRowWithCategory, nodeAlias, parentAlias } from "@/lib/search/tag-search"
 import type { TagDTO, Paginated } from "@/types/api"
 
 /**
  * 管理后台标签列表查询参数 schema。
  * - status: 可选,按状态筛选(pending/approved/rejected)
- * - category: 可选,按一级大类筛选
+ * - category: 可选,按一级大类名或 slug 筛选
  * - q: 可选,关键词模糊搜索 name
  */
 const listTagsQuerySchema = z.object({
@@ -52,10 +52,9 @@ export async function GET(req: NextRequest) {
 
   const { status, category, q } = parsed.data
 
-  // 组装筛选条件
+  // 组装筛选条件(在 hobby_tags 上)
   const conditions = []
   if (status) conditions.push(eq(hobbyTags.status, status))
-  if (category) conditions.push(eq(hobbyTags.category, category))
   if (q) {
     // 关键词同时匹配 name / pinyin / pinyinInitials
     conditions.push(
@@ -67,21 +66,43 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined
+  // 分类灵活化:category 匹配「标签所在一级大类(parent)的 name/slug」,
+  // 或「标签直挂的 level=1 叶子大类(node)的 name/slug」
+  const categoryCond = category
+    ? or(
+        eq(parentAlias.name, category),
+        eq(parentAlias.slug, category),
+        and(eq(nodeAlias.level, 1), eq(nodeAlias.name, category)),
+        and(eq(nodeAlias.level, 1), eq(nodeAlias.slug, category))
+      )!
+    : undefined
 
-  const [rows, [{ count }]] = await Promise.all([
-    db
-      .select()
-      .from(hobbyTags)
-      .where(whereClause)
+  const whereClause = categoryCond
+    ? conditions.length > 0
+      ? and(...conditions, categoryCond)
+      : categoryCond
+    : conditions.length > 0
+      ? and(...conditions)
+      : undefined
+
+  // 关联查询:拿到分类名称 + 支持按一级大类筛选
+  const baseQuery = selectTagsWithCategory()
+  const filteredQuery = whereClause ? baseQuery.where(whereClause) : baseQuery
+
+  const [joinedRows, [{ count }]] = await Promise.all([
+    filteredQuery
       .orderBy(desc(hobbyTags.createdAt))
       .limit(pageSize)
       .offset(offset),
     db
       .select({ count: sql<number>`count(*)::int` })
       .from(hobbyTags)
+      .leftJoin(nodeAlias, eq(hobbyTags.categoryId, nodeAlias.id))
+      .leftJoin(parentAlias, eq(nodeAlias.parentId, parentAlias.id))
       .where(whereClause),
   ])
+
+  const rows = joinedRows as TagRowWithCategory[]
 
   const payload: Paginated<TagDTO> = {
     list: rows.map(toTagDTO),

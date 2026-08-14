@@ -1,11 +1,12 @@
 import "dotenv/config"
 import bcrypt from "bcryptjs"
 import { pinyin } from "pinyin-pro"
-import { inArray } from "drizzle-orm"
+import { eq, inArray } from "drizzle-orm"
 import { db } from "@/lib/db"
 import {
   users,
   hobbyTags,
+  categories,
   circles,
   circleMembers,
   accounts,
@@ -29,52 +30,159 @@ function computePinyin(name: string): { pinyin: string; pinyinInitials: string }
 }
 
 /**
- * 标签定义(二级分类体系:category 一级大类 + name 二级分类名称)。
- * 由原 60 条三级标签按 (category, subCategory) 去重得到 25 条二级标签,
- * name 取原 subCategory。参考_PRD §4.2.4 兴趣标签体系表_。
+ * 分类树定义(两级:一级大类 → 二级中类)。
+ * 用 slug 作为稳定键,标签通过 subCategorySlug 关联到具体二级中类节点,
+ * 避免分类名称漂移导致关联失败。
+ */
+type CategorySeed = {
+  /** 一级大类定义 */
+  slug: string
+  name: string
+  sortOrder: number
+  /** 该大类下的二级中类 */
+  subCategories: { slug: string; name: string; sortOrder: number }[]
+}
+
+const CATEGORY_TREE: CategorySeed[] = [
+  {
+    slug: "traditional",
+    name: "传统与民族文化",
+    sortOrder: 1,
+    subCategories: [
+      { slug: "martial", name: "武术养生", sortOrder: 1 },
+      { slug: "folk-craft", name: "传统手工", sortOrder: 2 },
+    ],
+  },
+  {
+    slug: "visual",
+    name: "视觉与造型艺术",
+    sortOrder: 2,
+    subCategories: [
+      { slug: "calligraphy", name: "书画篆刻", sortOrder: 1 },
+      { slug: "digital-paint", name: "数字绘画", sortOrder: 2 },
+      { slug: "painting", name: "绘画雕塑", sortOrder: 3 },
+    ],
+  },
+  {
+    slug: "performing",
+    name: "表演与音乐艺术",
+    sortOrder: 3,
+    subCategories: [
+      { slug: "folk-instrument", name: "民族器乐", sortOrder: 1 },
+      { slug: "western-instrument", name: "西洋乐器", sortOrder: 2 },
+      { slug: "opera-quyi", name: "戏曲曲艺", sortOrder: 3 },
+      { slug: "dance-drama", name: "舞蹈戏剧", sortOrder: 4 },
+    ],
+  },
+  {
+    slug: "craft",
+    name: "手作与匠艺",
+    sortOrder: 4,
+    subCategories: [],
+  },
+  {
+    slug: "lifestyle",
+    name: "生活美学与休闲",
+    sortOrder: 5,
+    subCategories: [
+      { slug: "tea-flower", name: "茶道花艺", sortOrder: 1 },
+      { slug: "drink-craft", name: "饮品手作", sortOrder: 2 },
+      { slug: "garden-fragrance", name: "园艺香氛", sortOrder: 3 },
+    ],
+  },
+  {
+    slug: "digital",
+    name: "数字与新媒体",
+    sortOrder: 6,
+    subCategories: [{ slug: "media-audio", name: "影像音频", sortOrder: 1 }],
+  },
+]
+
+/**
+ * 标签定义(叶子节点)。
+ * 通过 subCategorySlug 关联到 CATEGORY_TREE 中的二级中类节点(categoryId 外键)。
  */
 type TagDefinition = {
+  /** 具体标签名称(如"太极拳""书法") */
   name: string
-  category: string
+  /** 所属二级中类的 slug(指向 CATEGORY_TREE 中的 subCategories[].slug) */
+  subCategorySlug: string
 }
 
 const TAG_DEFINITIONS: TagDefinition[] = [
-  // === 武术养生 (3) ===
-  { name: "太极拳", category: "武术养生" },
-  { name: "气功功法", category: "武术养生" },
-  { name: "器械功法", category: "武术养生" },
+  // === 传统与民族文化 → 武术养生 ===
+  { name: "太极拳", subCategorySlug: "martial" },
+  { name: "气功功法", subCategorySlug: "martial" },
+  { name: "器械功法", subCategorySlug: "martial" },
 
-  // === 民族器乐 (4) ===
-  { name: "弹拨乐器", category: "民族器乐" },
-  { name: "拉弦乐器", category: "民族器乐" },
-  { name: "吹管乐器", category: "民族器乐" },
-  { name: "打击乐器", category: "民族器乐" },
+  // === 表演与音乐艺术 → 民族器乐 ===
+  { name: "弹拨乐器", subCategorySlug: "folk-instrument" },
+  { name: "拉弦乐器", subCategorySlug: "folk-instrument" },
+  { name: "吹管乐器", subCategorySlug: "folk-instrument" },
+  { name: "打击乐器", subCategorySlug: "folk-instrument" },
 
-  // === 书画篆刻 (3) ===
-  { name: "书法", category: "书画篆刻" },
-  { name: "国画", category: "书画篆刻" },
-  { name: "篆刻", category: "书画篆刻" },
+  // === 视觉与造型艺术 → 书画篆刻 ===
+  { name: "书法", subCategorySlug: "calligraphy" },
+  { name: "国画", subCategorySlug: "calligraphy" },
+  { name: "篆刻", subCategorySlug: "calligraphy" },
 
-  // === 茶道花艺 (4) ===
-  { name: "茶艺", category: "茶道花艺" },
-  { name: "花道", category: "茶道花艺" },
-  { name: "香道", category: "茶道花艺" },
-  { name: "茶具", category: "茶道花艺" },
+  // === 生活美学与休闲 → 茶道花艺 ===
+  { name: "茶艺", subCategorySlug: "tea-flower" },
+  { name: "花道", subCategorySlug: "tea-flower" },
+  { name: "香道", subCategorySlug: "tea-flower" },
+  { name: "茶具", subCategorySlug: "tea-flower" },
 
-  // === 戏曲曲艺 (6) ===
-  { name: "京剧", category: "戏曲曲艺" },
-  { name: "昆曲", category: "戏曲曲艺" },
-  { name: "越剧", category: "戏曲曲艺" },
-  { name: "相声", category: "戏曲曲艺" },
-  { name: "评书", category: "戏曲曲艺" },
-  { name: "鼓曲", category: "戏曲曲艺" },
+  // === 表演与音乐艺术 → 戏曲曲艺 ===
+  { name: "京剧", subCategorySlug: "opera-quyi" },
+  { name: "昆曲", subCategorySlug: "opera-quyi" },
+  { name: "越剧", subCategorySlug: "opera-quyi" },
+  { name: "相声", subCategorySlug: "opera-quyi" },
+  { name: "评书", subCategorySlug: "opera-quyi" },
+  { name: "鼓曲", subCategorySlug: "opera-quyi" },
 
-  // === 传统手工 (5) ===
-  { name: "剪纸", category: "传统手工" },
-  { name: "刺绣", category: "传统手工" },
-  { name: "陶艺", category: "传统手工" },
-  { name: "编织", category: "传统手工" },
-  { name: "木作", category: "传统手工" },
+  // === 传统与民族文化 → 传统手工 ===
+  { name: "剪纸", subCategorySlug: "folk-craft" },
+  { name: "刺绣", subCategorySlug: "folk-craft" },
+  { name: "陶艺", subCategorySlug: "folk-craft" },
+  { name: "编织", subCategorySlug: "folk-craft" },
+  { name: "木作", subCategorySlug: "folk-craft" },
+
+  // === 视觉与造型艺术 → 绘画雕塑 ===
+  { name: "油画", subCategorySlug: "painting" },
+  { name: "水彩", subCategorySlug: "painting" },
+  { name: "素描", subCategorySlug: "painting" },
+  { name: "雕塑", subCategorySlug: "painting" },
+
+  // === 表演与音乐艺术 → 西洋乐器 ===
+  { name: "钢琴", subCategorySlug: "western-instrument" },
+  { name: "小提琴", subCategorySlug: "western-instrument" },
+  { name: "吉他", subCategorySlug: "western-instrument" },
+  { name: "架子鼓", subCategorySlug: "western-instrument" },
+
+  // === 表演与音乐艺术 → 舞蹈戏剧 ===
+  { name: "芭蕾", subCategorySlug: "dance-drama" },
+  { name: "现代舞", subCategorySlug: "dance-drama" },
+  { name: "话剧", subCategorySlug: "dance-drama" },
+  { name: "音乐剧", subCategorySlug: "dance-drama" },
+
+  // === 视觉与造型艺术 → 数字绘画 ===
+  { name: "板绘", subCategorySlug: "digital-paint" },
+  { name: "像素画", subCategorySlug: "digital-paint" },
+  { name: "AI绘画", subCategorySlug: "digital-paint" },
+
+  // === 数字与新媒体 → 影像音频 ===
+  { name: "视频剪辑", subCategorySlug: "media-audio" },
+  { name: "电子音乐", subCategorySlug: "media-audio" },
+  { name: "Vlog", subCategorySlug: "media-audio" },
+
+  // === 生活美学与休闲 → 饮品手作 ===
+  { name: "咖啡", subCategorySlug: "drink-craft" },
+  { name: "调酒", subCategorySlug: "drink-craft" },
+  { name: "烘焙", subCategorySlug: "drink-craft" },
+
+  // === 生活美学与休闲 → 园艺香氛 ===
+  { name: "园艺", subCategorySlug: "garden-fragrance" },
+  { name: "香薰", subCategorySlug: "garden-fragrance" },
 ]
 
 /**
@@ -121,7 +229,7 @@ async function main() {
   const userHash = await bcrypt.hash("user123", 10)
   const teacherHash = await bcrypt.hash("teacher123", 10)
 
-  // === 2. 用户定义(标签名已从原三级映射为二级,如"陈氏太极拳养生八式"→"太极拳") ===
+  // === 2. 用户定义(标签名为三级体系的具体标签名,如"太极拳""书法",直接写入 users.tags 数组) ===
   const userSeeds: UserSeed[] = [
     // 保留现有 admin 与测试用户
     {
@@ -291,8 +399,57 @@ async function main() {
       })
   }
 
-  // === 6. 插入标签(幂等:先查现有,只插入不存在的) ===
+  // === 6. 插入分类树(幂等:按 slug upsert,保证 categoryId 关联稳定) ===
+  console.log("→ 插入分类树…")
+  for (const cat of CATEGORY_TREE) {
+    await db
+      .insert(categories)
+      .values({
+        slug: cat.slug,
+        name: cat.name,
+        level: 1,
+        parentId: null,
+        sortOrder: cat.sortOrder,
+      })
+      .onConflictDoUpdate({
+        target: categories.slug,
+        set: { name: cat.name, sortOrder: cat.sortOrder },
+      })
+    const parent = await db.query.categories.findFirst({
+      where: eq(categories.slug, cat.slug),
+    })
+    if (!parent) continue
+    for (const sub of cat.subCategories) {
+      await db
+        .insert(categories)
+        .values({
+          slug: sub.slug,
+          name: sub.name,
+          level: 2,
+          parentId: parent.id,
+          sortOrder: sub.sortOrder,
+        })
+        .onConflictDoUpdate({
+          target: categories.slug,
+          set: { name: sub.name, parentId: parent.id, sortOrder: sub.sortOrder },
+        })
+    }
+  }
+
+  // === 6.1 插入标签(幂等:先查现有,只插入不存在的,通过 slug 关联 categoryId) ===
   console.log("→ 插入兴趣标签…")
+  // 构建 slug → categoryId(二级中类) 映射
+  const allSubSlugs = CATEGORY_TREE.flatMap((c) =>
+    c.subCategories.map((s) => s.slug)
+  )
+  const subCategoryRows = await db
+    .select({ id: categories.id, slug: categories.slug })
+    .from(categories)
+    .where(inArray(categories.slug, allSubSlugs))
+  const subCategoryIdBySlug = new Map(
+    subCategoryRows.map((r) => [r.slug, r.id])
+  )
+
   const allTagNames = TAG_DEFINITIONS.map((t) => t.name)
   const existingTags = await db
     .select({ id: hobbyTags.id, name: hobbyTags.name })
@@ -306,10 +463,14 @@ async function main() {
   if (newTagDefs.length > 0) {
     await db.insert(hobbyTags).values(
       newTagDefs.map((t) => {
+        const subId = subCategoryIdBySlug.get(t.subCategorySlug)
+        if (!subId) {
+          throw new Error(`标签 "${t.name}" 关联的二级中类 slug 不存在: ${t.subCategorySlug}`)
+        }
         const { pinyin: py, pinyinInitials: pyInit } = computePinyin(t.name)
         return {
           name: t.name,
-          category: t.category,
+          categoryId: subId,
           pinyin: py,
           pinyinInitials: pyInit,
           status: "approved" as const,
@@ -391,7 +552,7 @@ async function main() {
   }
 
   console.log(
-    `✅ Seeded ${userSeeds.length} users, ${TAG_DEFINITIONS.length} tags, ${circleSeeds.length} circles.`
+    `✅ Seeded ${userSeeds.length} users, ${TAG_DEFINITIONS.length} tag definitions, ${circleSeeds.length} circles.`
   )
   process.exit(0)
 }

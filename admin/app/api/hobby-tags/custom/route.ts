@@ -2,21 +2,25 @@ import { eq } from "drizzle-orm"
 import { z } from "zod"
 
 import { db } from "@/lib/db"
-import { hobbyTags } from "@/db/schema"
+import { hobbyTags, categories } from "@/db/schema"
 import { corsOptions, fail, ok, withCors } from "@/lib/api"
 import { requireSession } from "@/lib/auth-utils"
 import { logger, LOG_PREFIX } from "@/lib/logger"
 import { toPinyin, toPinyinInitials } from "@/lib/search/pinyin"
 import { toTagDTO } from "@/lib/search/tag-search"
 
+/** 自定义标签默认归属的兜底分类 slug(全局"其他兴趣 → 自定义标签") */
+const DEFAULT_CATEGORY_SLUG = "custom-other"
+
 /**
  * 自定义标签请求体 schema。
  * - name: 1-30 字符,trim 后校验
- * - category: 可选,用户所选兴趣大类(1-30 字符);不传时回退 "自定义"
+ * - categorySlug: 可选,用户所选分类(一级叶子或二级中类)的稳定 slug;
+ *   不传时归到全局"自定义标签"兜底中类
  */
 const createCustomTagSchema = z.object({
   name: z.string().trim().min(1).max(30),
-  category: z.string().trim().min(1).max(30).optional(),
+  categorySlug: z.string().trim().min(1).max(64).optional(),
 })
 
 /**
@@ -24,9 +28,10 @@ const createCustomTagSchema = z.object({
  *
  * 用户自定义标签创建接口(需登录)。
  *
- * - zod 校验 `name`(1-30 字符,trim)、可选 `category`(1-30 字符,trim)
+ * - zod 校验 `name`(1-30 字符,trim)、可选 `categorySlug`(分类稳定键,可为一级或二级)
  * - 用 `toPinyin` 与 `toPinyinInitials` 自动计算 pinyin 字段
- * - 设置 `category`(用户所选,缺省"自定义")、`status='pending'`、`createdBy=当前用户ID`
+ * - 通过 `categorySlug` 解析出 `categoryId`;不传则归到全局"自定义标签"兜底中类
+ * - 设置 `status='pending'`、`createdBy=当前用户ID`
  * - 插入 `hobby_tags` 表(若 name 已存在则返回 409)
  * - 返回 `IResponse<TagDTO>`(包含新创建的 tagId)
  *
@@ -54,9 +59,17 @@ export async function POST(req: Request) {
   }
 
   const name = parsed.data.name
-  const category = parsed.data.category ?? "自定义"
+  const categorySlug = parsed.data.categorySlug ?? DEFAULT_CATEGORY_SLUG
 
-  // 3. 检查 name 是否已存在(任何状态都视为冲突,避免重复创建)
+  // 3. 解析所属分类(可为 level=1 叶子大类或 level=2 二级中类)
+  const subCat = await db.query.categories.findFirst({
+    where: eq(categories.slug, categorySlug),
+  })
+  if (!subCat) {
+    return withCors(fail(400, "所属分类不存在"), req)
+  }
+
+  // 4. 检查 name 是否已存在(任何状态都视为冲突,避免重复创建)
   const existing = await db.query.hobbyTags.findFirst({
     where: eq(hobbyTags.name, name),
   })
@@ -64,16 +77,16 @@ export async function POST(req: Request) {
     return withCors(fail(409, "标签名已存在"), req)
   }
 
-  // 4. 计算拼音字段
+  // 5. 计算拼音字段
   const pinyinFull = toPinyin(name)
   const pinyinInit = toPinyinInitials(name)
 
-  // 5. 插入 hobby_tags 表
+  // 6. 插入 hobby_tags 表
   const [created] = await db
     .insert(hobbyTags)
     .values({
       name,
-      category,
+      categoryId: subCat.id,
       pinyin: pinyinFull,
       pinyinInitials: pinyinInit,
       status: "pending",

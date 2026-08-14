@@ -155,7 +155,7 @@ All commands run from the project root with no `cd` needed.
   - `users` — id, email (unique), name, passwordHash, role, avatarUrl, createdAt, updatedAt. **Phase 1 扩展字段:** `phone` / `wechatOpenid` / `latitude` / `longitude`(lat/lng 双列方案替代 PostGIS Point)/ `address` / `privacySettings`(JSONB)/ `practiceYears` / `activityLevel` / `lastActiveAt`;`role` 类型扩展为 `'ADMIN' | 'USER' | 'TEACHER'`。
   - `accounts` — id, userId (FK → users, cascade delete), provider, providerAccountId, type, createdAt, updatedAt. Unique index on `(provider, providerAccountId)`; index on `userId`.
   - `smsVerificationCodes` — id, phone, codeHash (bcrypt), attempts, expiresAt, consumedAt, createdAt. Index on `phone`.
-  - `hobby_tags` — id, name(二级分类名称), category(一级大类), pinyin, pinyinInitials, status(`'pending' | 'approved' | 'rejected'`), createdBy, createdAt, updatedAt. 索引:name ILIKE、pinyin、pinyinInitials、(category+name)、status。六大类兴趣标签(太极 / 书法 / 古琴 / 茶道 / 国画 / 民乐)。users.tags / circles.tags 为 text[] 名称数组(存 hobby_tags.name),有 GIN 索引。
+  - `hobby_tags` — id, name(三级具体标签), category(一级大类), subCategory(二级中类,可空), pinyin, pinyinInitials, status(`'pending' | 'approved' | 'rejected'`), createdBy, createdAt, updatedAt. 索引:name ILIKE、pinyin、pinyinInitials、(category+name)、status。三级分类体系:一级大类(中国传统文化艺术 / 西方与世界艺术 / 数字新媒体艺术 / 现代生活美学)→ 二级中类(武术养生…)→ 三级具体标签(太极拳…)。users.tags / circles.tags 为 text[] 名称数组(存 hobby_tags.name),有 GIN 索引。
   - `userTags` — id, userId (FK → users), tagId (FK → tags), level int, createdAt. 唯一索引 `(userId, tagId)`。每个用户最多 10 个标签。
   - `circles` — id, title, description, creatorId (FK → users), latitude, longitude(lat/lng 双列), address, contactPhone, wechat, activityTime, maxMembers int, memberCount int default 0, status(`'active' | 'offline' | 'deleted' | 'violated'`), createdAt, updatedAt. 复合 btree 索引 (latitude, longitude)。TEACHER 创建,普通用户联系老师。
   - `circleTags` — id, circleId (FK → circles), tagId (FK → tags). 唯一索引 `(circleId, tagId)`。圈子与标签多对多。
@@ -191,8 +191,8 @@ All commands run from the project root with no `cd` needed.
 「文艺同频圈」核心业务 API,均走 `requireSession(req)` 鉴权(非 admin),返回 `IResponse<T>` 信封。
 
 - **`GET /api/hobby-tags/search?q=&limit=`**:公开,搜索标签。策略:1) 精确 name → 2) ILIKE `%q%` → 3) pinyin 完全匹配 → 4) pinyinInitials 完全匹配 → 5) pinyinInitials 前缀匹配。`q` 为空时返回热门 top 10。`limit` 默认 10,最大 50。
-- **`GET /api/hobby-tags/categories`**:公开,返回六大类与二级分类树(从 hobby_tags 表 group by)。
-- **`POST /api/hobby-tags/custom`**:登录用户,zod 校验 `name`(1-30 字符)→ 自动填充 pinyin → 创建 `status='pending'` 标签 → 返回 `TagDTO`。
+- **`GET /api/hobby-tags/categories`**:公开,返回三级分类树(一级大类 → 二级中类 → 三级具体标签,从 hobby_tags 表 group by)。
+- **`POST /api/hobby-tags/custom`**:登录用户,zod 校验 `name`(1-30 字符)、可选 `category`(一级大类)、可选 `subCategory`(二级中类,缺省以 name 兜底)→ 自动填充 pinyin → 创建 `status='pending'` 标签 → 返回 `TagDTO`。
 - **`PUT /api/users/me/hobby-tags`**:登录用户,zod 校验 `tags: string[]`(1-10 项标签名)→ 全量替换 `users.tags` → 返回 `{ tags: string[] }`。
 - **`PUT /api/users/me/privacy`**:登录用户,zod 校验 `PrivacySettings` → 写入 `users.privacySettings` JSONB。
 - **`PATCH /api/users/me/profile`**:登录用户,支持更新 `role('USER' | 'TEACHER')` / `phone` / `practiceYears` / `activityLevel`。复用 `readUserFromToken`。

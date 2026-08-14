@@ -83,14 +83,23 @@ export type UserProfileDTO = UserDTO & {
 }
 
 /**
- * 兴趣标签 DTO(二级分类体系:category 一级大类 + name 二级分类名称)。
+ * 兴趣标签 DTO。分类灵活化后,标签可挂在任意层级的分类节点:
+ * - 挂在 level=2 中类:category=一级大类名,subCategory=该中类名
+ * - 挂在 level=1 叶子大类:category=该大类名,subCategory=null
+ * category / subCategory 由 categories 分类树关联得出,categoryLevel 标明层级。
  */
 export type TagDTO = {
   id: string
-  /** 二级分类名称(如"太极拳""书法") */
+  /** 叶子标签名称(如"太极拳""书法") */
   name: string
-  /** 一级大类(如"武术养生") */
+  /** 一级大类名称(如"传统与民族文化"),由 categories 关联得出 */
   category: string
+  /** 二级中类名称(如"武术养生");由 categories 关联得出;本节点为 level=1 叶子大类时为 null */
+  subCategory?: string | null
+  /** 所属分类节点 id(指向 categories.id,可为 level=1 叶子或 level=2 中类) */
+  categoryId?: string | null
+  /** 所属分类节点层级:1=一级大类(叶子),2=二级中类。分类灵活化后标签可挂在任意层级 */
+  categoryLevel?: 1 | 2 | null
   /** 拼音全拼(可空) */
   pinyin?: string | null
   /** 拼音首字母(可空) */

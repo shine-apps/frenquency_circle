@@ -4,49 +4,46 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
  * /api/hobby-tags/* 集成测试。
  *
  * 覆盖:
- * - GET /api/hobby-tags/search?q=太极拳 返回匹配标签
+ * - GET /api/hobby-tags/search?q=太极拳 返回匹配标签(含分类名称)
  * - GET /api/hobby-tags/search?q=tjq 拼音首字母匹配
  * - GET /api/hobby-tags/search 无 q 返回热门标签
- * - GET /api/hobby-tags/categories 返回二级分类树(category + name)
+ * - GET /api/hobby-tags/categories 返回两级分类树(一级大类 → 二级中类 → 叶子标签)
  * - POST /api/hobby-tags/custom 未登录返回 401
- * - POST /api/hobby-tags/custom 登录后创建 pending 标签
+ * - POST /api/hobby-tags/custom 登录后创建 pending 标签(归到指定二级中类)
  *
  * mock 层级:
- * - @/lib/db:支持 select().from().where().orderBy().limit() 与
- *   query.hobbyTags.findFirst / insert().values().returning() 链式调用
+ * - @/lib/db:支持 select().from(table).leftJoin().where().orderBy().limit(),
+ *   并按 from 的表对象切分返回结果(categories / hobby_tags);
+ *   query.hobbyTags.findFirst / query.categories.findFirst 链式调用
  * - @/lib/auth/session-token:控制 readUserFromToken 返回值
  * - @/lib/logger:避免输出噪音
  *
  * 直接调用 route handler(参考 tests/integration/api/auth/me-patch.test.ts 模式)。
  */
 
-type TagRow = {
-  id: string
-  name: string
-  category: string
-  pinyin: string | null
-  pinyinInitials: string | null
-  status: string
-  createdBy: string | null
-  createdAt: Date
-  updatedAt: Date
-}
+// 真实 schema 表对象,用于 from() 引用比较(需在 mock db 之前导入)
+import { categories, hobbyTags } from "@/db/schema"
 
 const {
   mockDb,
   chainSelect,
   chainInsert,
-  findFirstMock,
+  findFirstHobbyTagsMock,
+  findFirstCategoriesMock,
   readUserFromTokenMock,
 } = vi.hoisted(() => {
-  let selectResult: TagRow[] = []
+  let tagRows: TagRow[] = []
+  let catRows: unknown[] = []
   let insertResult: TagRow[] = []
+  let currentFromTable: unknown = null
+  let categoriesRef: unknown = null
 
-  // 链式 mock:支持 select().from().where().orderBy().limit() 与
-  // select().from().where().orderBy() (无 limit,categories 路由用)
-  // 通过让 chain 本身 thenable,使 `await chain` 也能解析为 selectResult
   const chainSelect = {
-    from: vi.fn(function (this: unknown) {
+    from: vi.fn(function (this: unknown, table: unknown) {
+      currentFromTable = table
+      return chainSelect
+    }),
+    leftJoin: vi.fn(function (this: unknown) {
       return chainSelect
     }),
     where: vi.fn(function (this: unknown) {
@@ -56,13 +53,30 @@ const {
       return chainSelect
     }),
     limit: vi.fn(async function () {
-      return selectResult
+      // limit 仅用于 hobby_tags 查询
+      return tagRows
     }),
-    // thenable:使 `await chain.orderBy(...)` 等无 limit 终止的链也能解析
     then: (
-      resolve: (value: TagRow[]) => unknown,
+      resolve: (value: unknown) => unknown,
       reject?: (reason: unknown) => unknown
-    ) => Promise.resolve(selectResult).then(resolve, reject),
+    ) =>
+      Promise.resolve(
+        currentFromTable === categoriesRef ? catRows : tagRows
+      ).then(resolve, reject),
+    _setCategoriesRef: (t: unknown) => {
+      categoriesRef = t
+    },
+  } as {
+    from: ReturnType<typeof vi.fn>
+    leftJoin: ReturnType<typeof vi.fn>
+    where: ReturnType<typeof vi.fn>
+    orderBy: ReturnType<typeof vi.fn>
+    limit: ReturnType<typeof vi.fn>
+    then: (
+      resolve: (value: unknown) => unknown,
+      reject?: (reason: unknown) => unknown
+    ) => Promise<unknown>
+    _setCategoriesRef: (t: unknown) => void
   }
 
   const chainInsert = {
@@ -82,12 +96,14 @@ const {
       return chainInsert
     }),
     query: {
-      hobbyTags: {
-        findFirst: vi.fn(),
-      },
+      hobbyTags: { findFirst: vi.fn() },
+      categories: { findFirst: vi.fn() },
     },
-    _setSelectResult(rows: TagRow[]) {
-      selectResult = rows
+    _setTagRows(rows: TagRow[]) {
+      tagRows = rows
+    },
+    _setCatRows(rows: unknown[]) {
+      catRows = rows
     },
     _setInsertResult(rows: TagRow[]) {
       insertResult = rows
@@ -98,34 +114,60 @@ const {
     mockDb,
     chainSelect,
     chainInsert,
-    findFirstMock: mockDb.query.hobbyTags.findFirst,
+    findFirstHobbyTagsMock: mockDb.query.hobbyTags.findFirst,
+    findFirstCategoriesMock: mockDb.query.categories.findFirst,
     readUserFromTokenMock: vi.fn(),
   }
 }) as {
   mockDb: {
     select: ReturnType<typeof vi.fn>
     insert: ReturnType<typeof vi.fn>
-    query: { hobbyTags: { findFirst: ReturnType<typeof vi.fn> } }
-    _setSelectResult: (rows: TagRow[]) => void
+    query: {
+      hobbyTags: { findFirst: ReturnType<typeof vi.fn> }
+      categories: { findFirst: ReturnType<typeof vi.fn> }
+    }
+    _setTagRows: (rows: TagRow[]) => void
+    _setCatRows: (rows: unknown[]) => void
     _setInsertResult: (rows: TagRow[]) => void
   }
   chainSelect: {
     from: ReturnType<typeof vi.fn>
+    leftJoin: ReturnType<typeof vi.fn>
     where: ReturnType<typeof vi.fn>
     orderBy: ReturnType<typeof vi.fn>
     limit: ReturnType<typeof vi.fn>
     then: (
-      resolve: (value: TagRow[]) => unknown,
+      resolve: (value: unknown) => unknown,
       reject?: (reason: unknown) => unknown
     ) => Promise<unknown>
+    _setCategoriesRef: (t: unknown) => void
   }
   chainInsert: {
     values: ReturnType<typeof vi.fn>
     returning: ReturnType<typeof vi.fn>
   }
-  findFirstMock: ReturnType<typeof vi.fn>
+  findFirstHobbyTagsMock: ReturnType<typeof vi.fn>
+  findFirstCategoriesMock: ReturnType<typeof vi.fn>
   readUserFromTokenMock: ReturnType<typeof vi.fn>
 }
+
+type TagRow = {
+  id: string
+  name: string
+  categoryId: string
+  pinyin: string | null
+  pinyinInitials: string | null
+  status: string
+  createdBy: string | null
+  createdAt: Date
+  updatedAt: Date
+  subCategoryName?: string | null
+  categoryName?: string | null
+  categoryLevel?: number | null
+}
+
+// 注入 categories 表对象引用,用于 from() 结果切分
+chainSelect._setCategoriesRef(categories)
 
 vi.mock("@/lib/db", () => ({ db: mockDb }))
 vi.mock("@/lib/auth/session-token", () => ({
@@ -158,13 +200,16 @@ function makeTagRow(overrides: Partial<TagRow> = {}): TagRow {
   return {
     id: overrides.id ?? "tag-1",
     name: overrides.name ?? "太极拳",
-    category: overrides.category ?? "武术养生",
+    categoryId: overrides.categoryId ?? "sub-martial",
     pinyin: overrides.pinyin ?? "taijiquan",
     pinyinInitials: overrides.pinyinInitials ?? "tjq",
     status: overrides.status ?? "approved",
     createdBy: overrides.createdBy ?? null,
     createdAt: overrides.createdAt ?? new Date("2026-01-01T00:00:00Z"),
     updatedAt: overrides.updatedAt ?? new Date("2026-01-01T00:00:00Z"),
+    subCategoryName: overrides.subCategoryName ?? "武术养生",
+    categoryName: overrides.categoryName ?? "传统与民族文化",
+    categoryLevel: overrides.categoryLevel ?? 2,
   }
 }
 
@@ -175,15 +220,18 @@ function makeUrl(path: string): URL {
 beforeEach(() => {
   mockDb.select.mockClear()
   chainSelect.from.mockClear()
+  chainSelect.leftJoin.mockClear()
   chainSelect.where.mockClear()
   chainSelect.orderBy.mockClear()
   chainSelect.limit.mockClear()
   mockDb.insert.mockClear()
   chainInsert.values.mockClear()
   chainInsert.returning.mockClear()
-  findFirstMock.mockReset()
+  findFirstHobbyTagsMock.mockReset()
+  findFirstCategoriesMock.mockReset()
   readUserFromTokenMock.mockReset()
-  mockDb._setSelectResult([])
+  mockDb._setTagRows([])
+  mockDb._setCatRows([])
   mockDb._setInsertResult([])
 })
 
@@ -196,9 +244,11 @@ describe("GET /api/hobby-tags/search", () => {
         name: "书法",
         pinyin: "shufa",
         pinyinInitials: "sf",
+        subCategoryName: "书画篆刻",
+        categoryName: "视觉与造型艺术",
       }),
     ]
-    mockDb._setSelectResult(rows)
+    mockDb._setTagRows(rows)
 
     const req = new Request(makeUrl("/api/hobby-tags/search?q=太极"), {
       method: "GET",
@@ -210,13 +260,11 @@ describe("GET /api/hobby-tags/search", () => {
     expect(body.data.list).toHaveLength(2)
     expect(body.data.list[0]!.name).toBe("太极拳")
     expect(body.data.list[1]!.name).toBe("书法")
-    // 每条 DTO 应包含必需字段
     expect(body.data.list[0]).toHaveProperty("id")
     expect(body.data.list[0]).toHaveProperty("name")
     expect(body.data.list[0]).toHaveProperty("category")
-    expect(body.data.list[0]).toHaveProperty("pinyin")
-    // DTO 不应包含已移除的 subCategory 字段
-    expect(body.data.list[0]).not.toHaveProperty("subCategory")
+    expect(body.data.list[0]).toHaveProperty("subCategory")
+    expect(body.data.list[0]).toHaveProperty("categoryId")
   })
 
   it("returns matching tags for pinyin initials 'tjq'", async () => {
@@ -227,7 +275,7 @@ describe("GET /api/hobby-tags/search", () => {
         pinyinInitials: "tjq",
       }),
     ]
-    mockDb._setSelectResult(rows)
+    mockDb._setTagRows(rows)
 
     const req = new Request(makeUrl("/api/hobby-tags/search?q=tjq"), {
       method: "GET",
@@ -244,19 +292,18 @@ describe("GET /api/hobby-tags/search", () => {
       makeTagRow({ id: "p1", name: "古筝" }),
       makeTagRow({ id: "p2", name: "琵琶" }),
     ]
-    mockDb._setSelectResult(rows)
+    mockDb._setTagRows(rows)
 
     const req = new Request(makeUrl("/api/hobby-tags/search"), { method: "GET" })
     const res = await searchGet(req)
     expect(res.status).toBe(200)
     const body = (await res.json()) as IResponse<{ list: TagDTO[] }>
     expect(body.data.list).toHaveLength(2)
-    // 应该调用了 orderBy(popular 走 createdAt desc 排序)
     expect(chainSelect.orderBy).toHaveBeenCalledTimes(1)
   })
 
   it("returns popular tags when q is empty string", async () => {
-    mockDb._setSelectResult([])
+    mockDb._setTagRows([])
     const req = new Request(makeUrl("/api/hobby-tags/search?q="), {
       method: "GET",
     })
@@ -267,7 +314,7 @@ describe("GET /api/hobby-tags/search", () => {
   })
 
   it("respects limit query parameter (default 10, max 50)", async () => {
-    mockDb._setSelectResult([])
+    mockDb._setTagRows([])
     const req = new Request(makeUrl("/api/hobby-tags/search?q=太极&limit=20"), {
       method: "GET",
     })
@@ -287,7 +334,7 @@ describe("GET /api/hobby-tags/search", () => {
   })
 
   it("caps limit at 50", async () => {
-    mockDb._setSelectResult([])
+    mockDb._setTagRows([])
     const req = new Request(makeUrl("/api/hobby-tags/search?q=太极&limit=100"), {
       method: "GET",
     })
@@ -297,41 +344,99 @@ describe("GET /api/hobby-tags/search", () => {
 })
 
 describe("GET /api/hobby-tags/categories", () => {
-  it("returns category tree grouped by category with deduped names", async () => {
-    const rows = [
-      { category: "武术养生", name: "太极拳" },
-      { category: "武术养生", name: "太极拳" }, // 重复 name,应被去重
-      { category: "武术养生", name: "气功功法" },
-      { category: "民族器乐", name: "弹拨乐器" },
-      { category: "民族器乐", name: "拉弦乐器" },
+  it("returns 2-level category tree (category → subCategory → tags) from categories table", async () => {
+    // 分类骨架:一级大类 2 个 + 二级中类
+    const catData = [
+      { id: "c-trad", name: "传统与民族文化", level: 1, parentId: null, sortOrder: 1 },
+      { id: "c-vis", name: "视觉与造型艺术", level: 1, parentId: null, sortOrder: 2 },
+      { id: "sub-martial", name: "武术养生", level: 2, parentId: "c-trad", sortOrder: 1 },
+      { id: "sub-calligraphy", name: "书画篆刻", level: 2, parentId: "c-vis", sortOrder: 1 },
     ]
-    mockDb._setSelectResult(rows as unknown as TagRow[])
+    mockDb._setCatRows(catData)
+    // 标签:from(hobbyTags) 的 select 返回 tagRows
+    mockDb._setTagRows([
+      makeTagRow({
+        id: "t1",
+        name: "太极拳",
+        categoryId: "sub-martial",
+        subCategoryName: "武术养生",
+        categoryName: "传统与民族文化",
+      }),
+      makeTagRow({
+        id: "t2",
+        name: "书法",
+        categoryId: "sub-calligraphy",
+        subCategoryName: "书画篆刻",
+        categoryName: "视觉与造型艺术",
+      }),
+    ])
 
     const req = new Request(makeUrl("/api/hobby-tags/categories"), { method: "GET" })
     const res = await categoriesGet(req)
     expect(res.status).toBe(200)
     const body = (await res.json()) as IResponse<{
-      categories: { category: string; subCategories: string[] }[]
+      categories: {
+        category: string
+        subCategories: { name: string; categoryId: string; tags: { name: string }[] }[]
+      }[]
     }>
     expect(body.code).toBe(200)
     expect(body.data.categories).toHaveLength(2)
-    const wushu = body.data.categories.find((c) => c.category === "武术养生")
-    expect(wushu).toBeDefined()
-    expect(wushu!.subCategories).toEqual(["太极拳", "气功功法"])
-    const yueqi = body.data.categories.find((c) => c.category === "民族器乐")
-    expect(yueqi).toBeDefined()
-    expect(yueqi!.subCategories).toEqual(["弹拨乐器", "拉弦乐器"])
+
+    const trad = body.data.categories.find((c) => c.category === "传统与民族文化")
+    expect(trad).toBeDefined()
+    expect(trad!.subCategories).toHaveLength(1)
+    expect(trad!.subCategories[0]!.name).toBe("武术养生")
+    expect(trad!.subCategories[0]!.tags.map((t) => t.name)).toEqual(["太极拳"])
+
+    const vis = body.data.categories.find((c) => c.category === "视觉与造型艺术")
+    expect(vis).toBeDefined()
+    expect(vis!.subCategories[0]!.tags.map((t) => t.name)).toEqual(["书法"])
   })
 
-  it("returns empty array when no approved tags exist", async () => {
-    mockDb._setSelectResult([])
+  it("returns empty array when no categories exist", async () => {
+    mockDb._setCatRows([])
+    mockDb._setTagRows([])
     const req = new Request(makeUrl("/api/hobby-tags/categories"), { method: "GET" })
     const res = await categoriesGet(req)
     expect(res.status).toBe(200)
     const body = (await res.json()) as IResponse<{
-      categories: { category: string; subCategories: string[] }[]
+      categories: {
+        category: string
+        subCategories: { name: string; tags: { name: string }[] }[]
+      }[]
     }>
     expect(body.data.categories).toEqual([])
+  })
+
+  it("puts a tag directly under a level-1 leaf category as its own sub-category node", async () => {
+    const catData = [
+      { id: "c-trad", name: "传统与民族文化", level: 1, parentId: null, sortOrder: 1, slug: "trad" },
+      { id: "c-leaf", name: "中医养生", level: 1, parentId: null, sortOrder: 2, slug: "tcm" },
+      { id: "sub-martial", name: "武术养生", level: 2, parentId: "c-trad", sortOrder: 1, slug: "martial" },
+    ]
+    mockDb._setCatRows(catData)
+    mockDb._setTagRows([
+      makeTagRow({ id: "t1", name: "太极拳", categoryId: "sub-martial", subCategoryName: "武术养生", categoryName: "传统与民族文化", categoryLevel: 2 }),
+      makeTagRow({ id: "t2", name: "艾灸", categoryId: "c-leaf", subCategoryName: null, categoryName: "中医养生", categoryLevel: 1 }),
+    ])
+
+    const req = new Request(makeUrl("/api/hobby-tags/categories"), { method: "GET" })
+    const res = await categoriesGet(req)
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as IResponse<{
+      categories: {
+        category: string
+        categoryId: string
+        subCategories: { name: string; categoryId: string; tags: { name: string }[] }[]
+      }[]
+    }>
+    const leaf = body.data.categories.find((c) => c.category === "中医养生")
+    expect(leaf).toBeDefined()
+    expect(leaf!.subCategories).toHaveLength(1)
+    expect(leaf!.subCategories[0]!.name).toBe("中医养生")
+    expect(leaf!.subCategories[0]!.categoryId).toBe("c-leaf")
+    expect(leaf!.subCategories[0]!.tags.map((t) => t.name)).toEqual(["艾灸"])
   })
 })
 
@@ -353,51 +458,74 @@ describe("POST /api/hobby-tags/custom", () => {
     expect(body.message).toBe("未登录或登录已过期")
   })
 
-  it("creates a pending tag when logged in with valid name", async () => {
+  it("creates a pending tag under a sub-category when logged in", async () => {
     readUserFromTokenMock.mockResolvedValue(FAKE_USER)
     // 名称不冲突
-    findFirstMock.mockResolvedValue(null)
+    findFirstHobbyTagsMock.mockResolvedValue(null)
+    // 所属二级中类存在
+    findFirstCategoriesMock.mockResolvedValue({ id: "sub-martial", slug: "martial" })
 
     const createdRow = makeTagRow({
       id: "new-tag-1",
       name: "王派快板",
-      category: "自定义",
+      categoryId: "sub-martial",
       pinyin: "wangpaikuaiban",
       pinyinInitials: "wpkb",
       status: "pending",
       createdBy: FAKE_USER.id,
+      subCategoryName: "武术养生",
+      categoryName: "传统与民族文化",
+      categoryLevel: 2,
     })
-    // insert().values().returning() 解析为 insertResult
     mockDb._setInsertResult([createdRow])
 
-    const res = await customPost(makeJsonRequest({ name: "王派快板" }))
+    const res = await customPost(
+      makeJsonRequest({ name: "王派快板", categorySlug: "martial" })
+    )
     expect(res.status).toBe(200)
     const body = (await res.json()) as IResponse<TagDTO>
     expect(body.code).toBe(200)
     expect(body.data.id).toBe("new-tag-1")
     expect(body.data.name).toBe("王派快板")
-    expect(body.data.category).toBe("自定义")
+    expect(body.data.category).toBe("传统与民族文化")
+    expect(body.data.subCategory).toBe("武术养生")
+    expect(body.data.categoryId).toBe("sub-martial")
     expect(body.data.status).toBe("pending")
     expect(body.data.createdBy).toBe(FAKE_USER.id)
-    // 自动计算拼音字段
     expect(body.data.pinyin).toBe("wangpaikuaiban")
     expect(body.data.pinyinInitials).toBe("wpkb")
-    // 应调用 insert
     expect(mockDb.insert).toHaveBeenCalledTimes(1)
+  })
+
+  it("returns 400 when categorySlug does not exist", async () => {
+    readUserFromTokenMock.mockResolvedValue(FAKE_USER)
+    findFirstHobbyTagsMock.mockResolvedValue(null)
+    findFirstCategoriesMock.mockResolvedValue(null)
+
+    const res = await customPost(
+      makeJsonRequest({ name: "王派快板", categorySlug: "no-such" })
+    )
+    expect(res.status).toBe(400)
+    const body = (await res.json()) as IResponse<null>
+    expect(body.code).toBe(400)
+    expect(body.message).toBe("所属分类不存在")
+    expect(mockDb.insert).not.toHaveBeenCalled()
   })
 
   it("returns 409 when tag name already exists", async () => {
     readUserFromTokenMock.mockResolvedValue(FAKE_USER)
-    findFirstMock.mockResolvedValue(
+    findFirstHobbyTagsMock.mockResolvedValue(
       makeTagRow({ id: "existing-tag", name: "王派快板" })
     )
+    findFirstCategoriesMock.mockResolvedValue({ id: "sub-martial", slug: "martial" })
 
-    const res = await customPost(makeJsonRequest({ name: "王派快板" }))
+    const res = await customPost(
+      makeJsonRequest({ name: "王派快板", categorySlug: "martial" })
+    )
     expect(res.status).toBe(409)
     const body = (await res.json()) as IResponse<null>
     expect(body.code).toBe(409)
     expect(body.message).toBe("标签名已存在")
-    // 冲突时不应执行 insert
     expect(mockDb.insert).not.toHaveBeenCalled()
   })
 

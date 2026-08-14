@@ -4,7 +4,7 @@ import { createCustomTag, getCategories, searchTags } from '@/api/tags'
 import { useDialog } from '@wot-ui/ui/components/wd-dialog'
 import { useUserStore } from '@/store/user'
 import { toLoginPage } from '@/utils/toLoginPage'
-import type { CategoryNode, TagDTO } from '@/types'
+import type { CategoryNode, TagDTO, TagBrief } from '@/types'
 
 /**
  * 兴趣标签选择弹窗(wd-popup 封装),已合并原 `TagSelector` 组件内容。
@@ -120,22 +120,37 @@ const CUSTOM_NAME_MAX = 30
 const query = ref('')
 const suggestions = ref<TagDTO[]>([])
 const loading = ref(false)
-// 六大类分类树
+// 兴趣分类树(三级:一级大类 → 二级中类 → 三级具体标签)
 const categories = ref<CategoryNode[]>([])
-// 当前展开的分类名(空表示全部收起)
+// 当前展开的一级大类(空表示全部收起)
 const expandedCategory = ref<string | null>(null)
+// 当前展开的二级中类(复合键 `${category}::${sub}`,空表示全部收起)
+const expandedSubKey = ref<string | null>(null)
 
 // 自定义添加相关状态
 const customOpen = ref(false)
 const customName = ref('')
-const customCategory = ref('')
+/** 选中的二级中类 slug(传给后端) */
+const customCategorySlug = ref('')
+/** 选中的二级中类展示文案(大类 / 中类) */
+const customCategoryLabel = ref('')
 const customSubmitting = ref(false)
 
-/** 自定义分类下拉选项:六大类一级分类 + "其他"兜底(wd-picker 列数据) */
-const customCategoryOptions = computed(() => [
-  ...categories.value.map(c => ({ label: c.category, value: c.category })),
-  { label: '其他', value: '其他' },
-])
+/**
+ * 自定义分类下拉选项:把所有二级中类展平(一级大类 / 二级中类),value 用 slug。
+ * wd-picker 列数据格式。
+ */
+const customCategoryOptions = computed(() => {
+  const opts: { label: string; value: string }[] = []
+  for (const cat of categories.value) {
+    for (const sub of cat.subCategories) {
+      // 叶子一级大类以同名节点呈现,避免 "X / X" 重复展示
+      const label = sub.categoryId === cat.categoryId ? sub.name : `${cat.category} / ${sub.name}`
+      opts.push({ label, value: sub.slug })
+    }
+  }
+  return opts
+})
 
 // 防抖定时器引用
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -179,16 +194,21 @@ onBeforeUnmount(() => {
 })
 
 // ====== 选择 / 取消选择 ======
-function handleToggleTag(tag: TagDTO) {
-  if (selectedTags.value.includes(tag.name)) {
-    selectedTags.value = selectedTags.value.filter(name => name !== tag.name)
+/** 按名称加入/移除已选标签(搜索结果、三级分类叶子共用) */
+function toggleTagByName(name: string) {
+  if (selectedTags.value.includes(name)) {
+    selectedTags.value = selectedTags.value.filter(x => x !== name)
     return
   }
   if (reachedMax.value) {
     uni.showToast({ title: `最多选 ${props.max} 个`, icon: 'none' })
     return
   }
-  selectedTags.value = [...selectedTags.value, tag.name]
+  selectedTags.value = [...selectedTags.value, name]
+}
+
+function handleToggleTag(tag: TagDTO) {
+  toggleTagByName(tag.name)
 }
 
 function handleRemoveSelected(name: string) {
@@ -203,23 +223,27 @@ function handleRemoveAll() {
 // ====== 分类展开/收起 ======
 function handleToggleCategory(cat: string) {
   expandedCategory.value = expandedCategory.value === cat ? null : cat
-  // 展开分类时收起自定义添加
+  // 切换一级大类时收起二级展开态与自定义添加
   if (expandedCategory.value !== null) {
+    expandedSubKey.value = null
     customOpen.value = false
   }
 }
 
-/** 点击二级分类:直接加入/移除兴趣标签,无需确认步骤 */
-function handleToggleSub(sub: string) {
-  if (selectedTags.value.includes(sub)) {
-    selectedTags.value = selectedTags.value.filter(name => name !== sub)
-    return
-  }
-  if (reachedMax.value) {
-    uni.showToast({ title: `最多选 ${props.max} 个`, icon: 'none' })
-    return
-  }
-  selectedTags.value = [...selectedTags.value, sub]
+/** 二级中类是否展开 */
+function isSubExpanded(category: string, sub: string) {
+  return expandedSubKey.value === `${category}::${sub}`
+}
+
+/** 点击二级中类:展开/收起其下的三级具体标签(不直接加入) */
+function handleToggleSub(category: string, sub: string) {
+  const key = `${category}::${sub}`
+  expandedSubKey.value = expandedSubKey.value === key ? null : key
+}
+
+/** 点击三级具体标签:加入/移除兴趣标签 */
+function handleToggleTag3(t: TagBrief) {
+  toggleTagByName(t.name)
 }
 
 // ====== 自定义添加 ======
@@ -228,9 +252,12 @@ const customCategoryPickerVisible = ref(false)
 /** wd-picker 选中值(存 value 数组) */
 const customCategoryPickerValue = ref<Array<string | number>>([])
 
-/** wd-picker 确认回调:取第一列选中项 */
+/** wd-picker 确认回调:取第一列选中项(slug),并解析展示文案 */
 function handleCategoryConfirm({ value }: { value: Array<string | number> }) {
-  customCategory.value = String(value[0] ?? '')
+  const slug = String(value[0] ?? '')
+  customCategorySlug.value = slug
+  const opt = customCategoryOptions.value.find(o => o.value === slug)
+  customCategoryLabel.value = opt?.label ?? ''
   customCategoryPickerVisible.value = false
 }
 
@@ -240,7 +267,7 @@ function handleCustomNameChange(e: any) {
 
 async function handleSubmitCustom() {
   const name = customName.value.trim()
-  if (!customCategory.value) {
+  if (!customCategorySlug.value) {
     uni.showToast({ title: '请选择分类', icon: 'none' })
     return
   }
@@ -254,22 +281,30 @@ async function handleSubmitCustom() {
   }
   customSubmitting.value = true
   try {
-    const tag = await createCustomTag(name, customCategory.value)
+    const tag = await createCustomTag(name, customCategorySlug.value)
     selectedTags.value = [...selectedTags.value, tag.name]
-    // 列表刷新:将新标签并入对应分类的二级分类,立即可见
-    // 若所选分类(如"其他")不在六大类骨架中,按需注入占位节点
+    // 列表刷新:将新标签并入分类树的对应二级中类,立即可见
+    // 若所选分类不在骨架中,按需注入占位节点(用后端返回的 category/subCategory)
     let target = categories.value.find(c => c.category === tag.category)
     if (!target) {
       target = { category: tag.category, subCategories: [] }
       categories.value = [...categories.value, target]
     }
-    if (!target.subCategories.includes(tag.name))
-      target.subCategories = [...target.subCategories, tag.name]
+    const subName = tag.subCategory ?? tag.name
+    let sub = target.subCategories.find(s => s.name === subName)
+    if (!sub) {
+      sub = { name: subName, categoryId: tag.categoryId ?? '', tags: [] }
+      target.subCategories = [...target.subCategories, sub]
+    }
+    if (!sub.tags.some(t => t.name === tag.name)) {
+      sub.tags = [...sub.tags, { id: tag.id, name: tag.name, pinyin: tag.pinyin, pinyinInitials: tag.pinyinInitials }]
+    }
     // 若处于搜索态,也并入联想列表
     if (query.value.trim() && !suggestions.value.some(s => s.id === tag.id))
       suggestions.value = [...suggestions.value, tag]
     customName.value = ''
-    customCategory.value = ''
+    customCategorySlug.value = ''
+    customCategoryLabel.value = ''
     customOpen.value = false
     uni.showToast({ title: '已添加', icon: 'success' })
   }
@@ -389,14 +424,14 @@ async function handleSubmitCustom() {
             </view>
           </template>
 
-          <!-- 分类态:六大类骨架 -->
+          <!-- 分类态:兴趣分类树(三级) -->
           <template v-else>
             <view class="flex items-center justify-between">
               <text class="text-sm text-[#333] font-medium">
-                六大类兴趣
+                全部兴趣大类
               </text>
               <text class="text-xs text-[#999]">
-                点击子类直接添加为兴趣标签
+                点击大类展开子类
               </text>
             </view>
             <view v-if="categories.length === 0" class="flex flex-col items-center pt-12">
@@ -415,13 +450,25 @@ async function handleSubmitCustom() {
               </view>
               <view v-if="expandedCategory === node.category && node.subCategories.length > 0"
                 class="border-t border-[#f5f6f7] px-4 py-3">
-                <view class="flex flex-wrap gap-2">
-                  <text v-for="sub in node.subCategories" :key="sub"
-                    class="rounded-full px-3 py-1 text-xs active:scale-95"
-                    :class="selectedTags.includes(sub) ? 'bg-[#e8f5f1] text-[#018d71]' : 'bg-[#f5f6f7] text-[#666]'"
-                    @click="handleToggleSub(sub)">
-                    {{ selectedTags.includes(sub) ? `✓ ${sub}` : sub }}
-                  </text>
+                <!-- 二级中类 -->
+                <view v-for="sub in node.subCategories" :key="sub.name" class="mb-3 last:mb-0">
+                  <view class="flex items-center justify-between" @click="handleToggleSub(node.category, sub.name)">
+                    <text class="text-xs text-[#666] font-medium">
+                      {{ sub.name }}
+                    </text>
+                    <text class="text-[10px] text-[#999]">
+                      {{ isSubExpanded(node.category, sub.name) ? '收起' : `展开(${sub.tags.length})` }}
+                    </text>
+                  </view>
+                  <!-- 三级具体标签 -->
+                  <view v-if="isSubExpanded(node.category, sub.name)" class="mt-2 flex flex-wrap gap-2">
+                    <text v-for="t in sub.tags" :key="t.name"
+                      class="rounded-full px-3 py-1 text-xs active:scale-95"
+                      :class="selectedTags.includes(t.name) ? 'bg-[#e8f5f1] text-[#018d71]' : 'bg-[#f5f6f7] text-[#666]'"
+                      @click="handleToggleTag3(t)">
+                      {{ selectedTags.includes(t.name) ? `✓ ${t.name}` : t.name }}
+                    </text>
+                  </view>
                 </view>
               </view>
             </view>
@@ -450,8 +497,8 @@ async function handleSubmitCustom() {
           <view class="flex flex-col gap-3">
             <view class="h-10 flex items-center justify-between rounded-full bg-[#f5f6f7] px-4 active:scale-[0.98]"
               @click="customCategoryPickerVisible = true">
-              <text class="text-sm" :class="customCategory ? 'text-[#333]' : 'text-[#bbb]'">
-                {{ customCategory || '请选择分类' }}
+              <text class="text-sm" :class="customCategoryLabel ? 'text-[#333]' : 'text-[#bbb]'">
+                {{ customCategoryLabel || '请选择分类' }}
               </text>
               <text class="text-xs text-[#999]">
                 ▾

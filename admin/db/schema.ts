@@ -378,6 +378,39 @@ export type CircleMember = typeof circleMembers.$inferSelect
 export type NewCircleMember = typeof circleMembers.$inferInsert
 
 /**
+ * 圈子关注表。
+ * 用户关注感兴趣的圈子,关注后可在"我关注的圈子"列表快速回看。
+ * 一个用户对同一圈子最多一条关注记录(UNIQUE(circle_id, user_id))。
+ */
+export const circleFollows = pgTable(
+  "circle_follows",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    circleId: uuid("circle_id")
+      .notNull()
+      .references(() => circles.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // 同一用户关注同一圈子只有一条
+    uniqueIndex("circle_follows_circle_user_idx").on(
+      table.circleId,
+      table.userId
+    ),
+    // 按用户反查关注列表
+    index("circle_follows_user_idx").on(table.userId),
+  ]
+)
+
+export type CircleFollow = typeof circleFollows.$inferSelect
+export type NewCircleFollow = typeof circleFollows.$inferInsert
+
+/**
  * 教师认证申请状态字面量联合:
  * - `pending` 待审核
  * - `approved` 已通过(用户已升级为 TEACHER)

@@ -75,6 +75,11 @@ function handleMyCircles() {
   uni.navigateTo({ url: '/pages/my-circles/my-circles' })
 }
 
+/** 跳我关注的圈子页 */
+function handleFollowedCircles() {
+  uni.navigateTo({ url: '/pages/followed-circles/followed-circles' })
+}
+
 /** 跳我发布的圈子页(TEACHER / ADMIN 专属) */
 function handleMyPublished() {
   if (!canCreateCircle(user.value?.role)) {
@@ -195,6 +200,20 @@ const roleChipClass = computed(() => {
           </text>
           <text class="mt-0.5 text-xs text-[#999]">
             最近匹配的圈子
+          </text>
+        </view>
+        <text class="text-sm text-[#ccc]">
+          ›
+        </text>
+      </view>
+
+      <view class="flex items-center justify-between border-b border-[#f5f5f5] px-4 py-4" @click="handleFollowedCircles">
+        <view class="flex flex-col">
+          <text class="text-sm text-[#333] font-medium">
+            我关注的圈子
+          </text>
+          <text class="mt-0.5 text-xs text-[#999]">
+            一键回看感兴趣的圈子
           </text>
         </view>
         <text class="text-sm text-[#ccc]">

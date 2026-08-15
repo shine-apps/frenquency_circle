@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
 import { onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
-import { getCircle, contactCircle } from '@/api/circles'
+import { getCircle, contactCircle, followCircle, unfollowCircle } from '@/api/circles'
 import { useUserStore } from '@/store/user'
 import { useShare } from '@/composables/useShare'
 import { formatDate, formatDateTime } from '@/utils/format'
@@ -25,6 +25,9 @@ const notFound = ref(false)
 const contactOpen = ref(false)
 const contactInfo = ref<{ phone: string | null; wechat: string | null } | null>(null)
 const contactLoading = ref(false)
+// 关注状态与操作
+const followed = ref(false)
+const followLoading = ref(false)
 
 /** 分享:小程序(好友/朋友圈) + H5 微信浏览器 JSSDK。内容在触发/配置时实时读取,兼容详情异步加载 */
 const { share, shareAppMessage, shareTimeline } = useShare({
@@ -52,6 +55,7 @@ async function fetchCircle(id: string) {
   try {
     const data = await getCircle(id)
     circle.value = data
+    followed.value = !!data.isFollowed
     notFound.value = false
   }
   catch (e) {
@@ -106,6 +110,33 @@ async function handleContact() {
   }
   finally {
     contactLoading.value = false
+  }
+}
+
+/** 关注/取消关注圈子 */
+async function handleFollow() {
+  const c = circle.value
+  if (!c || followLoading.value) return
+  followLoading.value = true
+  try {
+    if (followed.value) {
+      await unfollowCircle(c.id)
+      followed.value = false
+      if (c.followCount > 0) c.followCount -= 1
+      uni.showToast({ title: '已取消关注', icon: 'none' })
+    }
+    else {
+      await followCircle(c.id)
+      followed.value = true
+      c.followCount += 1
+      uni.showToast({ title: '关注成功', icon: 'success' })
+    }
+  }
+  catch (e) {
+    uni.showToast({ title: (e as Error).message || '操作失败', icon: 'none' })
+  }
+  finally {
+    followLoading.value = false
   }
 }
 
@@ -272,6 +303,14 @@ const maxMembersText = computed(() => (circle.value?.maxMembers ? String(circle.
               {{ circle.memberCount }}/{{ maxMembersText }}
             </text>
           </view>
+          <view class="mt-2 flex items-center justify-between">
+            <text class="text-sm font-medium text-[#333]">
+              关注人数
+            </text>
+            <text class="text-sm text-[#018d71]">
+              {{ circle.followCount }}
+            </text>
+          </view>
           <text v-if="isFull" class="mt-2 block text-xs text-[#ff4d4f]">
             圈子已满,可联系老师加备选
           </text>
@@ -290,6 +329,16 @@ const maxMembersText = computed(() => (circle.value?.maxMembers ? String(circle.
             @click="isCreator ? handleEdit() : handleContact()"
           >
             {{ isCreator ? '编辑圈子信息' : '联系老师' }}
+          </wd-button>
+          <!-- 关注/已关注:创建者无需关注自己的圈子 -->
+          <wd-button
+            v-if="!isCreator"
+            plain
+            custom-class="shrink-0"
+            :loading="followLoading"
+            @click="handleFollow"
+          >
+            {{ followed ? '已关注' : '关注' }}
           </wd-button>
           <!-- 小程序:原生转发按钮 -->
           <!-- #ifdef MP-WEIXIN -->

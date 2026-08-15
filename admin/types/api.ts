@@ -196,12 +196,24 @@ export type CircleDTO = {
 }
 
 /**
- * 圈子详情 DTO(含 creator 信息、标签、被联系次数)。
+ * 圈子详情 DTO(含 creator 信息、标签、被联系次数、关注状态)。
  */
 export type CircleDetailDTO = CircleDTO & {
   creator: { id: string; name: string; avatarUrl: string | null }
   tags: string[]
   contactCount: number
+  /** 当前用户是否已关注该圈子(未登录场景恒为 false) */
+  isFollowed: boolean
+  /** 圈子被关注总数 */
+  followCount: number
+}
+
+/**
+ * 我关注的圈子列表项 DTO(用于 /api/circles/followed 响应)。
+ */
+export type FollowedCircleDTO = CircleDTO & {
+  /** 关注时间 */
+  followedAt: string
 }
 
 /**

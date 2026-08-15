@@ -4,6 +4,7 @@ import { and, count, eq, inArray } from "drizzle-orm"
 import { db } from "@/lib/db"
 import {
   circles,
+  circleFollows,
   hobbyTags,
   contactLogs,
   users,
@@ -43,7 +44,10 @@ function toCircleDTO(row: typeof circles.$inferSelect): CircleDTO {
 }
 
 /** 查询圈子详情并组装 CircleDetailDTO(tags 直接取 circles.tags 数组) */
-async function fetchCircleDetail(circleId: string): Promise<CircleDetailDTO | null> {
+async function fetchCircleDetail(
+  circleId: string,
+  userId: string
+): Promise<CircleDetailDTO | null> {
   // 1. 查询圈子本身
   const [circleRow] = await db
     .select()
@@ -63,6 +67,24 @@ async function fetchCircleDetail(circleId: string): Promise<CircleDetailDTO | nu
     .from(contactLogs)
     .where(eq(contactLogs.circleId, circleId))
 
+  // 4. 统计被关注次数
+  const [followCountRow] = await db
+    .select({ value: count() })
+    .from(circleFollows)
+    .where(eq(circleFollows.circleId, circleId))
+
+  // 5. 当前用户是否已关注(GET/PUT 均已通过 requireSession 鉴权,userId 必为有效值)
+  const [followRow] = await db
+    .select({ id: circleFollows.id })
+    .from(circleFollows)
+    .where(
+      and(
+        eq(circleFollows.circleId, circleId),
+        eq(circleFollows.userId, userId)
+      )
+    )
+  const isFollowed = !!followRow
+
   return {
     ...toCircleDTO(circleRow),
     creator: {
@@ -72,6 +94,8 @@ async function fetchCircleDetail(circleId: string): Promise<CircleDetailDTO | nu
     },
     tags: circleRow.tags ?? [],
     contactCount: countRow?.value ?? 0,
+    followCount: followCountRow?.value ?? 0,
+    isFollowed,
   }
 }
 
@@ -93,7 +117,7 @@ export async function GET(req: Request, context: RouteContext) {
   const userId = guard.user.id
 
   // 2. 查询圈子详情
-  const detail = await fetchCircleDetail(id)
+  const detail = await fetchCircleDetail(id, userId)
   if (!detail) {
     return withCors(fail(404, "圈子不存在"), req)
   }
@@ -221,7 +245,7 @@ export async function PUT(req: Request, context: RouteContext) {
   logger.info(LOG_PREFIX.CIRCLE, "Circle updated", { circleId: id, userId })
 
   // 5. 返回更新后的详情
-  const detail = await fetchCircleDetail(id)
+  const detail = await fetchCircleDetail(id, userId)
   return withCors(ok(detail), req)
 }
 

@@ -281,15 +281,19 @@ function makeContext(id: string): RouteContext {
 }
 
 /**
- * 组装 fetchCircleDetail 所需的 3 个 select 结果队列(circle + creator + count)。
+ * 组装 fetchCircleDetail 所需的 5 个 select 结果队列
+ * (circle + creator + contactCount + followCount + isFollowed)。
  * circles.tags 为数组列,直接存在于 circle 行,无需额外标签查询。
  * circles/[id] 的 GET 与 PUT(更新后回查)都会调用 fetchCircleDetail。
+ * 现有调用方不传 followCount/isFollowed 时使用默认值,保证老用例不变。
  */
 function enqueueFetchCircleDetail(
   queue: Record<string, unknown>[][],
   circle: CircleRow,
   creator: { id: string; name: string; avatarUrl: string | null } | null,
-  contactCount: number
+  contactCount: number,
+  followCount = 0,
+  isFollowed = false
 ) {
   // 1. circle 行(含 tags 数组)
   queue.push([circle])
@@ -297,6 +301,10 @@ function enqueueFetchCircleDetail(
   queue.push(creator ? [creator] : [])
   // 3. contact count 行
   queue.push([{ value: contactCount }])
+  // 4. follow count 行
+  queue.push([{ value: followCount }])
+  // 5. isFollowed 行(已关注时返回一行)
+  queue.push(isFollowed ? [{ id: "follow-row-id" }] : [])
 }
 
 beforeEach(() => {
@@ -544,9 +552,9 @@ describe("GET /api/circles/:id", () => {
       name: "Teacher",
       avatarUrl: null,
     }
-    // fetchCircleDetail 的 3 个 select
+    // fetchCircleDetail 的 5 个 select(circle + creator + contactCount + followCount + isFollowed)
     const queue: Record<string, unknown>[][] = []
-    enqueueFetchCircleDetail(queue, circle, creator, 3)
+    enqueueFetchCircleDetail(queue, circle, creator, 3, 5, true)
     setSelectResultsQueue(queue)
 
     const res = await getCircleById(
@@ -562,6 +570,8 @@ describe("GET /api/circles/:id", () => {
     expect(body.data.creator.name).toBe("Teacher")
     expect(body.data.tags).toEqual([TAG_NAME_1, TAG_NAME_2])
     expect(body.data.contactCount).toBe(3)
+    expect(body.data.followCount).toBe(5)
+    expect(body.data.isFollowed).toBe(true)
     expect(body.data.memberCount).toBe(8)
   })
 
@@ -586,7 +596,7 @@ describe("GET /api/circles/:id", () => {
       status: "offline",
       creatorId: TEACHER_USER.id,
     })
-    // fetchCircleDetail:circle 行(offline)+ creator + count
+    // fetchCircleDetail:circle 行(offline)+ creator + contactCount + followCount + isFollowed
     const queue: Record<string, unknown>[][] = []
     enqueueFetchCircleDetail(
       queue,
@@ -678,7 +688,7 @@ describe("PUT /api/circles/:id", () => {
       name: "Teacher",
       avatarUrl: null,
     }
-    // 队列:1) creator check select 2-4) fetchCircleDetail 的 3 个 select
+    // 队列:1) creator check select 2-6) fetchCircleDetail 的 5 个 select
     const queue: Record<string, unknown>[][] = [[circle]]
     enqueueFetchCircleDetail(queue, updatedCircle, creator, 0)
     setSelectResultsQueue(queue)
@@ -713,7 +723,7 @@ describe("PUT /api/circles/:id", () => {
       name: "Teacher",
       avatarUrl: null,
     }
-    // 队列:1) creator check 2-4) fetchCircleDetail
+    // 队列:1) creator check 2-6) fetchCircleDetail 的 5 个 select
     const queue: Record<string, unknown>[][] = [[oldCircle]]
     enqueueFetchCircleDetail(queue, updatedCircle, creator, 0)
     setSelectResultsQueue(queue)
@@ -793,7 +803,7 @@ describe("PUT /api/circles/:id", () => {
       name: "Teacher",
       avatarUrl: null,
     }
-    // 队列:1) creator check 2) 标签名称校验 3-5) fetchCircleDetail
+    // 队列:1) creator check 2) 标签名称校验 3-7) fetchCircleDetail 的 5 个 select
     const queue: Record<string, unknown>[][] = [[circle], [makeTagRow({ name: TAG_NAME_2 })]]
     enqueueFetchCircleDetail(queue, updatedCircle, creator, 0)
     setSelectResultsQueue(queue)

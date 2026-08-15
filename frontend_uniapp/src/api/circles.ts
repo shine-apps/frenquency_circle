@@ -3,6 +3,7 @@ import type {
   CircleDTO,
   CircleDetailDTO,
   CreateCircleInput,
+  FollowedCircleDTO,
   Paginated,
   UpdateCircleInput,
 } from '@/types'
@@ -56,4 +57,22 @@ export function getMyCircles(params?: MyCirclesParams) {
 /** 学员联系老师(需登录)。插入 contact_logs 记录 */
 export function contactCircle(id: string, contactType: 'phone' | 'wechat') {
   return http.post<ContactCircleResult>(`/api/circles/${encodeURIComponent(id)}/contact`, { contactType })
+}
+
+/** 关注圈子(幂等,仅 active 圈子可关注) */
+export function followCircle(id: string) {
+  return http.post<{ followed: true }>(`/api/circles/${encodeURIComponent(id)}/follow`)
+}
+
+/** 取消关注(幂等) */
+export function unfollowCircle(id: string) {
+  return http.delete<{ followed: false }>(`/api/circles/${encodeURIComponent(id)}/follow`)
+}
+
+/** 我关注的圈子列表(分页,按关注时间倒序,排除已删除) */
+export function getFollowedCircles(params?: MyCirclesParams) {
+  return http.get<Paginated<FollowedCircleDTO>>('/api/circles/followed', {
+    ...(params?.page !== undefined ? { page: params.page } : {}),
+    ...(params?.pageSize !== undefined ? { pageSize: params.pageSize } : {}),
+  })
 }

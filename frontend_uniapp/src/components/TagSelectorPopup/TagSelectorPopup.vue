@@ -477,7 +477,7 @@ async function handleSubmitCustom() {
                   </text>
                 </view>
                 <!-- 三级具体标签:选中二级中类后展示其下标签,默认"全部"展示该大类全部标签 -->
-                <view class="py-3 flex flex-wrap gap-2.5">
+                <view class="px-4 py-3 flex flex-wrap gap-2.5">
                   <text v-for="t in visibleTags" :key="t.name"
                     class="rounded-full px-4 py-2 text-sm active:scale-95"
                     :class="selectedTags.includes(t.name) ? 'bg-[#e8f5f1] text-[#018d71]' : 'bg-[#f5f6f7] text-[#666]'"

@@ -1,5 +1,7 @@
 import type { Preset } from 'unocss'
 import { FileSystemIconLoader } from '@iconify/utils/lib/loader/node-loaders'
+// 显式引入 carbon 图标集，规避 pnpm isolated 模式下 preset-icons 子依赖无法解析 @iconify-json/carbon 的问题
+import carbon from '@iconify-json/carbon/icons.json'
 
 // https://www.npmjs.com/package/@uni-helper/unocss-preset-uni
 import { presetUni } from '@uni-helper/unocss-preset-uni'
@@ -47,6 +49,8 @@ export default defineConfig({
             return svgStr
           },
         ),
+        // 显式注册 carbon 集合，避免 preset-icons 在 pnpm 下动态解析失败
+        carbon: () => carbon as any,
       },
     }),
     // TODO: check 是否会有别的影响

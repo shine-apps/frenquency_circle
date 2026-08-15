@@ -10,6 +10,26 @@ import { createHttpError, getResponseMessage, HttpErrorType, isSuccessResultCode
 let refreshing = false // 防止重复刷新 token 标识
 let taskQueue: (() => void)[] = [] // 刷新 token 请求队列
 
+/**
+ * 认证流程相关接口。这些接口自身可能返回 401（如密码错误、验证码错误），
+ * 属于预期的业务错误，不应被全局拦截器当成“登录态过期”去触发登出/跳转。
+ * 注意：这里只收录通过 http.ts 发送的接口；新增同类接口请同步补充到本列表。
+ */
+const AUTH_FLOW_URLS = [
+  '/auth/login',
+  '/auth/wxLogin',
+  '/api/auth/login/credentials',
+  '/api/auth/login/phone',
+  '/api/auth/wechat-miniprogram/login',
+  '/api/auth/sms/send',
+  '/api/auth/logout',
+  '/auth/refreshToken',
+]
+
+function isAuthFlowUrl(url?: string) {
+  return !!url && AUTH_FLOW_URLS.some(path => url.includes(path))
+}
+
 export function http<T>(options: CustomRequestOptions) {
   // 1. 返回 Promise 对象
   return new Promise<T>((resolve, reject) => {
@@ -28,6 +48,23 @@ export function http<T>(options: CustomRequestOptions) {
         const isTokenExpired = res.statusCode === 401 || code === ResultEnum.Unauthorized
 
         if (isTokenExpired) {
+          // 认证流程接口（登录/注册/登出/发验证码/刷新）自身就可能返回 401
+          // （如密码错误），属于预期业务错误，不应被当成“登录态过期”去触发登出。
+          // 通过集中式白名单区分，而非给每个请求打标记。
+          if (isAuthFlowUrl(options.url)) {
+            const httpError = createHttpError({
+              type: HttpErrorType.Business,
+              code,
+              statusCode: res.statusCode,
+              message: getResponseMessage(responseData, '邮箱或密码错误'),
+              data: responseData?.data,
+              raw: res,
+            })
+            if (!options.hideErrorToast) {
+              uni.showToast({ icon: 'none', title: httpError.message })
+            }
+            return reject(httpError)
+          }
           const tokenStore = useTokenStore()
           if (!isDoubleTokenMode) {
             // 未启用双token策略，清理用户信息，跳转到登录页

@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { signIn } from "@/auth"
+import { CredentialsSignin } from "next-auth"
 import { corsOptions, fail, ok, withCors } from "@/lib/api"
 import {
   extractSessionToken,
@@ -45,6 +46,10 @@ export async function POST(req: Request) {
       redirect: false,
     })
   } catch (err) {
+    if (err instanceof CredentialsSignin) {
+      logger.warn(LOG_PREFIX.AUTH, "Credentials token login: invalid credentials", { email })
+      return withCors(fail(401, "邮箱或密码错误"), req)
+    }
     logger.error(LOG_PREFIX.AUTH, "Credentials token login: signIn threw", {
       error: err instanceof Error ? err.message : String(err),
       stack: err instanceof Error ? err.stack : undefined,

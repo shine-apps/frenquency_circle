@@ -33,7 +33,7 @@ export function refreshToken(refreshToken: string) {
  * 退出登录
  */
 export function logout() {
-  return http.get<void>('/api/auth/logout')
+  return http.post<void>('/api/auth/logout')
 }
 
 /**

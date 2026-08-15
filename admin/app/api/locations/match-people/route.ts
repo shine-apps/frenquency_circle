@@ -10,7 +10,7 @@ import { readUserFromToken } from "@/lib/auth/session-token"
  *
  * 查询参数:
  * - latitude / longitude: 坐标(数值)
- * - tags: 逗号分隔的标签名称字符串(hobby_tags.name)
+ * - tags: 逗号分隔的标签名称字符串(hobby_tags.name),可选;缺省时按距离/活跃度推荐
  * - rangeKm: 1 / 5 / 10 / 30(默认 5)
  * - page / pageSize: 分页(默认 1 / 20)
  *
@@ -21,8 +21,10 @@ const matchQuerySchema = z.object({
   longitude: z.coerce.number().min(-180).max(180),
   tags: z
     .string()
-    .min(1)
-    .transform((s) => s.split(",").map((t) => t.trim()).filter(Boolean)),
+    .optional()
+    .transform((s) =>
+      s ? s.split(",").map((t) => t.trim()).filter(Boolean) : []
+    ),
   rangeKm: z
     .coerce.number()
     .pipe(

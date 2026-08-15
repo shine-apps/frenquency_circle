@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, getCurrentInstance, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { createCustomTag, getCategories, searchTags } from '@/api/tags'
 import { useDialog } from '@wot-ui/ui/components/wd-dialog'
 import { useUserStore } from '@/store/user'
@@ -221,12 +221,40 @@ function handleRemoveAll() {
 }
 
 // ====== 分类展开/收起 + 二级中类单选 ======
-function handleToggleCategory(cat: string) {
+/** 中部滚动容器当前滚动位置(受控,用于展开大类后自动居中) */
+const categoryScrollTop = ref(0)
+const instance = getCurrentInstance()
+
+/**
+ * 展开大类后,自动滚动让展开的二级中类区域尽量处于滚动容器中部。
+ * 计算方式:取滚动容器当前 scrollOffset + 目标相对容器的可视偏移,再减去半屏使目标居中。
+ */
+function scrollExpandedIntoView(index: number) {
+  nextTick(() => {
+    const query = uni.createSelectorQuery().in(instance?.proxy)
+    query.select('#category-scroll-view').scrollOffset(() => {})
+    query.select('#category-scroll-view').boundingClientRect()
+    query.select(`#cat-expand-${index}`).boundingClientRect()
+    query.exec((res) => {
+      const offsetInfo = res?.[0] as { scrollTop: number } | null
+      const container = res?.[1] as { top: number; height: number } | null
+      const target = res?.[2] as { top: number; height: number } | null
+      if (!offsetInfo || !container || !target)
+        return
+      const rel = target.top - container.top
+      const next = (offsetInfo.scrollTop ?? 0) + rel - container.height / 2 + target.height / 2
+      categoryScrollTop.value = Math.max(0, Math.round(next))
+    })
+  })
+}
+
+function handleToggleCategory(cat: string, index: number) {
   expandedCategory.value = expandedCategory.value === cat ? null : cat
   // 展开一级大类时,默认选中"全部"并收起自定义添加
   if (expandedCategory.value !== null) {
     selectedSub.value = null
     customOpen.value = false
+    scrollExpandedIntoView(index)
   }
 }
 
@@ -406,7 +434,7 @@ async function handleSubmitCustom() {
 
       <!-- ====== 中部滚动区:搜索联想 / 分类骨架 / 自定义表单共用同一滚动容器 ====== -->
       <view class="relative min-h-0 flex-1 px-3 pb-2">
-        <scroll-view scroll-y
+        <scroll-view scroll-y id="category-scroll-view" :scroll-top="categoryScrollTop" :scroll-with-animation="true"
           class="h-full box-border rounded-2xl border border-[#e4e9ec] bg-[#f6f8fa] px-2.5 pt-2.5 pb-5 shadow-sm">
           <!-- 搜索态:联想列表 -->
           <template v-if="query.trim()">
@@ -452,8 +480,8 @@ async function handleSubmitCustom() {
                 分类加载中...
               </text>
             </view>
-            <view v-for="node in categories" :key="node.category" class="mt-3 rounded-2xl bg-white shadow-sm overflow-hidden">
-              <view class="flex items-center justify-between px-4 pt-4 pb-4 bg-[#eef6f3]" @click="handleToggleCategory(node.category)">
+            <view v-for="(node, index) in categories" :key="node.category" class="mt-3 rounded-2xl bg-white shadow-sm overflow-hidden">
+              <view class="flex items-center justify-between px-4 pt-4 pb-4 bg-[#eef6f3]" @click="handleToggleCategory(node.category, index)">
                 <text class="text-base text-[#1a1a1a] font-semibold">
                   {{ node.category }}
                 </text>
@@ -461,7 +489,7 @@ async function handleSubmitCustom() {
                   {{ expandedCategory === node.category ? '收起' : '展开' }}
                 </text>
               </view>
-              <view v-if="expandedCategory === node.category" class="border-t-2 border-[#018d71]/20 bg-[#fafbfb]">
+              <view v-if="expandedCategory === node.category" :id="`cat-expand-${index}`" class="border-t-2 border-[#018d71]/20 bg-[#fafbfb]">
                 <!-- 二级中类单选按钮(含"全部"):紧凑小字,与标签区分,独立浅色块背景 -->
                 <view class="flex flex-wrap gap-2 rounded-md bg-[#f2f7f5] px-4 pb-3">
                   <text class="rounded-md px-2.5 py-1 text-xs active:scale-95 b-solid b-[#e0e0e0]"

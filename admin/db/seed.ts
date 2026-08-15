@@ -91,7 +91,7 @@ const CATEGORY_TREE: CategorySeed[] = [
     subCategories: [
       { slug: "fitness-qigong", name: "健身气功", sortOrder: 1 },
       { slug: "taiji", name: "太极拳", sortOrder: 2 },
-      { slug: "other-wushu", name: "其他传统武术", sortOrder: 3 },
+      { slug: "other-wushu", name: "其他武术", sortOrder: 3 },
     ],
   },
   {
@@ -129,7 +129,7 @@ const TAG_DEFINITIONS: TagDefinition[] = [
   { name: "孙式太极拳", subCategorySlug: "taiji" },
   { name: "和式太极拳", subCategorySlug: "taiji" },
 
-  // === 武术养生 → 其他传统武术(具体拳种) ===
+  // === 武术养生 → 其他武术(具体拳种) ===
   { name: "少林拳", subCategorySlug: "other-wushu" },
   { name: "咏春", subCategorySlug: "other-wushu" },
   { name: "形意拳", subCategorySlug: "other-wushu" },

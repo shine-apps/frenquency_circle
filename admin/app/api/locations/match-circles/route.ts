@@ -7,15 +7,17 @@ import { logger, LOG_PREFIX } from "@/lib/logger"
 /**
  * GET /api/locations/match-circles
  *
- * 查询参数同 match-people(tags 为逗号分隔的标签名称),返回 Paginated<MatchCircleDTO>。
+ * 查询参数同 match-people(tags 为逗号分隔的标签名称,可选),返回 Paginated<MatchCircleDTO>。
  */
 const matchQuerySchema = z.object({
   latitude: z.coerce.number().min(-90).max(90),
   longitude: z.coerce.number().min(-180).max(180),
   tags: z
     .string()
-    .min(1)
-    .transform((s) => s.split(",").map((t) => t.trim()).filter(Boolean)),
+    .optional()
+    .transform((s) =>
+      s ? s.split(",").map((t) => t.trim()).filter(Boolean) : []
+    ),
   rangeKm: z
     .coerce.number()
     .pipe(

@@ -78,15 +78,14 @@ const items = ref<MixedItem[]>([])
 /** 兴趣/位置完备性 */
 const tagsReady = computed(() => userTags.value.length > 0)
 const locationReady = computed(() => latitude.value != null && longitude.value != null)
-const ready = computed(() => tagsReady.value && locationReady.value)
+/** 匹配就绪:仅需位置;兴趣可选,未选择时按距离/活跃度推荐 */
+const ready = computed(() => locationReady.value)
 
 /** 匹配请求序号,丢弃过期请求结果 */
 let loadSeq = 0
 
 /** 获取位置并拉取匹配 */
 async function loadAll(lat: number, lng: number, range: number): Promise<void> {
-  if (userTags.value.length === 0)
-    return
   const seq = ++loadSeq
   loading.value = true
   try {
@@ -178,7 +177,7 @@ onShow(() => {
     // 兴趣标签变更(从选择页返回)或首次无结果时重新拉取,避免展示陈旧匹配
     const storeTagsKey = matchStore.tags.join(',')
     const userTagsKey = userTags.value.join(',')
-    if (userTags.value.length > 0 && (storeTagsKey !== userTagsKey || items.value.length === 0)) {
+    if (storeTagsKey !== userTagsKey || items.value.length === 0) {
       loadAll(latitude.value, longitude.value, rangeKm.value)
     }
   }
@@ -210,7 +209,7 @@ async function handleTagsConfirmed(tags: string[]): Promise<void> {
     // 未登录:仅更新本地状态用于本次匹配展示,不发起后端保存
     userStore.setTags(tags)
   }
-  if (latitude.value != null && longitude.value != null && userTags.value.length > 0) {
+  if (latitude.value != null && longitude.value != null) {
     loadAll(latitude.value, longitude.value, rangeKm.value)
   }
 }
@@ -265,9 +264,7 @@ async function handleLocationUpdated(loc: { latitude: number, longitude: number,
     )
   }
 
-  if (userTags.value.length > 0) {
-    loadAll(loc.latitude, loc.longitude, rangeKm.value)
-  }
+  loadAll(loc.latitude, loc.longitude, rangeKm.value)
 }
 
 /** 点击人卡片:已登录则跳转到对方个人主页,未登录提示先登录 */
@@ -356,7 +353,7 @@ function handleCircleClick(circleId: string): void {
         </text>
       </view>
       <text v-else class="mt-3 block text-sm text-[#999] leading-6">
-         选择 1~10 个兴趣标签, 以便为你推荐同趣的人与圈子
+         未选择兴趣，将按距离展示附近的人与圈子；选择兴趣可获得更精准推荐
       </text>
     </view>
 

@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
  * - 未登录(游客)允许匹配,返回 200(路由不强校验登录态)
  * - 成功返回 Paginated<MatchPersonDTO> / Paginated<MatchCircleDTO>
  * - 缺少 latitude 返回 400
- * - 缺少 tags 返回 400
+ * - 缺少 tags 视为空兴趣,允许匹配(返回 200,matcher 收到空数组)
  * - rangeKm 非法值返回 400
  * - 分页参数非法(page=0)返回 400
  *
@@ -216,19 +216,22 @@ describe("GET /api/locations/match-people", () => {
     expect(matchPeopleMock).not.toHaveBeenCalled()
   })
 
-  it("returns 400 when tags is missing", async () => {
+  it("matches with empty interests when tags is missing (returns 200)", async () => {
     readUserFromTokenMock.mockResolvedValue(FAKE_USER)
+    matchPeopleMock.mockResolvedValue(SAMPLE_PEOPLE_RESULT)
+
     const res = await matchPeopleGET(
       makeGetRequest("/api/locations/match-people", {
         latitude: "39.9042",
         longitude: "116.4074",
       })
     )
-    expect(res.status).toBe(400)
-    const body = (await res.json()) as IResponse<null>
-    expect(body.code).toBe(400)
-    expect(body.message).toBe("Invalid query parameters")
-    expect(matchPeopleMock).not.toHaveBeenCalled()
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as IResponse<Paginated<MatchPersonDTO>>
+    expect(body.code).toBe(200)
+    expect(body.data.total).toBe(1)
+    expect(matchPeopleMock).toHaveBeenCalledTimes(1)
+    expect(matchPeopleMock.mock.calls[0]?.[0].tags).toEqual([])
   })
 
   it("returns 400 when rangeKm is not one of 1/5/10/30", async () => {
@@ -351,19 +354,22 @@ describe("GET /api/locations/match-circles", () => {
     expect(matchCirclesMock).not.toHaveBeenCalled()
   })
 
-  it("returns 400 when tags is missing", async () => {
+  it("matches with empty interests when tags is missing (returns 200)", async () => {
     readUserFromTokenMock.mockResolvedValue(FAKE_USER)
+    matchCirclesMock.mockResolvedValue(SAMPLE_CIRCLES_RESULT)
+
     const res = await matchCirclesGET(
       makeGetRequest("/api/locations/match-circles", {
         latitude: "39.9042",
         longitude: "116.4074",
       })
     )
-    expect(res.status).toBe(400)
-    const body = (await res.json()) as IResponse<null>
-    expect(body.code).toBe(400)
-    expect(body.message).toBe("Invalid query parameters")
-    expect(matchCirclesMock).not.toHaveBeenCalled()
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as IResponse<Paginated<MatchCircleDTO>>
+    expect(body.code).toBe(200)
+    expect(body.data.total).toBe(1)
+    expect(matchCirclesMock).toHaveBeenCalledTimes(1)
+    expect(matchCirclesMock.mock.calls[0]?.[0].tags).toEqual([])
   })
 
   it("returns 400 when page is 0 (invalid pagination)", async () => {

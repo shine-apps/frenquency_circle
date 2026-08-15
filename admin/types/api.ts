@@ -158,59 +158,6 @@ export type MatchCircleDTO = {
 }
 
 /**
- * 用户搜索结果匹配来源标记。
- */
-export type UserMatchedField = "name" | "email" | "tag"
-
-/**
- * 用户搜索结果项(用于 /api/users/search 响应)。
- * 不含距离信息(发现搜索为纯关键词 + 标签匹配)。
- */
-export type UserSearchResultDTO = {
-  userId: string
-  name: string
-  avatarUrl: string | null
-  tags: string[]
-  activityLevel: ActivityLevel
-  practiceYears: number | null
-  /** 命中的匹配字段,前端据此高亮 */
-  matchedFields: UserMatchedField[]
-}
-
-/**
- * 圈子搜索结果匹配来源标记。
- */
-export type CircleMatchedField = "title" | "description" | "tag"
-
-/**
- * 圈子搜索结果项(用于 /api/circles/search 响应)。
- */
-export type CircleSearchResultDTO = {
-  circleId: string
-  title: string
-  description: string
-  tags: string[]
-  memberCount: number
-  maxMembers: number | null
-  address: string
-  activityTime: string | null
-  /** 命中的匹配字段,前端据此高亮 */
-  matchedFields: CircleMatchedField[]
-}
-
-/**
- * 关键词搜索通用查询参数。
- */
-export type SearchQueryParams = {
-  /** 搜索关键词(必填,trim 后 1-100 字符) */
-  q: string
-  /** 兴趣标签名称过滤(可选,最多 50 个) */
-  tags?: string[]
-  page: number
-  pageSize: number
-}
-
-/**
  * 公开用户主页 DTO(用于 /api/users/[id]/profile 响应)。
  * 不含 email / phone / privacySettings 等敏感字段。
  */

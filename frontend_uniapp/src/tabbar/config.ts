@@ -48,13 +48,6 @@ export const customTabbarList: CustomTabBarItem[] = [
     iconType: 'unocss',
     icon: 'i-carbon-home',
   },
-  // 中间 tab：发现页入口（普通大小，与左右平齐）
-  {
-    pagePath: 'pages/discover/discover',
-    text: '发现',
-    iconType: 'unocss',
-    icon: 'i-carbon-scan',
-  },
   {
     pagePath: 'pages/me/me',
     text: '我的',

@@ -142,4 +142,17 @@ describe('匹配过滤栏组件', () => {
     await confirmBtn!.trigger('click')
     expect(wrapper.emitted('change-range')).toBeUndefined()
   })
+
+  it('点击预设 Tab 后收起自定义输入框并 emit change-range', async () => {
+    const wrapper = mountBar({})
+    // 展开自定义输入框
+    await wrapper.findAll('view').find(v => v.text() === '自定义')!.trigger('click')
+    expect(wrapper.findComponent({ name: 'WdInput' }).exists()).toBe(true)
+    // 点击预设 5km
+    const preset = wrapper.findAll('view').find(v => v.text() === '5km')
+    expect(preset).toBeTruthy()
+    await preset!.trigger('click')
+    expect(wrapper.emitted('change-range')?.[0]).toEqual([5])
+    expect(wrapper.findComponent({ name: 'WdInput' }).exists()).toBe(false)
+  })
 })

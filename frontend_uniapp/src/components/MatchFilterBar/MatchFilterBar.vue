@@ -72,6 +72,12 @@ const isPresetActive = computed(() => props.rangeKm !== null && RANGE_OPTIONS.so
 /** 自定义 Tab 文案:选中自定义距离时展示当前公里数 */
 const customTabLabel = computed(() => isPresetActive.value ? '自定义' : `自定义(${props.rangeKm}km)`)
 
+/** 点击预设范围 Tab:收起自定义输入框并切换范围 */
+function handlePresetChange(value: number): void {
+  showCustomInput.value = false
+  emit('change-range', value)
+}
+
 /** 点击「自定义」Tab:展开输入框 */
 function handleCustomTab(): void {
   showCustomInput.value = true
@@ -167,7 +173,7 @@ function handleTagsConfirmed(tags: string[]): void {
             :key="opt.value"
             class="h-9 min-w-10 flex items-center justify-center rounded-full px-4"
             :class="rangeKm === opt.value ? 'bg-[#018d71]' : 'bg-white'"
-            @click="emit('change-range', opt.value)"
+            @click="handlePresetChange(opt.value)"
           >
             <text :class="rangeKm === opt.value ? 'text-sm font-medium text-white' : 'text-sm text-[#666]'">
               {{ opt.label }}

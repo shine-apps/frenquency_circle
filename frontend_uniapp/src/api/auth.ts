@@ -83,7 +83,7 @@ export async function updateMyTags(tags: string[]): Promise<string[]> {
 /**
  * 更新当前用户的隐私设置。
  * - PUT /api/users/me/privacy
- * - `allowMatch=false` 时该用户不出现在他人的"同频的人"匹配结果
+ * - `allowMatch=false` 时该用户不出现在他人的"同趣的人"匹配结果
  *
  * @param settings 隐私设置
  * @returns 后端实际持久化的 PrivacySettings

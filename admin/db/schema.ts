@@ -42,7 +42,7 @@ export type ActivityLevel = (typeof ACTIVITY_LEVELS)[number]
 
 /**
  * 隐私设置结构(存储在 users.privacySettings JSONB 字段)。
- * - allowMatch: 是否允许出现在他人的"同频的人"匹配结果
+ * - allowMatch: 是否允许出现在他人的"同趣的人"匹配结果
  * - publicContact: 是否对外公开联系方式
  * - locationPrecision: 位置精度脱敏等级
  *   - `exact` 精确距离

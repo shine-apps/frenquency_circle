@@ -4,13 +4,13 @@ import { ref } from 'vue'
 
 /**
  * 匹配结果 Store(对应原 Taro 项目 store/match.ts 的 useMatchStore)。
- * 缓存最近一次"同频的人 / 同频的圈子"匹配结果,
+ * 缓存最近一次"同趣的人 / 同趣的圈子"匹配结果,
  * 供首页与匹配结果页共享,避免重复请求与页面切换时数据丢失。
  */
 export const useMatchStore = defineStore('match', () => {
-  /** 同频的人列表 */
+  /** 同趣的人列表 */
   const people = ref<MatchPersonDTO[]>([])
-  /** 同频的圈子列表 */
+  /** 同趣的圈子列表 */
   const circles = ref<MatchCircleDTO[]>([])
   /** 当前匹配使用的范围(公里) */
   const rangeKm = ref(5)

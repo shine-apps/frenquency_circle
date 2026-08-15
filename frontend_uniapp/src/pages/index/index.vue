@@ -23,7 +23,7 @@ definePage({
   // 首页:自动匹配主界面
   type: 'home',
   style: {
-    navigationBarTitleText: '文艺同频圈',
+    navigationBarTitleText: '趣邻圈',
     navigationStyle: 'custom',
   },
 })
@@ -53,7 +53,7 @@ const dialog = useDialog()
 
 // 首页分享(右上角菜单:好友/朋友圈)
 const { shareAppMessage, shareTimeline } = useShare({
-  title: '文艺同频圈',
+  title: '趣邻圈',
   path: '/pages/index/index',
 })
 
@@ -279,7 +279,7 @@ function handlePersonClick(person: { userId: string | number } | null | undefine
   if (!userStore.isLoggedIn) {
     dialog.confirm({
       title: '需要登录',
-      msg: '查看同频的人需要先登录,是否前往登录页?',
+      msg: '查看同趣的人需要先登录,是否前往登录页?',
       confirmButtonText: '去登录',
       cancelButtonText: '取消',
     }).then((res) => {
@@ -307,11 +307,11 @@ function handleCircleClick(circleId: string): void {
           <view class="flex items-center gap-1">
             <image src="/static/images/logo_256_circle.png" class="w-[40px] h-[40px]"></image>
             <text class="text-xl text-white font-semibold">
-              文艺同频圈
+              趣邻圈
             </text>
           </view>
           <text class="mt-1 text-xs text-white/80">
-            选择兴趣,遇见同频的人与圈子
+            选择兴趣,遇见同趣的人与圈子
           </text>
         </view>
         <view class="flex gap-2">
@@ -356,7 +356,7 @@ function handleCircleClick(circleId: string): void {
         </text>
       </view>
       <text v-else class="mt-3 block text-sm text-[#999] leading-6">
-         选择 1~10 个兴趣标签, 以便为你推荐同频的人与圈子
+         选择 1~10 个兴趣标签, 以便为你推荐同趣的人与圈子
       </text>
     </view>
 
@@ -394,12 +394,12 @@ function handleCircleClick(circleId: string): void {
     <view v-if="ready" class="mx-4 mt-3 flex-1 pb-32">
       <view v-if="loading && items.length === 0" class="flex flex-col items-center pt-20">
         <text class="text-sm text-[#999]">
-          发现同频中...
+          发现同趣中...
         </text>
       </view>
       <view v-else-if="items.length === 0" class="flex flex-col items-center pt-20">
         <text class="text-sm text-[#999]">
-          附近暂无同频,试试扩大范围或调整兴趣
+          附近暂无同趣,试试扩大范围或调整兴趣
         </text>
       </view>
       <view v-else class="flex flex-col gap-3">

@@ -402,7 +402,7 @@ async function main() {
       tagNames: ["陈式太极拳", "八段锦"],
     },
     {
-      title: "同频书法交流圈",
+      title: "同趣书法交流圈",
       description:
         "书法爱好者交流圈,定期组织颜体楷书与兰亭序行书临摹活动。欢迎零基础学员,提供文房四宝。每月组织一次作品点评与交流茶会。",
       creatorEmail: "wangshifu@example.com",

@@ -15,7 +15,7 @@ import { http } from '@/http/http'
  *
  * 用法:
  *   const { share, shareAppMessage, shareTimeline } = useShare({
- *     title: () => circle.value?.title || '文艺同频圈',
+ *     title: () => circle.value?.title || '趣邻圈',
  *     path: '/pages/circle/circle',
  *     query: () => ({ id: circleId.value }),
  *     imageUrl: () => circle.value?.coverImages?.[0],

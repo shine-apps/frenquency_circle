@@ -217,7 +217,7 @@ onHide(() => {
         <view class="bg-[#018d71] px-4 pb-3 pt-2">
           <wd-search
             v-model="keyword"
-            placeholder="搜索同频的人或圈子"
+            placeholder="搜索同趣的人或圈子"
             hide-cancel
             :light="false"
             custom-style="--wot-search-bg: rgba(255,255,255,0.2); --wot-search-color: #fff; --wot-search-placeholder-color: rgba(255,255,255,0.7); --wot-search-border-radius: 22px;"
@@ -391,7 +391,7 @@ onHide(() => {
       <template v-else>
         <view v-if="hotTags.length === 0" class="flex flex-1 flex-col items-center justify-center py-20">
           <text class="text-[#ccc]" style="font-size: 56px;">🔍</text>
-          <text class="mt-3 text-sm text-[#999]">输入关键词探索同频的人与圈子</text>
+          <text class="mt-3 text-sm text-[#999]">输入关键词探索同趣的人与圈子</text>
         </view>
       </template>
     </z-paging>

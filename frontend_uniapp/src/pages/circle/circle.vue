@@ -28,7 +28,7 @@ const contactLoading = ref(false)
 
 /** 分享:小程序(好友/朋友圈) + H5 微信浏览器 JSSDK。内容在触发/配置时实时读取,兼容详情异步加载 */
 const { share, shareAppMessage, shareTimeline } = useShare({
-  title: () => (circle.value ? `${circle.value.title}｜${circle.value.description.slice(0, 40)}` : '文艺同频圈'),
+  title: () => (circle.value ? `${circle.value.title}｜${circle.value.description.slice(0, 40)}` : '趣邻圈'),
   path: '/pages/circle/circle',
   query: () => (circleId.value ? { id: circleId.value } : {}),
   imageUrl: () => circle.value?.coverImages?.[0] ?? '',

@@ -11,7 +11,7 @@ import { haversineKm, withinRangeSql } from "@/lib/match/distance"
 import { applyLocationPrecision } from "@/lib/match/precision"
 
 /**
- * 同频的人匹配引擎。
+ * 同趣的人匹配引擎。
  *
  * 加权打分公式:
  * - 距离分(40%):1 - (distance / rangeKm),范围 0-1(越近越高)
@@ -51,7 +51,7 @@ function extractLocationPrecision(raw: unknown): LocationPrecision {
 }
 
 /**
- * 查询范围内的同频用户并按加权总分排序返回。
+ * 查询范围内的同趣用户并按加权总分排序返回。
  *
  * @returns 分页后的 MatchPersonDTO 列表
  */

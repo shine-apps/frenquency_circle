@@ -6,7 +6,7 @@ import type { MatchCircleDTO, Paginated } from "@/types/api"
 import { haversineKm, withinRangeSql } from "@/lib/match/distance"
 
 /**
- * 同频的圈子匹配引擎。
+ * 同趣的圈子匹配引擎。
  *
  * 加权打分公式:
  * - 距离分(30%):1 - (distance / rangeKm),范围 0-1

@@ -23,7 +23,7 @@ const searchQuerySchema = z.object({
 /**
  * GET /api/users/search
  *
- * 按关键词分页搜索同频用户。
+ * 按关键词分页搜索同趣用户。
  *
  * - 鉴权:任意登录用户
  * - 关键词支持 5 策略模糊匹配(精确 → ILIKE → 拼音全拼 → 拼音首字母 → 拼音首字母前缀)

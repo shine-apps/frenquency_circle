@@ -59,7 +59,7 @@ export function wxLogin(data: { code: string }) {
   return http.post<IAuthLoginRes>('/auth/wxLogin', data)
 }
 
-// ==================== 文艺同频圈鉴权 API ====================
+// ==================== 趣邻圈鉴权 API ====================
 
 /** 发送短信验证码(无需鉴权) */
 export function sendSmsCode(phone: string) {

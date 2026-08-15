@@ -555,7 +555,7 @@ async function handleBindPhone() {
             </text>
           </view>
           <text v-else class="mt-3 block text-sm text-[#999] leading-6">
-            未选择兴趣标签,完善后可自动匹配同频
+            未选择兴趣标签,完善后可自动匹配同趣
           </text>
         </view>
       </view>

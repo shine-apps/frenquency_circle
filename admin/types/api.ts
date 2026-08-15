@@ -131,7 +131,7 @@ export type AuthLoginResponse = {
 }
 
 /**
- * 同频的人匹配结果项。
+ * 同趣的人匹配结果项。
  */
 export type MatchPersonDTO = {
   userId: string
@@ -144,7 +144,7 @@ export type MatchPersonDTO = {
 }
 
 /**
- * 同频的圈子匹配结果项。
+ * 同趣的圈子匹配结果项。
  */
 export type MatchCircleDTO = {
   circleId: string

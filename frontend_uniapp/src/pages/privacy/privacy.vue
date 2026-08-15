@@ -131,7 +131,7 @@ function handlePrecisionChange(val: PrivacySettings['locationPrecision']) {
           允许被匹配
         </text>
         <text class="mt-1 text-xs text-[#999]">
-          关闭后,你不会出现在他人的"同频的人"匹配结果中
+          关闭后,你不会出现在他人的"同趣的人"匹配结果中
         </text>
       </view>
       <switch

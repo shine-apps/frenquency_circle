@@ -173,7 +173,7 @@ async function handleGetPhoneNumber(e: any) {
     <view class="flex flex-col items-center py-5">
       <image src="/static/images/logo_256_circle.png" class="w-[200px] h-[200px]" />
       <view class="mt-4 text-2xl font-semibold text-[#1a1a1a]">
-        文艺同频
+        趣邻
       </view>
       <view class="mt-2 text-sm text-[#999]">
         人与人的连接，让生活更美好

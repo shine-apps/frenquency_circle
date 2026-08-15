@@ -23,7 +23,7 @@ const searchQuerySchema = z.object({
 /**
  * GET /api/circles/search
  *
- * 按关键词分页搜索同频圈子。
+ * 按关键词分页搜索同趣圈子。
  *
  * - 鉴权:任意登录用户
  * - 关键词支持 5 策略模糊匹配(精确 → ILIKE → 拼音全拼 → 拼音首字母 → 拼音首字母前缀)

@@ -188,7 +188,7 @@ All commands run from the project root with no `cd` needed.
 
 ### Phase 2-3: 标签子系统与匹配引擎 API
 
-「文艺同频圈」核心业务 API,均走 `requireSession(req)` 鉴权(非 admin),返回 `IResponse<T>` 信封。
+「趣邻圈」核心业务 API,均走 `requireSession(req)` 鉴权(非 admin),返回 `IResponse<T>` 信封。
 
 - **`GET /api/hobby-tags/search?q=&limit=`**:公开,搜索标签。策略:1) 精确 name → 2) ILIKE `%q%` → 3) pinyin 完全匹配 → 4) pinyinInitials 完全匹配 → 5) pinyinInitials 前缀匹配。`q` 为空时返回热门 top 10。`limit` 默认 10,最大 50。
 - **`GET /api/hobby-tags/categories`**:公开,返回三级分类树(一级大类 → 二级中类 → 三级具体标签,从 hobby_tags 表 group by)。

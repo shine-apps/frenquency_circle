@@ -11,7 +11,7 @@ import type { PrivacySettings } from "@/types/api"
 /**
  * 隐私设置请求体 schema。
  * 与 `PrivacySettings` 类型对齐:
- * - allowMatch: 是否允许出现在他人的"同频的人"匹配结果
+ * - allowMatch: 是否允许出现在他人的"同趣的人"匹配结果
  * - publicContact: 是否对外公开联系方式
  * - locationPrecision: 位置精度脱敏等级('exact' | 'community' | 'region')
  */
@@ -31,7 +31,7 @@ const privacySettingsSchema = z.object({
  * - 更新 `users.privacySettings` JSONB 字段(同时更新 updatedAt)
  * - 返回 `IResponse<{ privacySettings: PrivacySettings }>`
  *
- * `allowMatch=false` 时该用户不出现在他人的"同频的人"匹配结果
+ * `allowMatch=false` 时该用户不出现在他人的"同趣的人"匹配结果
  * (由匹配引擎在查询时过滤,本接口仅负责持久化)。
  */
 export async function OPTIONS(req: Request) {

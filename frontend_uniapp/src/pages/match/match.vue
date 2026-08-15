@@ -164,7 +164,7 @@ onPullDownRefresh(() => {
 
 /** 人列表项点击:简化为 Toast */
 function handlePersonClick() {
-  uni.showToast({ title: '同频的人暂不支持直接联系,请通过圈子互动', icon: 'none', duration: 2000 })
+  uni.showToast({ title: '同趣的人暂不支持直接联系,请通过圈子互动', icon: 'none', duration: 2000 })
 }
 
 /** 圈子列表项点击:跳详情页 */
@@ -183,7 +183,7 @@ function handleGoHome() {
     <!-- ====== 顶部品牌渐变背景 ====== -->
     <view class="from-[#018d71] to-[#0aa07f] bg-gradient-to-b px-5 pb-4 pt-safe">
       <text class="text-lg text-white font-semibold">
-        同频结果
+        同趣结果
       </text>
       <text class="mt-1 block text-xs text-white/80">
         基于你的兴趣标签与当前位置自动匹配
@@ -197,14 +197,14 @@ function handleGoHome() {
         :class="activeTab === 'people' ? 'border-b-2 border-[#018d71] font-medium text-[#018d71]' : 'text-[#666]'"
         @click="activeTab = 'people'"
       >
-        同频的人
+        同趣的人
       </view>
       <view
         class="flex-1 py-3 text-center text-sm"
         :class="activeTab === 'circles' ? 'border-b-2 border-[#018d71] font-medium text-[#018d71]' : 'text-[#666]'"
         @click="activeTab = 'circles'"
       >
-        同频的圈子
+        同趣的圈子
       </view>
     </view>
 
@@ -239,11 +239,11 @@ function handleGoHome() {
       </text>
     </view>
 
-    <!-- 同频的人列表 -->
+    <!-- 同趣的人列表 -->
     <view v-else-if="activeTab === 'people'">
       <view v-if="people.length === 0" class="flex flex-col items-center pt-16">
         <text class="text-sm text-[#999]">
-          附近暂无同频的人,试试扩大范围
+          附近暂无同趣的人,试试扩大范围
         </text>
         <button class="mt-4 rounded-full bg-[#018d71] px-5 py-2 text-sm text-white active:scale-95" @click="handleGoHome">
           去首页调整
@@ -303,11 +303,11 @@ function handleGoHome() {
       </view>
     </view>
 
-    <!-- 同频的圈子列表 -->
+    <!-- 同趣的圈子列表 -->
     <view v-else>
       <view v-if="circles.length === 0" class="flex flex-col items-center pt-16">
         <text class="text-sm text-[#999]">
-          附近暂无同频的圈子,试试扩大范围
+          附近暂无同趣的圈子,试试扩大范围
         </text>
         <button class="mt-4 rounded-full bg-[#018d71] px-5 py-2 text-sm text-white active:scale-95" @click="handleGoHome">
           去首页调整

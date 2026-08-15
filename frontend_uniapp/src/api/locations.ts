@@ -13,7 +13,7 @@ export interface MatchQueryParams {
 }
 
 /**
- * 匹配同频的人(需登录)。
+ * 匹配同趣的人(需登录)。
  * 注意:tags 数组需序列化为逗号分隔字符串(后端 `tags=a,b,c` 解析)。
  */
 export function matchPeople(params: MatchQueryParams) {
@@ -28,7 +28,7 @@ export function matchPeople(params: MatchQueryParams) {
 }
 
 /**
- * 匹配同频的圈子(需登录)。
+ * 匹配同趣的圈子(需登录)。
  * 注意:tags 数组需序列化为逗号分隔字符串。
  */
 export function matchCircles(params: MatchQueryParams) {

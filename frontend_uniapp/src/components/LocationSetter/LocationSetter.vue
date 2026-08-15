@@ -135,7 +135,7 @@ function handleH5Close(): void {
     <view class="mt-3 flex items-start gap-2">
       <view class="i-carbon:location text-[16px] text-[#999] mt-0.5" />
       <text class="flex-1 text-sm leading-6 text-[#333] break-all">
-        {{ address || '暂未设置位置,选择后可匹配附近同频的人与圈子' }}
+        {{ address || '暂未设置位置,选择后可匹配附近同趣的人与圈子' }}
       </text>
     </view>
 

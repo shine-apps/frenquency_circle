@@ -140,7 +140,7 @@ export default defineManifestConfig({
     ],
     permission: {
       'scope.userLocation': {
-        'desc': '获取您的位置信息用于匹配附近文艺同频的人或者圈子'
+        'desc': '获取您的位置信息用于匹配附近趣邻的人或者圈子'
       }
     },
   },

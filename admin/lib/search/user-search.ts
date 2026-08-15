@@ -21,7 +21,7 @@ import type {
  *   5. 拼音首字母前缀匹配:name 的首字母以 query 首字母开头
  *
  * 标签维度同规则匹配(用户已绑定的兴趣标签名称,存于 users.tags text[]),
- * 命中任一标签即算"同频"。
+ * 命中任一标签即算"同趣"。
  *
  * 隐私控制:仅返回 `privacySettings.allowMatch = true` 的用户。
  * 标签过滤:提供 tags 名称时,用户必须至少拥有其中一个标签名称。

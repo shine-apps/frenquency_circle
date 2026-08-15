@@ -11,7 +11,7 @@ import { readUserFromToken } from "@/lib/auth/session-token"
  * 查询参数:
  * - latitude / longitude: 坐标(数值)
  * - tags: 逗号分隔的标签名称字符串(hobby_tags.name),可选;缺省时按距离/活跃度推荐
- * - rangeKm: 1 / 5 / 10 / 30(默认 5)
+ * - rangeKm: 任意正数(公里),默认 5,上限 200(与前端自定义距离上限一致)
  * - page / pageSize: 分页(默认 1 / 20)
  *
  * 返回 Paginated<MatchPersonDTO>。
@@ -27,9 +27,8 @@ const matchQuerySchema = z.object({
     ),
   rangeKm: z
     .coerce.number()
-    .pipe(
-      z.union([z.literal(1), z.literal(5), z.literal(10), z.literal(30)])
-    )
+    .min(0.1, "rangeKm 必须为正数")
+    .max(2000, "rangeKm 超出上限 200km")
     .default(5),
 })
 

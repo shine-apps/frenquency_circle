@@ -211,7 +211,7 @@ function handleGoHome() {
     <!-- ====== 范围筛选 + 结果摘要 ====== -->
     <view class="bg-white px-4 py-3">
       <scroll-view scroll-x class="whitespace-nowrap">
-        <view class="flex gap-2">
+        <view class="inline-flex gap-2">
           <view
             v-for="opt in RANGE_FILTERS"
             :key="opt.value"

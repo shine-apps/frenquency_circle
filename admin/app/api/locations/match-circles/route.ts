@@ -8,6 +8,7 @@ import { logger, LOG_PREFIX } from "@/lib/logger"
  * GET /api/locations/match-circles
  *
  * 查询参数同 match-people(tags 为逗号分隔的标签名称,可选),返回 Paginated<MatchCircleDTO>。
+ * rangeKm 支持任意正数(默认 5,上限 200)。
  */
 const matchQuerySchema = z.object({
   latitude: z.coerce.number().min(-90).max(90),
@@ -20,9 +21,8 @@ const matchQuerySchema = z.object({
     ),
   rangeKm: z
     .coerce.number()
-    .pipe(
-      z.union([z.literal(1), z.literal(5), z.literal(10), z.literal(30)])
-    )
+    .min(0.1, "rangeKm 必须为正数")
+    .max(2000, "rangeKm 超出上限 200km")
     .default(5),
 })
 

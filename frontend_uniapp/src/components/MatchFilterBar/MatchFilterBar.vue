@@ -64,10 +64,13 @@ const customInput = ref<string>('')
 /** 是否展示自定义距离输入框 */
 const showCustomInput = ref(false)
 /** 自定义距离输入上限(km) */
-const MAX_CUSTOM_KM = 200
+const MAX_CUSTOM_KM = 2000
 
 /** 当前是否为预设范围之一(高亮由父级 rangeKm 驱动) */
 const isPresetActive = computed(() => props.rangeKm !== null && RANGE_OPTIONS.some(o => o.value === props.rangeKm))
+
+/** 自定义 Tab 文案:选中自定义距离时展示当前公里数 */
+const customTabLabel = computed(() => isPresetActive.value ? '自定义' : `自定义(${props.rangeKm}km)`)
 
 /** 点击「自定义」Tab:展开输入框 */
 function handleCustomTab(): void {
@@ -158,7 +161,7 @@ function handleTagsConfirmed(tags: string[]): void {
     <!-- ====== 范围 Tab ====== -->
     <view v-if="ready" class="mt-3">
       <scroll-view scroll-x class="whitespace-nowrap">
-        <view class="flex gap-2 px-4">
+        <view class="inline-flex gap-2 px-4 py-2">
           <view
             v-for="opt in RANGE_OPTIONS"
             :key="opt.value"
@@ -176,8 +179,8 @@ function handleTagsConfirmed(tags: string[]): void {
             :class="!isPresetActive ? 'bg-[#018d71]' : 'bg-white'"
             @click="handleCustomTab"
           >
-            <text :class="!isPresetActive ? 'text-sm font-medium text-white' : 'text-sm text-[#666]'">
-              自定义
+            <text :class="!isPresetActive ? 'text-sm font-medium text-white' : 'text-sm text-[#666]'" class="text-nowrap">
+              {{ customTabLabel }}
             </text>
           </view>
         </view>

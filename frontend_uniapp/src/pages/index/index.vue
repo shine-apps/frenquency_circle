@@ -12,8 +12,7 @@ import { reverseGeocode } from '@/utils/geo'
 import { activityLevelText, formatDateTime, formatDistance } from '@/utils/format'
 import { canCreateCircle } from '@/utils/role'
 import { useShare } from '@/composables/useShare'
-import LocationSetter from '@/components/LocationSetter/LocationSetter.vue'
-import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue'
+import MatchFilterBar from '@/components/MatchFilterBar/MatchFilterBar.vue'
 import type { MatchCircleDTO, MatchPersonDTO } from '@/types'
 
 defineOptions({
@@ -27,14 +26,6 @@ definePage({
     navigationStyle: 'custom',
   },
 })
-
-/** 范围 Tab 选项 */
-const RANGE_OPTIONS: Array<{ label: string, value: number }> = [
-  { label: '1km', value: 1 },
-  { label: '5km', value: 5 },
-  { label: '10km', value: 10 },
-  { label: '30km', value: 30 },
-]
 
 /** 标签展示最大数量 */
 const MAX_TAG_VISIBLE = 3
@@ -76,7 +67,6 @@ const loading = ref(false)
 const items = ref<MixedItem[]>([])
 
 /** 兴趣/位置完备性 */
-const tagsReady = computed(() => userTags.value.length > 0)
 const locationReady = computed(() => latitude.value != null && longitude.value != null)
 /** 匹配就绪:仅需位置;兴趣可选,未选择时按距离/活跃度推荐 */
 const ready = computed(() => locationReady.value)
@@ -182,14 +172,6 @@ onShow(() => {
     }
   }
 })
-
-/** 兴趣标签选择弹窗显隐 */
-const tagPopupVisible = ref(false)
-
-/** 打开兴趣标签选择弹窗 */
-function handleEditTags(): void {
-  tagPopupVisible.value = true
-}
 
 /** 标签保存成功后刷新匹配结果(当前坐标已就绪时) */
 async function handleTagsConfirmed(tags: string[]): Promise<void> {
@@ -320,72 +302,18 @@ function handleCircleClick(circleId: string): void {
       </view>
     </view>
 
-    <!-- ====== 我的兴趣卡片 ====== -->
-    <view class="mx-4 mt-3 rounded-2xl bg-white p-4 shadow-sm">
-      <view class="flex items-center justify-between">
-        <view class="flex items-center gap-2">
-          <view class="i-carbon:tag text-[18px] text-[#018d71]" />
-          <text class="text-sm text-[#333] font-medium">
-            我的兴趣
-          </text>
-          <view v-if="tagsReady" class="rounded-full bg-[#e8f5f1] px-2 py-0.5">
-            <text class="text-xs text-[#018d71]">
-              {{ userTags.length }} 个
-            </text>
-          </view>
-          <view v-else class="rounded-full bg-[#fff4e5] px-2 py-0.5">
-            <text class="text-xs text-[#e68a00]">
-              未选择
-            </text>
-          </view>
-        </view>
-        <wd-button @click="handleEditTags" type="primary" size="small" variant="text">
-          {{ tagsReady ? '编辑' : '去选择' }} ›
-        </wd-button>
-      </view>
-      <view v-if="tagsReady" class="mt-3 flex flex-wrap gap-2">
-        <text
-          v-for="name in userTags"
-          :key="name"
-          class="rounded-full bg-[#e8f5f1] px-3 py-1 text-xs text-[#018d71]"
-        >
-          {{ name }}
-        </text>
-      </view>
-      <text v-else class="mt-3 block text-sm text-[#999] leading-6">
-         未选择兴趣，将按距离展示附近的人与圈子；选择兴趣可获得更精准推荐
-      </text>
-    </view>
-
-    <!-- ====== 当前位置卡片(复用 LocationSetter) ====== -->
-    <view class="mx-4 mt-3">
-      <LocationSetter
-        :latitude="latitude"
-        :longitude="longitude"
-        :address="address"
-        title="当前位置"
-        @update:location="handleLocationUpdated"
-      />
-    </view>
-
-    <!-- ====== 范围 Tab ====== -->
-    <view v-if="ready" class="mt-3">
-      <scroll-view scroll-x class="whitespace-nowrap">
-        <view class="flex gap-2 px-4">
-          <view
-            v-for="opt in RANGE_OPTIONS"
-            :key="opt.value"
-            class="h-9 min-w-10 flex items-center justify-center rounded-full px-4"
-            :class="rangeKm === opt.value ? 'bg-[#018d71]' : 'bg-white'"
-            @click="handleRangeChange(opt.value)"
-          >
-            <text :class="rangeKm === opt.value ? 'text-sm font-medium text-white' : 'text-sm text-[#666]'">
-              {{ opt.label }}
-            </text>
-          </view>
-        </view>
-      </scroll-view>
-    </view>
+    <!-- ====== 兴趣卡片 + 位置卡片 + 范围选择(纯输入/输出组件) ====== -->
+    <MatchFilterBar
+      :user-tags="userTags"
+      :latitude="latitude"
+      :longitude="longitude"
+      :address="address"
+      :range-km="rangeKm"
+      :ready="ready"
+      @confirm-tags="handleTagsConfirmed"
+      @update:location="handleLocationUpdated"
+      @change-range="handleRangeChange"
+    />
 
     <!-- ====== 匹配结果区 ====== -->
     <view v-if="ready" class="mx-4 mt-3 flex-1 pb-32">
@@ -487,9 +415,6 @@ function handleCircleClick(circleId: string): void {
 
     <!-- 留白区:ready 为 false 时占位,避免内容过短露出底部 -->
     <view v-if="!ready" class="flex-1" />
-
-    <!-- 兴趣标签选择弹窗:仅回传选择结果,保存由本页统一处理(未登录不保存) -->
-    <TagSelectorPopup v-model="tagPopupVisible" :initial-tags="userTags" @confirm="handleTagsConfirmed" />
 
     <!-- 登录提示对话框挂载点(供 useDialog 使用) -->
     <wd-dialog root-portal />

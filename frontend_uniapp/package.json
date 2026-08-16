@@ -135,6 +135,7 @@
     "@dcloudio/uni-mp-weixin": "3.0.0-4070620250821001",
     "@dcloudio/uni-mp-xhs": "3.0.0-4070620250821001",
     "@dcloudio/uni-quickapp-webview": "3.0.0-4070620250821001",
+    "@wot-ui/ui": "latest",
     "abortcontroller-polyfill": "^1.7.8",
     "alova": "^3.3.3",
     "dayjs": "1.11.10",
@@ -143,8 +144,7 @@
     "vue": "^3.4.21",
     "vue-i18n": "9.1.9",
     "vue-router": "4.5.1",
-    "z-paging": "2.8.7",
-    "@wot-ui/ui": "latest"
+    "z-paging": "2.8.7"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.8.1",
@@ -180,6 +180,7 @@
     "enquirer": "^2.4.1",
     "eslint": "^9.31.0",
     "eslint-plugin-format": "^1.0.1",
+    "fs-extra": "10.1.0",
     "husky": "^9.1.7",
     "jsdom": "^29.1.1",
     "lint-staged": "^15.2.10",

@@ -84,12 +84,6 @@ const isCreator = computed(() => {
   return !!(circle.value && userStore.userInfo && circle.value.creatorId === userStore.userInfo.id)
 })
 
-/** 成员是否已满 */
-const isFull = computed(() => {
-  const c = circle.value
-  return !!(c && c.maxMembers !== null && c.maxMembers !== undefined && c.memberCount >= c.maxMembers)
-})
-
 /** 联系老师:优先 phone,phone 为 null 时改 wechat */
 async function handleContact() {
   const c = circle.value
@@ -169,8 +163,6 @@ function handleBack() {
     },
   })
 }
-
-const maxMembersText = computed(() => (circle.value?.maxMembers ? String(circle.value.maxMembers) : '不限'))
 
 </script>
 
@@ -293,17 +285,9 @@ const maxMembersText = computed(() => (circle.value?.maxMembers ? String(circle.
           </text>
         </view>
 
-        <!-- ====== 7. 成员人数 ====== -->
+        <!-- ====== 7. 圈子数据(关注人数 / 被联系次数) ====== -->
         <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
           <view class="flex items-center justify-between">
-            <text class="text-sm font-medium text-[#333]">
-              成员人数
-            </text>
-            <text class="text-sm text-[#018d71]">
-              {{ circle.memberCount }}/{{ maxMembersText }}
-            </text>
-          </view>
-          <view class="mt-2 flex items-center justify-between">
             <text class="text-sm font-medium text-[#333]">
               关注人数
             </text>
@@ -311,9 +295,6 @@ const maxMembersText = computed(() => (circle.value?.maxMembers ? String(circle.
               {{ circle.followCount }}
             </text>
           </view>
-          <text v-if="isFull" class="mt-2 block text-xs text-[#ff4d4f]">
-            圈子已满,可联系老师加备选
-          </text>
           <text v-if="isCreator" class="mt-2 block text-xs text-[#999]">
             被联系 {{ circle.contactCount }} 次
           </text>

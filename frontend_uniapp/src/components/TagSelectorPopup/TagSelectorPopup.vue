@@ -242,7 +242,9 @@ function scrollExpandedIntoView(index: number) {
       if (!offsetInfo || !container || !target)
         return
       const rel = target.top - container.top
-      const next = (offsetInfo.scrollTop ?? 0) + rel - container.height / 2 + target.height / 2
+      // 注:这里刻意不用 `??`(改用 `||`),避免编译降级注入 `_a` 辅助变量时,
+      // 触发小程序差量编译补丁错位导致 `_a_container is not defined` 运行时错误
+      const next = (offsetInfo.scrollTop || 0) + rel - container.height / 2 + target.height / 2
       categoryScrollTop.value = Math.max(0, Math.round(next))
     })
   })

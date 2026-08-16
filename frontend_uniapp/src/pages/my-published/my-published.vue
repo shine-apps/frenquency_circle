@@ -139,12 +139,6 @@ function statusText(status: string): string {
             </view>
             <view class="mt-1 flex items-center gap-1">
               <text class="text-xs text-[#999]">
-                {{ c.memberCount }}/{{ c.maxMembers ?? '不限' }}人
-              </text>
-              <text class="text-xs text-[#999]">
-                ·
-              </text>
-              <text class="text-xs text-[#999]">
                 创建于 {{ formatDate(c.createdAt) }}
               </text>
             </view>

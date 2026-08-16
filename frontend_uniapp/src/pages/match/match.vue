@@ -341,12 +341,6 @@ function handleGoHome() {
                 <text class="text-xs text-[#999]">
                   {{ formatDateTime(c.activityTime) }}
                 </text>
-                <text class="text-xs text-[#999]">
-                  ·
-                </text>
-                <text class="text-xs text-[#999]">
-                  {{ c.memberCount }}/{{ c.maxMembers ?? '∞' }}人
-                </text>
               </view>
               <text v-if="c.address" class="mt-0.5 block truncate text-xs text-[#999]">
                 {{ c.address }}

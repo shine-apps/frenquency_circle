@@ -19,9 +19,6 @@ const TITLE_MAX = 50
 const DESCRIPTION_MAX = 500
 /** 标签最大数量 */
 const TAGS_MAX = 5
-/** 人数上限范围 */
-const MAX_MEMBERS_MIN = 1
-const MAX_MEMBERS_MAX = 999
 /** 手机号校验(11 位) */
 const PHONE_RE = /^1\d{10}$/
 /** 轮播图片最大数量 */
@@ -44,7 +41,6 @@ const longitude = ref<number | null>(null)
 const contactPhone = ref('')
 const wechat = ref('')
 const activityTime = ref('')
-const maxMembers = ref('')
 const submitting = ref(false)
 const pickerVisible = ref(false)
 const coverImages = ref<string[]>([])
@@ -77,7 +73,6 @@ async function fetchForEdit(id: string) {
     contactPhone.value = data.contactPhone || ''
     wechat.value =data.wechat || ''
     activityTime.value = data.activityTime || ''
-    maxMembers.value = data.maxMembers != null ? String(data.maxMembers) : ''
     coverImages.value = data.coverImages || []
   }
   catch (e) {
@@ -117,20 +112,13 @@ const locationValid = computed(() => !!address.value && latitude.value !== null 
 const descriptionValid = computed(() => description.value.trim().length >= 1 && description.value.trim().length <= DESCRIPTION_MAX)
 const hasContact = computed(() => contactPhone.value.trim() !== '' || wechat.value.trim() !== '')
 const phoneValid = computed(() => contactPhone.value.trim() === '' || PHONE_RE.test(contactPhone.value.trim()))
-const maxMembersNum = computed(() => (maxMembers.value === '' ? null : Number(maxMembers.value)))
-const maxMembersValid = computed(() =>
-  maxMembers.value === ''
-  || (!Number.isNaN(maxMembersNum.value as number)
-    && (maxMembersNum.value as number) >= MAX_MEMBERS_MIN
-    && (maxMembersNum.value as number) <= MAX_MEMBERS_MAX))
 const canSubmit = computed(() =>
   titleValid.value && descriptionValid.value && tagsValid.value && locationValid.value
-  && hasContact.value && phoneValid.value && maxMembersValid.value && !submitting.value)
+  && hasContact.value && phoneValid.value && !submitting.value)
 
 const formErr = computed((): string => {
   if (!hasContact.value) return '请至少填写一种联系方式'
   if (!phoneValid.value) return '手机号格式不正确(11 位)'
-  if (!maxMembersValid.value) return `人数上限范围 ${MAX_MEMBERS_MIN}-${MAX_MEMBERS_MAX}`
   return ''
 })
 
@@ -223,7 +211,6 @@ async function handleSubmit() {
   try {
     const lat = latitude.value as number
     const lng = longitude.value as number
-    const finalMax = maxMembers.value === '' ? undefined : Number(maxMembers.value)
 
     if (isEdit.value) {
       const patch: UpdateCircleInput = {
@@ -233,7 +220,6 @@ async function handleSubmit() {
         contactPhone: contactPhone.value.trim() || undefined,
         wechat: wechat.value.trim() || undefined,
         activityTime: activityTime.value.trim() || undefined,
-        maxMembers: finalMax,
         coverImages: coverImages.value,
       }
       await updateCircle(editId.value, patch)
@@ -250,7 +236,6 @@ async function handleSubmit() {
         contactPhone: contactPhone.value.trim() || undefined,
         wechat: wechat.value.trim() || undefined,
         activityTime: activityTime.value.trim() || undefined,
-        maxMembers: finalMax,
         coverImages: coverImages.value,
       })
       uni.redirectTo({ url: `/pages/circle/circle?id=${res.circleId}` })
@@ -422,18 +407,6 @@ const tagsCountText = computed(() => `${tags.value.length}/${TAGS_MAX}`)
             v-model="activityTime"
             class="mt-2 h-10 rounded-lg bg-[#f5f6f7] px-3 text-sm"
             placeholder="如:每周六上午 9:00-11:00"
-            placeholder-class="text-[#bbb]"
-          />
-        </view>
-
-        <!-- 8. 人数上限 -->
-        <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
-          <text class="text-sm font-medium text-[#333]">人数上限</text>
-          <input
-            v-model="maxMembers"
-            class="mt-2 h-10 rounded-lg bg-[#f5f6f7] px-3 text-sm"
-            type="number"
-            :placeholder="`可选,范围 ${MAX_MEMBERS_MIN}-${MAX_MEMBERS_MAX}`"
             placeholder-class="text-[#bbb]"
           />
         </view>

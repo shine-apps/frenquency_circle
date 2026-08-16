@@ -38,18 +38,27 @@ RUN ./node_modules/.bin/next build
 # -----------------------------------------------------------------------------
 FROM node:24-slim AS frontend-builder
 
+# install 后 pnpm 会执行 prepare 脚本("pnpm init-husky & pnpm init-baseFiles"):
+#   - init-husky = git init && husky,node:slim 无 git,需安装(HUSKY=0 让 husky 直接跳过 hook 安装)
+#   - init-baseFiles = node ./scripts/create-base-files.js,生成 src/manifest.json / src/pages.json
+# 本阶段为中间构建层,安装 git 不影响最终镜像体积
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
 # 与 admin-builder 统一 pnpm(脚本 preinstall 强制 only-allow pnpm)
 RUN corepack enable \
     && corepack prepare pnpm@11.5.1 --activate
 
 WORKDIR /build
 
-# 仅先复制依赖清单,最大化 Docker 层缓存
+# 依赖清单 + scripts/ 一并复制(init-baseFiles 需要),最大化 Docker 层缓存
 COPY frontend_uniapp/package.json frontend_uniapp/pnpm-lock.yaml ./
+COPY frontend_uniapp/scripts/ ./scripts/
 
-# CI=true:跳过 husky 初始化,但保留 prepare 中的 init-baseFiles
+# CI=true + HUSKY=0:跳过 husky 的 git hook 初始化,保留 init-baseFiles
 # (该脚本生成 src/manifest.json / src/pages.json,构建所必需)
-ENV CI=true
+ENV CI=true HUSKY=0
 RUN pnpm install --frozen-lockfile
 
 # 复制源码(含 env/ 目录,见 .dockerignore 中对前端 env 的例外)

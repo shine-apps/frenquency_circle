@@ -61,7 +61,7 @@ export async function GET(req: Request) {
   const circleIds = followRows.map((r) => r.circleId)
 
   // 4. 批量查询对应圈子
-  const circleMap = new Map<number, typeof circles.$inferSelect>()
+  const circleMap = new Map<string, typeof circles.$inferSelect>()
   if (circleIds.length > 0) {
     const circleRows = await db
       .select()

@@ -187,9 +187,10 @@ export default defineConfig(({ command, mode }) => {
     server: {
       host: '0.0.0.0',
       hmr: true,
-      port: Number.parseInt(VITE_APP_PORT, 10),
+      port: Number.parseInt(VITE_APP_PORT || '9000', 10),
       // 仅 H5 端生效，其他端不生效（其他端走build，不走devServer)
-      proxy: JSON.parse(VITE_APP_PROXY_ENABLE)
+      // CI/Docker 中若未提供 env 文件,变量可能为 undefined,需兜底避免 JSON.parse 崩溃
+      proxy: JSON.parse(VITE_APP_PROXY_ENABLE ?? 'false')
         ? {
             [VITE_APP_PROXY_PREFIX]: {
               target: VITE_SERVER_BASEURL,

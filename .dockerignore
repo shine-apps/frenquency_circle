@@ -14,9 +14,15 @@
 .gitattributes
 
 # 环境变量(避免泄露到镜像层;运行时通过 docker env / compose 注入)
-**/.env
-**/.env.*
-!**/.env.example
+# 注意:不要用 **/.env 全局排除 + ! 例外 —— 例外规则对 frontend_uniapp/env/.env
+# 未生效,导致 H5 构建缺少 VITE_APP_PROXY_ENABLE 等变量而失败。
+# 改为显式排除真正含密钥的 env 文件;frontend_uniapp/env/ 下仅含客户端 VITE_ 变量,构建期必需,不排除
+/.env
+/.env.*
+admin/.env
+admin/.env.*
+frontend_uniapp/.env
+frontend_uniapp/.env.*
 
 # 测试代码与产物(不进生产镜像)
 admin/tests
@@ -54,8 +60,3 @@ nginx.conf
 # Taro / 小程序本地缓存
 **/.swc
 **/.taro
-
-# 前端 H5 构建需读取 frontend_uniapp/env 下的 .env / .env.production
-# (其中仅含暴露给客户端的 VITE_ 变量,无密钥;构建期需要以确定 base 等配置)
-!frontend_uniapp/env/.env
-!frontend_uniapp/env/.env.production

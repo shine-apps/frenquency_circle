@@ -93,7 +93,7 @@ export function loadAMap(): Promise<any> {
       ) {
         if (args[0] === '2d') {
           const opts = args[1] as Record<string, any> | undefined
-          if (!Object.prototype.hasOwnProperty.call(opts ?? {}, 'willReadFrequently')) {
+          if (!opts?.hasOwnProperty?.('willReadFrequently')) {
             args[1] = { ...(opts || {}), willReadFrequently: true }
           }
         }

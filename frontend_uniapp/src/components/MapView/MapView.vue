@@ -25,11 +25,8 @@ const props = withDefaults(defineProps<{
   placeholderText: '地图加载失败',
   markers: () => [],
   fitMarkers: false,
-  timeout: 12000,
+  timeout: DEFAULT_LOAD_TIMEOUT,
 })
-
-/** H5 端 SDK 默认加载超时(ms) */
-const DEFAULT_LOAD_TIMEOUT = 12000
 
 /**
  * 跨平台地图展示组件。
@@ -48,6 +45,9 @@ const DEFAULT_LOAD_TIMEOUT = 12000
  * - SDK 加载带超时控制(默认 12s),加载失败 / 断网时降级为静态占位视图,
  *   仍展示经纬度信息,并提供"重新加载"入口。
  */
+
+/** H5 端 SDK 默认加载超时(ms) */
+const DEFAULT_LOAD_TIMEOUT = 12000
 
 // 小程序端原生 map 的附加标注点(主位置由 show-location 蓝点展示)。
 // 类型放宽为 any:uni-app 类型要求 iconPath,但本项目无 marker 图标资源,

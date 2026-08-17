@@ -78,6 +78,9 @@ importers:
       alova:
         specifier: ^3.3.3
         version: 3.3.4
+      cos-js-sdk-v5:
+        specifier: ^1.10.1
+        version: 1.10.1
       dayjs:
         specifier: 1.11.10
         version: 1.11.10
@@ -4755,6 +4758,9 @@ packages:
   core-util-is@1.0.3:
     resolution: {integrity: sha512-ZQBvi1DcpJ4GDqanjucZ2Hj3wEO5pZDS89BWbkcrvdxksJorwUDDZamX9ldFkp9aw2lmBDLgkObEA4DWNJ9FYQ==}
 
+  cos-js-sdk-v5@1.10.1:
+    resolution: {integrity: sha512-a4SRfCY5g6Z35C7OWe9te/S1zk77rVQzfpvZ33gmTdJQzKxbNbEG7Aw/v453XwVMsQB352FIf7KRMm5Ya/wlZQ==}
+
   cos-js-sdk-v5@1.8.6:
     resolution: {integrity: sha512-FCygXb5cNQhlwmsGf5B5WnqFsx+cQiPW+I4SWjVg08IaSA+1Uu8VqpP+FI7+LIA9PoC3GpX6ehgV0olsfEnoHg==}
 
@@ -5637,6 +5643,10 @@ packages:
 
   fast-xml-parser@4.2.5:
     resolution: {integrity: sha512-B9/wizE4WngqQftFPmdaMYlXoJlJOYxGQOanC77fq9k8+Z0v5dDSVh+3glErdIROP//s/jgb7ZuxKfB8nVyo0g==}
+    hasBin: true
+
+  fast-xml-parser@4.5.0:
+    resolution: {integrity: sha512-/PlTQCI96+fZMAOLMZK4CWG1ItCbfZ/0jx7UIJFChPNrx7tcEgerUgWbeieCM9MfHInUDyK8DWYZ+YrywDJuTg==}
     hasBin: true
 
   fast-xml-parser@4.5.3:
@@ -16479,6 +16489,10 @@ snapshots:
 
   core-util-is@1.0.3: {}
 
+  cos-js-sdk-v5@1.10.1:
+    dependencies:
+      fast-xml-parser: 4.5.0
+
   cos-js-sdk-v5@1.8.6:
     dependencies:
       fast-xml-parser: 4.5.3
@@ -17502,6 +17516,10 @@ snapshots:
   fast-uri@3.1.0: {}
 
   fast-xml-parser@4.2.5:
+    dependencies:
+      strnum: 1.1.2
+
+  fast-xml-parser@4.5.0:
     dependencies:
       strnum: 1.1.2
 

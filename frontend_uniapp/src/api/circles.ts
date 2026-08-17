@@ -1,7 +1,7 @@
 import { http } from '@/http/http'
 import type {
-  CircleDTO,
   CircleDetailDTO,
+  CircleDTO,
   CreateCircleInput,
   FollowedCircleDTO,
   Paginated,

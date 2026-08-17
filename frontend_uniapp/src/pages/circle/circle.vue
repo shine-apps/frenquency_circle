@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
 import { onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
-import { getCircle, contactCircle, followCircle, unfollowCircle } from '@/api/circles'
+import { contactCircle, followCircle, getCircle, unfollowCircle } from '@/api/circles'
 import { useUserStore } from '@/store/user'
 import { useShare } from '@/composables/useShare'
 import { formatDate, formatDateTime } from '@/utils/format'
@@ -23,7 +23,7 @@ const loading = ref(true)
 const notFound = ref(false)
 // 联系老师相关状态
 const contactOpen = ref(false)
-const contactInfo = ref<{ phone: string | null; wechat: string | null } | null>(null)
+const contactInfo = ref<{ phone: string | null, wechat: string | null } | null>(null)
 const contactLoading = ref(false)
 // 关注状态与操作
 const followed = ref(false)
@@ -87,7 +87,8 @@ const isCreator = computed(() => {
 /** 联系老师:优先 phone,phone 为 null 时改 wechat */
 async function handleContact() {
   const c = circle.value
-  if (!c || contactLoading.value) return
+  if (!c || contactLoading.value)
+    return
   contactLoading.value = true
   try {
     // 优先尝试 phone;phone 为 null 时改用 wechat
@@ -110,13 +111,15 @@ async function handleContact() {
 /** 关注/取消关注圈子 */
 async function handleFollow() {
   const c = circle.value
-  if (!c || followLoading.value) return
+  if (!c || followLoading.value)
+    return
   followLoading.value = true
   try {
     if (followed.value) {
       await unfollowCircle(c.id)
       followed.value = false
-      if (c.followCount > 0) c.followCount -= 1
+      if (c.followCount > 0)
+        c.followCount -= 1
       uni.showToast({ title: '已取消关注', icon: 'none' })
     }
     else {
@@ -151,7 +154,8 @@ function handleCopyWechat(wechat: string) {
 
 /** 跳编辑页 */
 function handleEdit() {
-  if (!circle.value) return
+  if (!circle.value)
+    return
   uni.navigateTo({ url: `/pages/create-circle/create-circle?id=${circle.value.id}` })
 }
 
@@ -163,11 +167,10 @@ function handleBack() {
     },
   })
 }
-
 </script>
 
 <template>
-  <view class="flex min-h-screen flex-col bg-[#f7f8fa]">
+  <view class="min-h-screen flex flex-col bg-[#f7f8fa]">
     <!-- ====== 边界态:加载中 ====== -->
     <view v-if="loading && !circle" class="flex flex-col items-center pt-32">
       <text class="text-sm text-[#999]">
@@ -177,10 +180,12 @@ function handleBack() {
 
     <!-- ====== 边界态:圈子不存在 ====== -->
     <view v-else-if="notFound || !circle" class="flex flex-col items-center pt-32">
-      <text class="text-base font-medium text-[#333]">
+      <text class="text-base text-[#333] font-medium">
         该圈子已不存在
       </text>
-      <wd-button class="mt-4" round size="small" @click="handleBack">返回</wd-button>
+      <wd-button class="mt-4" round size="small" @click="handleBack">
+        返回
+      </wd-button>
     </view>
 
     <template v-else>
@@ -216,7 +221,7 @@ function handleBack() {
 
         <!-- ====== 2. 标题 + 标签 ====== -->
         <view class="bg-white px-4 py-4">
-          <text class="block text-xl font-semibold text-[#333]">
+          <text class="block text-xl text-[#333] font-semibold">
             {{ circle.title }}
           </text>
           <scroll-view v-if="circle.tags.length > 0" scroll-x class="mt-3 whitespace-nowrap">
@@ -234,15 +239,15 @@ function handleBack() {
 
         <!-- ====== 3. 创建者卡片 ====== -->
         <view class="mx-4 mt-3 flex items-center gap-3 rounded-2xl bg-white p-4">
-          <view class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#e8f5f1]">
+          <view class="h-12 w-12 flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#e8f5f1]">
             <image v-if="circle.creator.avatarUrl" :src="circle.creator.avatarUrl" class="h-full w-full" mode="aspectFill" />
-            <text v-else class="text-lg font-medium text-[#018d71]">
+            <text v-else class="text-lg text-[#018d71] font-medium">
               {{ circle.creator.name ? circle.creator.name[0] : '?' }}
             </text>
           </view>
           <view class="min-w-0 flex-1">
             <view class="flex items-center gap-2">
-              <text class="truncate text-sm font-medium text-[#333]">
+              <text class="truncate text-sm text-[#333] font-medium">
                 {{ circle.creator.name }}
               </text>
               <text class="shrink-0 rounded-full bg-[#fff7e6] px-2 py-0.5 text-xs text-[#e68a00]">
@@ -257,17 +262,17 @@ function handleBack() {
 
         <!-- ====== 4. 圈子介绍 ====== -->
         <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
-          <text class="block text-sm font-medium text-[#333]">
+          <text class="block text-sm text-[#333] font-medium">
             圈子介绍
           </text>
-          <text class="mt-2 block text-sm leading-6 text-[#666]">
+          <text class="mt-2 block text-sm text-[#666] leading-6">
             {{ circle.description }}
           </text>
         </view>
 
         <!-- ====== 5. 活动时间 ====== -->
         <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
-          <text class="block text-sm font-medium text-[#333]">
+          <text class="block text-sm text-[#333] font-medium">
             活动时间
           </text>
           <text class="mt-2 block text-sm text-[#666]">
@@ -277,7 +282,7 @@ function handleBack() {
 
         <!-- ====== 6. 活动地点(简化:仅展示地址文本) ====== -->
         <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
-          <text class="block text-sm font-medium text-[#333]">
+          <text class="block text-sm text-[#333] font-medium">
             活动地点
           </text>
           <text class="mt-2 block text-sm text-[#666]">
@@ -288,7 +293,7 @@ function handleBack() {
         <!-- ====== 7. 圈子数据(关注人数 / 被联系次数) ====== -->
         <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
           <view class="flex items-center justify-between">
-            <text class="text-sm font-medium text-[#333]">
+            <text class="text-sm text-[#333] font-medium">
               关注人数
             </text>
             <text class="text-sm text-[#018d71]">
@@ -339,7 +344,7 @@ function handleBack() {
       <!-- ====== 联系方式底部弹层 ====== -->
       <wd-popup v-model="contactOpen" position="bottom" round>
         <view class="bg-white p-6 pb-safe">
-          <text class="block text-center text-base font-medium text-[#333]">
+          <text class="block text-center text-base text-[#333] font-medium">
             联系方式
           </text>
           <view v-if="contactInfo && (contactInfo.phone || contactInfo.wechat)" class="mt-4">

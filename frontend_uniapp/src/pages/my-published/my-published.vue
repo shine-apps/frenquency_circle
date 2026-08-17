@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { ref } from 'vue'
 import { useUserStore } from '@/store/user'
-import { getMyCircles, deleteCircle } from '@/api/circles'
+import { deleteCircle, getMyCircles } from '@/api/circles'
 import { formatDate } from '@/utils/format'
 import { canCreateCircle } from '@/utils/role'
 import type { CircleDTO } from '@/types'
@@ -13,7 +13,7 @@ definePage({
 })
 
 /** 圈子状态展示配置 */
-const STATUS_CONFIG: Record<string, { text: string; cls: string }> = {
+const STATUS_CONFIG: Record<string, { text: string, cls: string }> = {
   active: { text: '正常', cls: 'bg-[#e8f5f1] text-[#018d71]' },
   offline: { text: '已下线', cls: 'bg-[#eef0f2] text-[#666]' },
   violated: { text: '违规', cls: 'bg-[#fff1f0] text-[#ff4d4f]' },
@@ -67,7 +67,8 @@ function handleEdit(id: string) {
 
 /** 下线圈子:showModal 确认后调 deleteCircle 软删除 */
 function handleOffline(id: string, title: string) {
-  if (deletingId.value) return
+  if (deletingId.value)
+    return
   uni.showModal({
     title: '下线圈子',
     content: `确定下线「${title}」吗?下线后不再被匹配。`,
@@ -75,7 +76,8 @@ function handleOffline(id: string, title: string) {
     cancelText: '取消',
     confirmColor: '#f53f3f',
     success(res) {
-      if (!res.confirm) return
+      if (!res.confirm)
+        return
       deletingId.value = id
       deleteCircle(id)
         .then(() => {
@@ -105,9 +107,9 @@ function statusText(status: string): string {
 </script>
 
 <template>
-  <view class="flex min-h-screen flex-col bg-[#f7f8fa]">
+  <view class="min-h-screen flex flex-col bg-[#f7f8fa]">
     <view class="bg-white px-4 py-4">
-      <text class="block text-base font-semibold text-[#333]">
+      <text class="block text-base text-[#333] font-semibold">
         我发布的圈子
       </text>
       <text class="mt-1 block text-xs text-[#999]">
@@ -130,7 +132,7 @@ function statusText(status: string): string {
         <view class="flex items-start justify-between gap-2">
           <view class="min-w-0 flex-1">
             <view class="flex items-center gap-2">
-              <text class="truncate text-base font-medium text-[#333]">
+              <text class="truncate text-base text-[#333] font-medium">
                 {{ c.title }}
               </text>
               <text class="shrink-0 rounded-full px-2 py-0.5 text-xs" :class="statusCls(c.status)">
@@ -148,13 +150,13 @@ function statusText(status: string): string {
           </view>
         </view>
         <view class="mt-3 flex gap-3">
-          <view class="rounded-full border border-[#e0e0e0] px-4 py-1.5" @click="handleEdit(c.id)">
+          <view class="border border-[#e0e0e0] rounded-full px-4 py-1.5" @click="handleEdit(c.id)">
             <text class="text-sm text-[#666]">
               编辑
             </text>
           </view>
           <view
-            class="rounded-full border border-[#ffd6d6] px-4 py-1.5"
+            class="border border-[#ffd6d6] rounded-full px-4 py-1.5"
             :class="deletingId === c.id ? 'opacity-60' : ''"
             @click="deletingId === c.id ? null : handleOffline(c.id, c.title)"
           >

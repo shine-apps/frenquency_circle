@@ -15,8 +15,8 @@ setActivePinia(store)
 
 export default store
 
+export * from './location'
+export * from './match'
 // 模块统一导出
 export * from './token'
 export * from './user'
-export * from './match'
-export * from './location'

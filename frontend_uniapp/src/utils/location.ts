@@ -6,7 +6,7 @@
  *
  * @returns { latitude, longitude } GCJ02 坐标
  */
-export async function getCurrentLocation(): Promise<{ latitude: number; longitude: number }> {
+export async function getCurrentLocation(): Promise<{ latitude: number, longitude: number }> {
   // #ifdef H5
   const { getAMapLocation } = await import('./amap')
   return getAMapLocation()

@@ -1,12 +1,8 @@
 <script lang="ts" setup>
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { getCurrentLocation } from '@/utils/location'
-import { loadAMap, reverseGeocode, searchPlaces, type PlaceSearchResult } from '@/utils/amap'
-
-/** 逆地理编码防抖时长(ms) */
-const REVERSE_GEOCODE_DEBOUNCE = 300
-/** 搜索防抖时长(ms) */
-const SEARCH_DEBOUNCE = 400
+import { loadAMap, reverseGeocode, searchPlaces } from '@/utils/amap'
+import type { PlaceSearchResult } from '@/utils/amap'
 
 const props = defineProps<{
   /** 是否显示 */
@@ -17,11 +13,14 @@ const props = defineProps<{
   initialLng?: number | null
   title?: string
 }>()
-
 const emit = defineEmits<{
-  (e: 'confirm', loc: { latitude: number; longitude: number; address: string }): void
+  (e: 'confirm', loc: { latitude: number, longitude: number, address: string }): void
   (e: 'close'): void
 }>()
+/** 逆地理编码防抖时长(ms) */
+const REVERSE_GEOCODE_DEBOUNCE = 300
+/** 搜索防抖时长(ms) */
+const SEARCH_DEBOUNCE = 400
 
 /**
  * 地图容器 DOM id。
@@ -58,7 +57,7 @@ function waitForContainer(timeout = 3000): Promise<HTMLElement | null> {
 }
 const mapRef = ref<any>(null)
 /** 当前选中的中心点(经纬度) */
-const center = ref<{ lat: number; lng: number } | null>(null)
+const center = ref<{ lat: number, lng: number } | null>(null)
 /** 底部展示的地址 */
 const address = ref('')
 const loading = ref(true)
@@ -140,12 +139,14 @@ async function initMap() {
 
     // 拖动结束 → 取中心点 → 逆地理
     mapRef.value.on('mapmove', () => {
-      if (!ready) return
+      if (!ready)
+        return
       // 拖动地图时收起搜索结果下拉
       showSearchResult.value = false
       const c = mapRef.value.getCenter()
       // 防抖
-      if (debounceTimer) clearTimeout(debounceTimer)
+      if (debounceTimer)
+        clearTimeout(debounceTimer)
       debounceTimer = setTimeout(() => {
         const curLat = c.getLat()
         const curLng = c.getLng()
@@ -153,7 +154,8 @@ async function initMap() {
         // 令牌:仅最新请求的 resolve 会 setAddress,避免旧请求覆盖
         const myId = ++geoReqId
         reverseGeocode(curLat, curLng).then((addr) => {
-          if (myId === geoReqId) address.value = addr
+          if (myId === geoReqId)
+            address.value = addr
         })
       }, REVERSE_GEOCODE_DEBOUNCE)
     })
@@ -161,7 +163,8 @@ async function initMap() {
     center.value = { lat, lng }
     const myId = ++geoReqId
     const addr = await reverseGeocode(lat, lng)
-    if (myId === geoReqId) address.value = addr
+    if (myId === geoReqId)
+      address.value = addr
     ready = true
     loading.value = false
   }
@@ -211,7 +214,8 @@ async function doSearch(kw: string) {
 
 /** 选择搜索结果:地图中心移到该地点并更新地址 */
 function handleSelectPlace(poi: PlaceSearchResult) {
-  if (!mapRef.value) return
+  if (!mapRef.value)
+    return
   // 移动地图中心(setCenter 会触发 mapmove,进而逆地理编码更新地址)
   mapRef.value.setCenter([poi.lng, poi.lat])
   // 地址先直接用 POI 名称,等 mapmove 的逆地理结果回来再覆盖为完整地址
@@ -234,7 +238,8 @@ function clearSearch() {
 watch(
   () => props.visible,
   (val) => {
-    if (!val) return
+    if (!val)
+      return
     ready = false
     // 延迟一帧,确保弹层已挂载并具备尺寸
     setTimeout(initMap, 50)
@@ -247,7 +252,8 @@ onBeforeUnmount(() => {
 
 /** 确认选点 */
 function handleConfirm() {
-  if (!center.value) return
+  if (!center.value)
+    return
   emit('confirm', {
     latitude: center.value.lat,
     longitude: center.value.lng,
@@ -259,14 +265,14 @@ function handleConfirm() {
 <template>
   <view v-if="visible" class="fixed inset-0 z-1000 flex flex-col bg-white pb-safe">
     <!-- 头部:左取消 / 中标题 / 右确认 -->
-    <view class="relative flex h-12 items-center justify-between border-b border-[#f0f0f0] px-4">
+    <view class="relative h-12 flex items-center justify-between border-b border-[#f0f0f0] px-4">
       <text class="py-2 text-sm text-[#666]" @click="emit('close')">
         取消
       </text>
-      <text class="absolute left-1/2 -translate-x-1/2 text-base font-medium text-[#333]">
-        {{title || '选择位置' }}
+      <text class="absolute left-1/2 text-base text-[#333] font-medium -translate-x-1/2">
+        {{ title || '选择位置' }}
       </text>
-      <text class="py-2 text-sm font-medium text-[#018d71]" @click="handleConfirm">
+      <text class="py-2 text-sm text-[#018d71] font-medium" @click="handleConfirm">
         确认
       </text>
     </view>
@@ -280,8 +286,8 @@ function handleConfirm() {
     <!-- 地图容器 -->
     <view class="relative flex-1">
       <!-- 搜索框(覆盖在地图上方) -->
-      <view class="absolute top-3 left-3 right-3 z-20">
-        <view class="flex items-center rounded-full border border-[#e5e5e5] bg-white px-3 shadow-md">
+      <view class="absolute left-3 right-3 top-3 z-20">
+        <view class="flex items-center border border-[#e5e5e5] rounded-full bg-white px-3 shadow-md">
           <text class="mr-2 text-base text-[#999]">
             🔍
           </text>
@@ -292,7 +298,7 @@ function handleConfirm() {
             confirm-type="search"
             :disabled="loading || !!errorMsg"
             @input="handleSearchInput"
-          />
+          >
           <text v-if="searchKeyword" class="px-1 text-base text-[#ccc]" @click="clearSearch">
             ✕
           </text>
@@ -301,7 +307,7 @@ function handleConfirm() {
         <!-- 搜索结果下拉 -->
         <view
           v-if="showSearchResult && (searching || searchResults.length)"
-          class="absolute top-full left-0 right-0 z-30 mt-2 max-h-72 overflow-y-auto rounded-xl border border-[#e5e5e5] bg-white shadow-lg"
+          class="absolute left-0 right-0 top-full z-30 mt-2 max-h-72 overflow-y-auto border border-[#e5e5e5] rounded-xl bg-white shadow-lg"
         >
           <view v-if="searching" class="flex justify-center py-4">
             <text class="text-xs text-[#999]">
@@ -335,8 +341,8 @@ function handleConfirm() {
            可能不落盘到真实 DOM,且 ref 拿到的是组件代理对象,高德 SDK 无法识别 -->
       <div :id="containerId" class="h-full w-full" />
       <!-- 中心图钉(固定在地图视觉中心) -->
-      <view class="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-full">
-        <view class="i-carbon:location-filled text-[30px] leading-none text-red-500" />
+      <view class="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full">
+        <view class="i-carbon:location-filled text-[30px] text-red-500 leading-none" />
       </view>
       <!-- 加载遮罩 -->
       <view v-if="loading" class="absolute inset-0 flex items-center justify-center bg-white/80">

@@ -47,19 +47,21 @@ onLoad((options) => {
 })
 
 function activityLevelColor(level: string): string {
-  if (level === 'low') return '#f56c6c'
-  if (level === 'medium') return '#e68a00'
+  if (level === 'low')
+    return '#f56c6c'
+  if (level === 'medium')
+    return '#e68a00'
   return '#018d71'
 }
 
-function renderTags(tags: string[]): { visible: string[]; rest: number } {
+function renderTags(tags: string[]): { visible: string[], rest: number } {
   const visible = tags.slice(0, MAX_TAG_VISIBLE)
   return { visible, rest: tags.length - visible.length }
 }
 </script>
 
 <template>
-  <view class="flex min-h-screen flex-col bg-[#f7f8fa]">
+  <view class="min-h-screen flex flex-col bg-[#f7f8fa]">
     <!-- 加载态 -->
     <view v-if="loading" class="flex flex-1 flex-col items-center justify-center">
       <text class="text-sm text-[#999]">加载中...</text>
@@ -76,18 +78,18 @@ function renderTags(tags: string[]): { visible: string[]; rest: number } {
       <!-- 头像与名称 -->
       <view class="bg-white px-5 pb-6 pt-10">
         <view class="flex flex-col items-center">
-          <view class="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-[#e8f5f1] shadow-sm">
+          <view class="h-20 w-20 flex items-center justify-center overflow-hidden rounded-full bg-[#e8f5f1] shadow-sm">
             <image
               v-if="profile.avatarUrl"
               :src="profile.avatarUrl"
               class="h-full w-full"
               mode="aspectFill"
             />
-            <text v-else class="text-3xl font-bold text-[#018d71]">
+            <text v-else class="text-3xl text-[#018d71] font-bold">
               {{ profile.name ? profile.name[0] : '?' }}
             </text>
           </view>
-          <text class="mt-3 text-lg font-semibold text-[#333]">
+          <text class="mt-3 text-lg text-[#333] font-semibold">
             {{ profile.name }}
           </text>
         </view>
@@ -106,7 +108,7 @@ function renderTags(tags: string[]): { visible: string[]; rest: number } {
         <!-- 练习年限 -->
         <view class="flex items-center justify-between border-b border-[#f5f5f5] py-3.5">
           <text class="text-sm text-[#999]">练习年限</text>
-          <text class="text-sm font-medium text-[#333]">
+          <text class="text-sm text-[#333] font-medium">
             {{ practiceYearsText(profile.practiceYears, '未设置') }}
           </text>
         </view>
@@ -129,8 +131,8 @@ function renderTags(tags: string[]): { visible: string[]; rest: number } {
       </view>
 
       <!-- 兴趣标签 -->
-      <view v-if="profile.tags.length > 0" class="mx-4 mt-4 mb-8 rounded-2xl bg-white p-5 shadow-sm">
-        <text class="mb-3 block text-sm font-medium text-[#333]">兴趣标签</text>
+      <view v-if="profile.tags.length > 0" class="mx-4 mb-8 mt-4 rounded-2xl bg-white p-5 shadow-sm">
+        <text class="mb-3 block text-sm text-[#333] font-medium">兴趣标签</text>
         <view class="flex flex-wrap gap-2.5">
           <text
             v-for="name in renderTags(profile.tags).visible"
@@ -141,7 +143,7 @@ function renderTags(tags: string[]): { visible: string[]; rest: number } {
           </text>
           <text
             v-if="renderTags(profile.tags).rest > 0"
-            class="rounded-full border border-[#e0e0e0] bg-white px-3.5 py-1.5 text-xs text-[#999]"
+            class="border border-[#e0e0e0] rounded-full bg-white px-3.5 py-1.5 text-xs text-[#999]"
           >
             +{{ renderTags(profile.tags).rest }}
           </text>

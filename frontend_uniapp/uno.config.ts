@@ -50,7 +50,7 @@ export default defineConfig({
           },
         ),
         // 显式注册 carbon 集合，避免 preset-icons 在 pnpm 下动态解析失败
-        carbon: () => carbon as any,
+        'carbon': () => carbon as any,
       },
     }),
     // TODO: check 是否会有别的影响

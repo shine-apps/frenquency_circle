@@ -59,7 +59,8 @@ const actionLabel = computed(() => (hasLocation.value ? '切换位置' : '选择
  * 失败(用户取消 / 系统错误)静默处理,不弹 toast。
  */
 async function chooseByMiniProgram(): Promise<void> {
-  if (choosing.value) return
+  if (choosing.value)
+    return
   choosing.value = true
   try {
     // #ifdef MP-WEIXIN
@@ -119,7 +120,7 @@ function handleH5Close(): void {
     <view class="flex items-center justify-between">
       <view class="flex items-center gap-2">
         <view class="i-carbon:location-filled text-[18px] text-[#018d71]" />
-        <text class="text-sm font-medium text-[#333]">
+        <text class="text-sm text-[#333] font-medium">
           {{ title }}
         </text>
         <view v-if="hasLocation" class="rounded-full bg-[#e8f5f1] px-2 py-0.5">
@@ -128,13 +129,15 @@ function handleH5Close(): void {
           </text>
         </view>
       </view>
-      <wd-button type="primary" @click="handleChoose" variant="text" size="small">{{ actionLabel }} ›</wd-button>
+      <wd-button type="primary" variant="text" size="small" @click="handleChoose">
+        {{ actionLabel }} ›
+      </wd-button>
     </view>
 
     <!-- 当前地址 -->
     <view class="mt-3 flex items-start gap-2">
-      <view class="i-carbon:location text-[16px] text-[#999] mt-0.5" />
-      <text class="flex-1 text-sm leading-6 text-[#333] break-all">
+      <view class="i-carbon:location mt-0.5 text-[16px] text-[#999]" />
+      <text class="flex-1 break-all text-sm text-[#333] leading-6">
         {{ address || '暂未设置位置,选择后可匹配附近同趣的人与圈子' }}
       </text>
     </view>

@@ -1,4 +1,4 @@
-import { http } from "@/http/http"
+import { http } from '@/http/http'
 
 /**
  * 跨端逆地理编码(经纬度 → 格式化地址)。
@@ -13,26 +13,26 @@ import { http } from "@/http/http"
  */
 export async function reverseGeocode(lat: number, lng: number): Promise<string> {
   // #ifdef H5
-  const { reverseGeocode: amapReverseGeocode } = await import("@/utils/amap")
+  const { reverseGeocode: amapReverseGeocode } = await import('@/utils/amap')
   try {
     return await amapReverseGeocode(lat, lng)
   }
   catch {
-    return ""
+    return ''
   }
   // #endif
 
   // #ifndef H5
   try {
-    const res = await http.get<{ address: string }>("/api/geo/reverse", {
+    const res = await http.get<{ address: string }>('/api/geo/reverse', {
       latitude: lat,
       longitude: lng,
     })
-    return res?.address || ""
+    return res?.address || ''
   }
-  catch(e: any) {
-    console.error("reverseGeocode error:", e)
-    return ""
+  catch (e: any) {
+    console.error('reverseGeocode error:', e)
+    return ''
   }
   // #endif
 }

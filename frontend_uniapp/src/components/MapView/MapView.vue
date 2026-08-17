@@ -2,6 +2,35 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { loadAMap } from '@/utils/amap'
 
+const props = withDefaults(defineProps<{
+  /** 纬度(gcj02) */
+  latitude: number
+  /** 经度(gcj02) */
+  longitude: number
+  /** 缩放级别(默认 15) */
+  scale?: number
+  /** 是否展示当前位置标记(H5 始终展示主标注点) */
+  showLocation?: boolean
+  /** 地图加载/定位失败时的占位文案 */
+  placeholderText?: string
+  /** 附加标注点列表(经纬度 gcj02),H5 与小程序端均支持 */
+  markers?: Array<{ latitude: number, longitude: number, label?: string }>
+  /** 是否自动缩放视野以容纳所有标注点(默认 false) */
+  fitMarkers?: boolean
+  /** H5 端 SDK 加载超时(ms) */
+  timeout?: number
+}>(), {
+  scale: 15,
+  showLocation: true,
+  placeholderText: '地图加载失败',
+  markers: () => [],
+  fitMarkers: false,
+  timeout: 12000,
+})
+
+/** H5 端 SDK 默认加载超时(ms) */
+const DEFAULT_LOAD_TIMEOUT = 12000
+
 /**
  * 跨平台地图展示组件。
  *
@@ -19,35 +48,6 @@ import { loadAMap } from '@/utils/amap'
  * - SDK 加载带超时控制(默认 12s),加载失败 / 断网时降级为静态占位视图,
  *   仍展示经纬度信息,并提供"重新加载"入口。
  */
-
-/** H5 端 SDK 默认加载超时(ms) */
-const DEFAULT_LOAD_TIMEOUT = 12000
-
-const props = withDefaults(defineProps<{
-  /** 纬度(gcj02) */
-  latitude: number
-  /** 经度(gcj02) */
-  longitude: number
-  /** 缩放级别(默认 15) */
-  scale?: number
-  /** 是否展示当前位置标记(H5 始终展示主标注点) */
-  showLocation?: boolean
-  /** 地图加载/定位失败时的占位文案 */
-  placeholderText?: string
-  /** 附加标注点列表(经纬度 gcj02),H5 与小程序端均支持 */
-  markers?: Array<{ latitude: number; longitude: number; label?: string }>
-  /** 是否自动缩放视野以容纳所有标注点(默认 false) */
-  fitMarkers?: boolean
-  /** H5 端 SDK 加载超时(ms) */
-  timeout?: number
-}>(), {
-  scale: 15,
-  showLocation: true,
-  placeholderText: '地图加载失败',
-  markers: () => [],
-  fitMarkers: false,
-  timeout: DEFAULT_LOAD_TIMEOUT,
-})
 
 // 小程序端原生 map 的附加标注点(主位置由 show-location 蓝点展示)。
 // 类型放宽为 any:uni-app 类型要求 iconPath,但本项目无 marker 图标资源,
@@ -109,7 +109,8 @@ function waitForContainer(timeout = 5000): Promise<HTMLElement | null> {
 /** 为加载 Promise 增加超时控制:网络不佳时 SDK 脚本可能挂起,避免无限 loading */
 function withLoadTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    if (loadTimer) clearTimeout(loadTimer)
+    if (loadTimer)
+      clearTimeout(loadTimer)
     loadTimer = setTimeout(() => {
       loadTimer = null
       reject(new Error(`地图加载超时(${ms}ms)`))
@@ -142,7 +143,8 @@ function clearExtraMarkers() {
 
 /** 渲染附加标注点(重建,支持 label 气泡) */
 function renderExtraMarkers() {
-  if (!mapInstance || !AMapModule) return
+  if (!mapInstance || !AMapModule)
+    return
   clearExtraMarkers()
   props.markers.forEach((m) => {
     const marker = new AMapModule.Marker({
@@ -153,12 +155,14 @@ function renderExtraMarkers() {
     marker.setMap(mapInstance)
     extraMarkers.push(marker)
   })
-  if (props.fitMarkers) fitView()
+  if (props.fitMarkers)
+    fitView()
 }
 
 /** 调整视野:多标注时容纳全部,单标注时回到默认缩放 */
 function fitView() {
-  if (!mapInstance) return
+  if (!mapInstance)
+    return
   const overlays = [primaryMarker, ...extraMarkers].filter(Boolean)
   if (overlays.length > 1) {
     // avoid 数组 [top, right, bottom, left],留边距避免标注贴边
@@ -171,7 +175,8 @@ function fitView() {
 
 /** 更新中心点与主标注(高德坐标顺序为 [lng, lat]) */
 function updateCenter(lng: number, lat: number) {
-  if (!mapInstance) return
+  if (!mapInstance)
+    return
   mapInstance.setCenter([lng, lat])
   primaryMarker?.setPosition([lng, lat])
 }
@@ -189,7 +194,8 @@ function handleOnline() {
 function handleOffline() {
   isOffline.value = true
   // 地图已加载但断网:瓦片可能加载不全,给出轻提示(降级视图内另有断网文案)
-  if (mapInstance) offlineNotice.value = true
+  if (mapInstance)
+    offlineNotice.value = true
 }
 
 /** H5 端初始化高德地图 */
@@ -201,7 +207,8 @@ async function initH5Map() {
     const AMap = await withLoadTimeout(loadAMap(), props.timeout)
     AMapModule = AMap
     const el = await waitForContainer()
-    if (!el) throw new Error('地图容器 DOM 未就绪')
+    if (!el)
+      throw new Error('地图容器 DOM 未就绪')
 
     // 显式开启手势:单指拖拽、双指/双击缩放、滚轮缩放
     mapInstance = new AMap.Map(el, {
@@ -332,7 +339,7 @@ onMounted(() => {
     <!-- 网络不佳轻提示(地图已加载后断网) -->
     <view
       v-else-if="offlineNotice"
-      class="pointer-events-none absolute top-3 left-1/2 z-20 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1"
+      class="pointer-events-none absolute left-1/2 top-3 z-20 rounded-full bg-black/60 px-3 py-1 -translate-x-1/2"
     >
       <text class="text-xs text-white">
         网络不佳,地图数据可能不完整
@@ -347,8 +354,8 @@ onMounted(() => {
       <!-- CSS 网格模拟地图底图,保证断网时仍有地图视觉 -->
       <view class="map-fallback-grid pointer-events-none absolute inset-0 opacity-40" />
       <view class="relative flex flex-col items-center gap-2.5">
-        <view class="i-carbon-map text-[42px] leading-none text-[#c4c9d0]" />
-        <text class="text-sm font-medium text-[#333]">
+        <view class="i-carbon-map text-[42px] text-[#c4c9d0] leading-none" />
+        <text class="text-sm text-[#333] font-medium">
           {{ placeholderText }}
         </text>
         <text class="text-center text-xs text-[#999]">

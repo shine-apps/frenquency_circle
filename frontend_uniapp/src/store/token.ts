@@ -11,14 +11,15 @@ import {
   loginByWechat as _loginByWechat,
   logout as _logout,
   refreshToken as _refreshToken,
+  sendSmsCode as _sendSmsCode,
   wxLogin as _wxLogin,
   getWxCode,
-  sendSmsCode as _sendSmsCode,
 } from '@/api/login'
 import { toUserInfo } from '@/api/auth'
 import { isDoubleTokenRes, isSingleTokenRes } from '@/api/types/login'
 import { isDoubleTokenMode } from '@/utils'
-import { useUserStore, type UserInfo } from './user'
+import { useUserStore } from './user'
+import type { UserInfo } from './user'
 
 // 初始化状态
 const tokenInfoState = isDoubleTokenMode

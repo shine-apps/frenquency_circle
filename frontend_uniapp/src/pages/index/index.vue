@@ -274,17 +274,16 @@ function handlePersonClick(person: { userId: string | number } | null | undefine
 function handleCircleClick(circleId: string): void {
   uni.navigateTo({ url: `/pages/circle/circle?id=${circleId}` })
 }
-
 </script>
 
 <template>
   <view class="min-h-screen flex flex-col bg-[#f7f8fa]">
     <!-- ====== 顶部品牌区(青绿渐变) ====== -->
-    <view class="from-[#018d71] to-[#0aa07f] bg-gradient-to-b px-5 p-6 sticky top-0 z-10">
+    <view class="sticky top-0 z-10 from-[#018d71] to-[#0aa07f] bg-gradient-to-b p-6 px-5">
       <view class="flex items-center justify-between">
         <view class="flex flex-col">
           <view class="flex items-center gap-1">
-            <image src="/static/images/logo_256_circle.png" class="w-[40px] h-[40px]"></image>
+            <image src="/static/images/logo_256_circle.png" class="h-[40px] w-[40px]" />
             <text class="text-xl text-white font-semibold">
               趣邻圈
             </text>
@@ -297,7 +296,6 @@ function handleCircleClick(circleId: string): void {
           <wd-button v-if="canCreateCircle(user?.role)" variant="subtle" round @click="handleCreateCircle">
             创建圈子
           </wd-button>
-          
         </view>
       </view>
     </view>

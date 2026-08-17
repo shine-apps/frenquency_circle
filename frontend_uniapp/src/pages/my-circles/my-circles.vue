@@ -74,9 +74,9 @@ onShow(() => {
 </script>
 
 <template>
-  <view class="flex min-h-screen flex-col bg-[#f7f8fa]">
+  <view class="min-h-screen flex flex-col bg-[#f7f8fa]">
     <view class="bg-white px-4 py-4">
-      <text class="block text-base font-semibold text-[#333]">
+      <text class="block text-base text-[#333] font-semibold">
         最近匹配的圈子
       </text>
       <text class="mt-1 block text-xs text-[#999]">
@@ -89,8 +89,10 @@ onShow(() => {
         暂未匹配到任何圈子,去首页发现趣邻圈子吧
       </text>
       <view class="mt-4 flex gap-3">
-        <wd-button round size="small" @click="handleGoHome">去首页发现</wd-button>
-        <view class="rounded-full border border-[#e0e0e0] bg-white px-5 py-2" @click="handleViewMatch">
+        <wd-button round size="small" @click="handleGoHome">
+          去首页发现
+        </wd-button>
+        <view class="border border-[#e0e0e0] rounded-full bg-white px-5 py-2" @click="handleViewMatch">
           <text class="text-sm text-[#666]">
             查看匹配结果
           </text>
@@ -106,14 +108,14 @@ onShow(() => {
         @click="handleCircleClick(c.circleId)"
       >
         <view class="flex items-center gap-3">
-          <view class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#fdf3e7]">
-            <text class="text-lg font-medium text-[#e68a00]">
+          <view class="h-12 w-12 flex shrink-0 items-center justify-center rounded-full bg-[#fdf3e7]">
+            <text class="text-lg text-[#e68a00] font-medium">
               圈
             </text>
           </view>
           <view class="min-w-0 flex-1">
             <view class="flex items-center justify-between">
-              <text class="truncate text-base font-medium text-[#333]">
+              <text class="truncate text-base text-[#333] font-medium">
                 {{ c.title }}
               </text>
               <text class="shrink-0 text-xs text-[#999]">

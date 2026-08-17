@@ -1,7 +1,7 @@
 import type {
   AuthLoginResponse,
-  IDoubleTokenRes,
   IAuthLoginRes,
+  IDoubleTokenRes,
 } from './types/login'
 import { http } from '@/http/http'
 

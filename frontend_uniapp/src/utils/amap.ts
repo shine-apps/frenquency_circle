@@ -93,7 +93,7 @@ export function loadAMap(): Promise<any> {
       ) {
         if (args[0] === '2d') {
           const opts = args[1] as Record<string, any> | undefined
-          if (!opts?.hasOwnProperty?.('willReadFrequently')) {
+          if (!Object.prototype.hasOwnProperty.call(opts ?? {}, 'willReadFrequently')) {
             args[1] = { ...(opts || {}), willReadFrequently: true }
           }
         }
@@ -220,7 +220,7 @@ export async function searchPlaces(keyword: string): Promise<PlaceSearchResult[]
  *
  * @returns { latitude, longitude } GCJ02 坐标
  */
-export async function getAMapLocation(): Promise<{ latitude: number; longitude: number }> {
+export async function getAMapLocation(): Promise<{ latitude: number, longitude: number }> {
   const AMap = await loadAMap()
   return new Promise((resolve, reject) => {
     AMap.plugin('AMap.Geolocation', () => {

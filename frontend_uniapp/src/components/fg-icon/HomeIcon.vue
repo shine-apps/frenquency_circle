@@ -5,7 +5,7 @@
 </template>
 
 <script lang="ts" setup>
-withDefaults(defineProps<{ size?: number; color?: string }>(), {
+withDefaults(defineProps<{ size?: number, color?: string }>(), {
   size: 24,
   color: 'currentColor',
 })

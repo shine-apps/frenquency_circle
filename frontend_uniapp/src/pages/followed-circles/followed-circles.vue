@@ -21,7 +21,8 @@ const finished = ref(false)
 
 /** 拉取列表;reset=true 时回到第一页 */
 async function fetchList(reset = false) {
-  if (loading.value) return
+  if (loading.value)
+    return
   if (reset) {
     page.value = 1
     finished.value = false
@@ -31,7 +32,8 @@ async function fetchList(reset = false) {
     const res = await getFollowedCircles({ page: page.value, pageSize: PAGE_SIZE })
     list.value = reset ? res.list : [...list.value, ...res.list]
     // total 统计可能含已删除圈子(与 list 口径略有偏差),故同时以「不足一页」兜底判定到底
-    if (list.value.length >= res.total || res.list.length < PAGE_SIZE) finished.value = true
+    if (list.value.length >= res.total || res.list.length < PAGE_SIZE)
+      finished.value = true
   }
   catch (e) {
     uni.showToast({ title: (e as Error).message || '加载失败', icon: 'none' })
@@ -55,7 +57,8 @@ onPullDownRefresh(() => {
 
 /** 触底加载下一页 */
 onReachBottom(() => {
-  if (finished.value) return
+  if (finished.value)
+    return
   page.value += 1
   void fetchList()
 })
@@ -76,7 +79,7 @@ function handleBack() {
 </script>
 
 <template>
-  <view class="flex min-h-screen flex-col bg-[#f7f8fa]">
+  <view class="min-h-screen flex flex-col bg-[#f7f8fa]">
     <view v-if="loading && list.length === 0" class="flex flex-col items-center pt-20">
       <text class="text-sm text-[#999]">
         加载中...
@@ -87,7 +90,9 @@ function handleBack() {
       <text class="text-sm text-[#999]">
         还没有关注任何圈子,去首页发现吧
       </text>
-      <wd-button class="mt-4" round size="small" @click="handleBack">返回</wd-button>
+      <wd-button class="mt-4" round size="small" @click="handleBack">
+        返回
+      </wd-button>
     </view>
 
     <view v-else class="mx-4 mt-3 flex flex-col gap-3">
@@ -99,7 +104,7 @@ function handleBack() {
       >
         <view class="flex items-start justify-between gap-2">
           <view class="min-w-0 flex-1">
-            <text class="block truncate text-base font-medium text-[#333]">
+            <text class="block truncate text-base text-[#333] font-medium">
               {{ c.title }}
             </text>
             <view class="mt-1 flex items-center gap-1">

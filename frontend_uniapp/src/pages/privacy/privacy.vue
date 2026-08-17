@@ -41,7 +41,8 @@ const initialized = ref(false)
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
 onBeforeUnmount(() => {
-  if (debounceTimer) clearTimeout(debounceTimer)
+  if (debounceTimer)
+    clearTimeout(debounceTimer)
 })
 
 // 每次展示时从 store 预填,避免读取到过期快照
@@ -54,8 +55,10 @@ onShow(() => {
 /** 任意字段变更 → 防抖调 updatePrivacy */
 function handleChange(next: PrivacySettings) {
   settings.value = next
-  if (!initialized.value) return
-  if (debounceTimer) clearTimeout(debounceTimer)
+  if (!initialized.value)
+    return
+  if (debounceTimer)
+    clearTimeout(debounceTimer)
   debounceTimer = setTimeout(() => {
     void doSave(next)
   }, 300)
@@ -63,7 +66,8 @@ function handleChange(next: PrivacySettings) {
 
 /** 实际保存请求 */
 async function doSave(next: PrivacySettings) {
-  if (saving.value) return
+  if (saving.value)
+    return
   saving.value = true
   try {
     const persisted = await updatePrivacy(next)
@@ -97,9 +101,9 @@ function handlePrecisionChange(val: PrivacySettings['locationPrecision']) {
 </script>
 
 <template>
-  <view class="flex min-h-screen flex-col bg-[#f7f8fa]">
+  <view class="min-h-screen flex flex-col bg-[#f7f8fa]">
     <view class="m-4 flex items-center justify-between">
-      <text class="text-base font-semibold text-[#333]">
+      <text class="text-base text-[#333] font-semibold">
         隐私设置
       </text>
       <text class="text-xs text-[#999]">
@@ -110,7 +114,7 @@ function handlePrecisionChange(val: PrivacySettings['locationPrecision']) {
     <!-- ====== 1. 公开联系方式 ====== -->
     <view class="mx-4 flex items-center justify-between rounded-2xl bg-white px-4 py-4">
       <view class="flex flex-col">
-        <text class="text-sm font-medium text-[#333]">
+        <text class="text-sm text-[#333] font-medium">
           公开联系方式
         </text>
         <text class="mt-1 text-xs text-[#999]">
@@ -127,7 +131,7 @@ function handlePrecisionChange(val: PrivacySettings['locationPrecision']) {
     <!-- ====== 2. 允许被匹配 ====== -->
     <view class="mx-4 mt-3 flex items-center justify-between rounded-2xl bg-white px-4 py-4">
       <view class="flex flex-col">
-        <text class="text-sm font-medium text-[#333]">
+        <text class="text-sm text-[#333] font-medium">
           允许被匹配
         </text>
         <text class="mt-1 text-xs text-[#999]">
@@ -144,7 +148,7 @@ function handlePrecisionChange(val: PrivacySettings['locationPrecision']) {
     <!-- ====== 3. 位置精度 ====== -->
     <view class="mx-4 mt-3 rounded-2xl bg-white px-4 py-4">
       <view class="flex flex-col">
-        <text class="text-sm font-medium text-[#333]">
+        <text class="text-sm text-[#333] font-medium">
           位置精度
         </text>
         <text class="mt-1 text-xs text-[#999]">
@@ -155,7 +159,7 @@ function handlePrecisionChange(val: PrivacySettings['locationPrecision']) {
         <view
           v-for="opt in PRECISION_OPTIONS"
           :key="opt.value"
-          class="flex-1 rounded-xl border px-3 py-3"
+          class="flex-1 border rounded-xl px-3 py-3"
           :class="settings.locationPrecision === opt.value ? 'border-[#018d71] bg-[#f0faf7]' : 'border-[#e8e8e8] bg-white'"
           @click="handlePrecisionChange(opt.value)"
         >

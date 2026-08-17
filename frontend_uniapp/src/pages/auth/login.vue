@@ -168,11 +168,11 @@ async function handleGetPhoneNumber(e: any) {
 </script>
 
 <template>
-  <view class="flex min-h-screen flex-col bg-[#f7f8fa]">
+  <view class="min-h-screen flex flex-col bg-[#f7f8fa]">
     <!-- 1. Logo 区 -->
     <view class="flex flex-col items-center py-5">
-      <image src="/static/images/logo_256_circle.png" class="w-[200px] h-[200px]" />
-      <view class="mt-4 text-2xl font-semibold text-[#1a1a1a]">
+      <image src="/static/images/logo_256_circle.png" class="h-[200px] w-[200px]" />
+      <view class="mt-4 text-2xl text-[#1a1a1a] font-semibold">
         趣邻圈
       </view>
       <view class="mt-2 text-sm text-[#999]">
@@ -223,7 +223,7 @@ async function handleGetPhoneNumber(e: any) {
 
       <!-- 手机验证码登录 -->
       <view v-if="activeTab === 'phone'" class="mt-6 flex flex-col gap-4">
-        <view class="flex h-12 items-center rounded-lg border border-[#e8e8e8] bg-[#fafafa] px-3">
+        <view class="h-12 flex items-center border border-[#e8e8e8] rounded-lg bg-[#fafafa] px-3">
           <input
             v-model="phone"
             class="flex-1 text-base"
@@ -231,10 +231,10 @@ async function handleGetPhoneNumber(e: any) {
             :maxlength="11"
             placeholder="请输入手机号"
             placeholder-class="text-[#bbb]"
-          />
+          >
         </view>
         <view class="flex items-center gap-3">
-          <view class="flex h-12 flex-1 items-center rounded-lg border border-[#e8e8e8] bg-[#fafafa] px-3">
+          <view class="h-12 flex flex-1 items-center border border-[#e8e8e8] rounded-lg bg-[#fafafa] px-3">
             <input
               v-model="smsCode"
               class="flex-1 text-base"
@@ -242,7 +242,7 @@ async function handleGetPhoneNumber(e: any) {
               :maxlength="CODE_LEN"
               placeholder="请输入验证码"
               placeholder-class="text-[#bbb]"
-            />
+            >
           </view>
           <wd-button
             type="primary"
@@ -265,22 +265,22 @@ async function handleGetPhoneNumber(e: any) {
 
       <!-- 邮箱密码登录 -->
       <view v-else class="mt-6 flex flex-col gap-4">
-        <view class="flex h-12 items-center rounded-lg border border-[#e8e8e8] bg-[#fafafa] px-3">
+        <view class="h-12 flex items-center border border-[#e8e8e8] rounded-lg bg-[#fafafa] px-3">
           <input
             v-model="email"
             class="flex-1 text-base"
             placeholder="邮箱 / 手机号"
             placeholder-class="text-[#bbb]"
-          />
+          >
         </view>
-        <view class="flex h-12 items-center rounded-lg border border-[#e8e8e8] bg-[#fafafa] px-3">
+        <view class="h-12 flex items-center border border-[#e8e8e8] rounded-lg bg-[#fafafa] px-3">
           <input
             v-model="password"
             class="flex-1 text-base"
             password
             placeholder="请输入密码"
             placeholder-class="text-[#bbb]"
-          />
+          >
         </view>
         <wd-button
           block
@@ -294,7 +294,7 @@ async function handleGetPhoneNumber(e: any) {
       <!-- 4. 协议勾选 -->
       <view class="mt-6 flex items-center justify-center gap-1">
         <view
-          class="flex h-4 w-4 items-center justify-center rounded-sm border-inset"
+          class="h-4 w-4 flex items-center justify-center rounded-sm border-inset"
           :class="agreed ? 'border-[#018d71] bg-[#018d71]' : 'border-[#eee] bg-white'"
           @click="agreed = !agreed"
         >

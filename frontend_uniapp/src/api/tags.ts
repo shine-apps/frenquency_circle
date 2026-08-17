@@ -37,7 +37,7 @@ export function getCategories() {
  */
 export function createCustomTag(
   name: string,
-  categorySlug: string
+  categorySlug: string,
 ) {
   return http.post<TagDTO>('/api/hobby-tags/custom', {
     name,

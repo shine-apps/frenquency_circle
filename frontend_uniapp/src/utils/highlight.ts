@@ -31,8 +31,10 @@ function escapeRegExp(str: string): string {
  * // [{ text: 'Hello ', highlight: false }, { text: 'Wo', highlight: true }, { text: 'rld', highlight: false }]
  */
 export function highlightText(text: string, keyword: string): HighlightSegment[] {
-  if (!text) return [{ text: '', highlight: false }]
-  if (!keyword || !keyword.trim()) return [{ text, highlight: false }]
+  if (!text)
+    return [{ text: '', highlight: false }]
+  if (!keyword || !keyword.trim())
+    return [{ text, highlight: false }]
 
   const trimmed = keyword.trim()
   const escaped = escapeRegExp(trimmed)
@@ -53,6 +55,7 @@ export function isFieldMatched(
   matchedFields: string[] | undefined,
   field: string,
 ): boolean {
-  if (!matchedFields || matchedFields.length === 0) return false
+  if (!matchedFields || matchedFields.length === 0)
+    return false
   return matchedFields.includes(field)
 }

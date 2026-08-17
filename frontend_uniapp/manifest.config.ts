@@ -136,12 +136,12 @@ export default defineManifestConfig({
     // __usePrivacyCheck__: true,
     requiredPrivateInfos: [
       'getLocation',
-      'chooseLocation'
+      'chooseLocation',
     ],
     permission: {
       'scope.userLocation': {
-        'desc': '获取您的位置信息用于匹配附近趣邻的人或者圈子'
-      }
+        desc: '获取您的位置信息用于匹配附近趣邻的人或者圈子',
+      },
     },
   },
   'mp-alipay': {

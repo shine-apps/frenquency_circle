@@ -3,7 +3,7 @@ import { computed, reactive, ref } from 'vue'
 import { useUserStore } from '@/store/user'
 import { getMyProfile, updateMyProfile, updateProfile, verifyPhoneBind } from '@/api/auth'
 import { sendSmsCode } from '@/api/login'
-import { uploadFile } from '@/api/upload'
+import { uploadFileToCos } from '@/api/upload'
 import { LOGIN_PAGE } from '@/router/config'
 import { useToast } from '@wot-ui/ui/components/wd-toast'
 import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue'
@@ -120,7 +120,7 @@ function deriveFilenameFromPath(p: string): string {
 async function doUpload(file: string | File, filename: string) {
   uploading.value = true
   try {
-    const { url } = await uploadFile({ file, name: filename, purpose: 'avatar' })
+    const { url } = await uploadFileToCos({ file, name: filename, purpose: 'avatar' })
     avatarUrl.value = url
     await saveField('avatar', '头像', () => updateMyProfile({ avatarUrl: url }))
   }

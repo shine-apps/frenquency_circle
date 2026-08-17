@@ -185,6 +185,7 @@ All commands run from the project root with no `cd` needed.
 - **SMS send endpoint** (`POST /api/auth/sms/send`): public, rate-limited. Response body is `IResponse<null>` with `message: "验证码已发送"` and HTTP 201. Does **not** leak whether the phone is registered (anti-enumeration). Failure responses: 400 (invalid phone), 429 (rate limit, Chinese message), 500 (issue failed), 502 (SMS provider failed — no rollback of issued code).
 - **WeChat mini-program login endpoint** (`POST /api/auth/wechat-miniprogram/login`): public (微信小程序客户端调用),body `{ code, phoneCode }`(对应 `wx.login()` 的 js_code 与 getPhoneNumber 按钮的 phone_code)。内部调用 `signIn("wechat-miniprogram", { ..., redirect: false })`,Auth.js 自动写 session cookie。成功响应 `IResponse<{ provider: "wechat-miniprogram" }>` HTTP 200;失败 400 (参数缺失) / 401 (登录失败) / 500 (内部异常)。
 - **File upload endpoint** (`POST /api/upload`): 登录用户可调,接收 `multipart/form-data`,字段 `file` (必填) 与 `purpose` (可选,`'avatar' | 'generic'`,默认 `generic`)。鉴权用 `readUserFromToken`(同 `/api/auth/me`)。MIME 与大小限制走 env:`UPLOAD_MAX_BYTES`(默认 5 MiB) / `UPLOAD_ALLOWED_MIME`(默认 `image/jpeg,image/png,image/webp,image/gif`)。文件落到 `public/uploads/<yyyy>/<mm>/<uuid>.<ext>`,Next.js 自动以 `/uploads/...` 暴露,公开 URL 用 env `NEXT_PUBLIC_APP_URL` 拼接。失败 400 (无 file / purpose 非法) / 401 (未登录) / 413 (超限) / 415 (MIME 非法) / 500 (落盘失败)。响应体 `IResponse<UploadResult>`,其中 `key` 为相对路径(用于将来切换 OSS 驱动时做删除)。
+- **COS STS 凭证端点** (`GET /api/upload/cos-credentials`):登录用户可调,返回 `IResponse<CosCredentials>`(含临时 SecretId/Key/Token + bucket/region/prefix/publicBaseUrl)。客户端拿到后用 `cos-js-sdk-v5` 直传 COS,文件字节不经后端。失败 401(未登录)/ 500(STS 失败)。scope 按 userId 隔离,scope prefix = `<COS_KEY_PREFIX>/<userId>/*`。
 
 ### Phase 2-3: 标签子系统与匹配引擎 API
 
@@ -262,6 +263,15 @@ All commands run from the project root with no `cd` needed.
   - **env 优先级**:`UPLOAD_MAX_BYTES_<PURPOSE>` > `UPLOAD_MAX_BYTES` > 内置默认
   - env 缺失/非法时回退到内置默认值,不抛错
 - **不要**在路由处理器里直接 `fs.writeFile`,全部走 `localDriver.put`;后续切到 OSS 时无需改路由。
+
+### Client-side direct COS upload (parallel channel)
+
+- **`lib/cos/config.ts`** — 从 env 读 COS 配置(`COS_SECRET_ID` / `COS_SECRET_KEY` / `COS_BUCKET` / `COS_REGION` / `COS_PUBLIC_BASE_URL` / `COS_KEY_PREFIX` / `COS_STS_DURATION_SECONDS`),必填项缺失抛错,`stsDurationSeconds` 夹紧到 [60, 7200]。
+- **`lib/cos/sts.ts`** — `issueScopedCredentials(userId): Promise<CosCredentials>`,调 `qcloud-cos-sts` 签发 scoped STS 凭证。scope=`<keyPrefix>/<userId>/*`(只允许 `PutObject`)。`userId` 必须匹配 `[A-Za-z0-9_-]+`(防 `../` 注入扩大 scope)。返回字段含 `bucket/region/keyPrefix/publicBaseUrl`,客户端拿到即可构造 `cos-js-sdk-v5` 直传,无需再请求其他配置。
+- **`GET /api/upload/cos-credentials`** — 登录用户可调(走 `readUserFromToken`)。响应 `IResponse<CosCredentials>`,失败 401(未登录)/ 500(STS 签发失败)。**不参与文件传输**,文件字节不进 Next.js 进程内存。
+- **客户端**:`frontend_uniapp` 用 `cos-js-sdk-v5` 直传到 `<Bucket>`,key 形如 `<keyPrefix>/<userId>/<yyyy>/<mm>/<uuid>.<ext>`,公开 URL 用 `COS_PUBLIC_BASE_URL` 拼接。详见 `frontend_uniapp/src/api/upload.ts` 的 `uploadFileToCos`。
+- **与本地上传的关系**:`POST /api/upload`(本地上传)与本 STS 端点并存,互不影响。客户端默认走直传,本地端点保留为回退/管理后台用。
+- **微信小程序域名白名单**:发布前需在 `mp.weixin.qq.com` → 开发管理 → 服务器域名,把 `COS_PUBLIC_BASE_URL` 域名 + 后端 API 域名加入 `request` / `uploadFile` 合法域名。
 
 ### WeChat Mini-Program provider
 

@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useUserStore } from '@/store/user'
 import { createCircle, getCircle, updateCircle } from '@/api/circles'
-import { uploadFile } from '@/api/upload'
+import { uploadFileToCos } from '@/api/upload'
 import { LOGIN_PAGE } from '@/router/config'
 import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue'
 import type { CircleDetailDTO, UpdateCircleInput } from '@/types'
@@ -71,7 +71,7 @@ async function fetchForEdit(id: string) {
     latitude.value = data.latitude
     longitude.value = data.longitude
     contactPhone.value = data.contactPhone || ''
-    wechat.value =data.wechat || ''
+    wechat.value = data.wechat || ''
     activityTime.value = data.activityTime || ''
     coverImages.value = data.coverImages || []
   }
@@ -117,8 +117,10 @@ const canSubmit = computed(() =>
   && hasContact.value && phoneValid.value && !submitting.value)
 
 const formErr = computed((): string => {
-  if (!hasContact.value) return '请至少填写一种联系方式'
-  if (!phoneValid.value) return '手机号格式不正确(11 位)'
+  if (!hasContact.value)
+    return '请至少填写一种联系方式'
+  if (!phoneValid.value)
+    return '手机号格式不正确(11 位)'
   return ''
 })
 
@@ -137,13 +139,14 @@ async function handleChooseLocation() {
   }
   catch (e) {
     const err = e as Error & { errMsg?: string }
-    if (err?.errMsg && /cancel/i.test(err.errMsg)) return
+    if (err?.errMsg && /cancel/i.test(err.errMsg))
+      return
     uni.showToast({ title: err?.message || '定位失败', icon: 'none' })
   }
   // #endif
 }
 
-function handlePickerConfirm(loc: { latitude: number; longitude: number; address: string }) {
+function handlePickerConfirm(loc: { latitude: number, longitude: number, address: string }) {
   latitude.value = loc.latitude
   longitude.value = loc.longitude
   address.value = loc.address
@@ -152,7 +155,8 @@ function handlePickerConfirm(loc: { latitude: number; longitude: number; address
 
 // 上传轮播图片
 async function handlePickCover() {
-  if (uploadingCover.value) return
+  if (uploadingCover.value)
+    return
   const remaining = COVER_IMAGES_MAX - coverImages.value.length
   if (remaining <= 0) {
     uni.showToast({ title: `最多 ${COVER_IMAGES_MAX} 张`, icon: 'none' })
@@ -167,7 +171,8 @@ async function handlePickCover() {
       maxDuration: 60,
       camera: 'back',
     })
-    if (!(res as any)?.tempFiles?.length) return
+    if (!(res as any)?.tempFiles?.length)
+      return
     uploadingCover.value = true
     const uploaded: string[] = []
     for (const f of (res as any).tempFiles) {
@@ -176,7 +181,7 @@ async function handlePickCover() {
         const name = (f.originalFileObj && f.originalFileObj.name)
           || f.tempFilePath
           || `cover-${Date.now()}`
-        const result = await uploadFile({ file, name, purpose: 'generic' })
+        const result = await uploadFileToCos({ file, name, purpose: 'generic' })
         uploaded.push(result.url)
       }
       catch (e) {
@@ -192,7 +197,8 @@ async function handlePickCover() {
   }
   catch (e) {
     const err = e as Error & { errMsg?: string }
-    if (err?.errMsg && /cancel/i.test(err.errMsg)) return
+    if (err?.errMsg && /cancel/i.test(err.errMsg))
+      return
     uni.showToast({ title: err?.message || '选择失败', icon: 'none' })
   }
   finally {
@@ -206,7 +212,8 @@ function handleRemoveCover(idx: number) {
 
 // 提交
 async function handleSubmit() {
-  if (!canSubmit.value) return
+  if (!canSubmit.value)
+    return
   submitting.value = true
   try {
     const lat = latitude.value as number
@@ -255,7 +262,7 @@ const tagsCountText = computed(() => `${tags.value.length}/${TAGS_MAX}`)
 </script>
 
 <template>
-  <view class="flex min-h-screen flex-col bg-[#f7f8fa] pb-40">
+  <view class="min-h-screen flex flex-col bg-[#f7f8fa] pb-40">
     <view v-if="loading && isEdit" class="flex flex-col items-center pt-32">
       <text class="text-sm text-[#999]">
         加载中...
@@ -267,7 +274,7 @@ const tagsCountText = computed(() => `${tags.value.length}/${TAGS_MAX}`)
         <!-- 1. 标题 -->
         <view class="mx-4 mt-4 rounded-2xl bg-white p-4">
           <view class="flex items-center justify-between">
-            <text class="text-sm font-medium text-[#333]">
+            <text class="text-sm text-[#333] font-medium">
               标题 <text class="text-[#f53f3f]">*</text>
             </text>
             <text class="text-xs text-[#999]">{{ titleCount }}</text>
@@ -278,19 +285,19 @@ const tagsCountText = computed(() => `${tags.value.length}/${TAGS_MAX}`)
             :maxlength="TITLE_MAX"
             placeholder="1-50 字符,如:陈氏太极拳晨练班"
             placeholder-class="text-[#bbb]"
-          />
+          >
         </view>
 
         <!-- 2. 兴趣标签 -->
         <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
           <view class="flex items-center justify-between">
-            <text class="text-sm font-medium text-[#333]">
+            <text class="text-sm text-[#333] font-medium">
               兴趣标签 <text class="text-[#f53f3f]">*</text>
             </text>
             <text class="text-xs text-[#999]">{{ tagsCountText }}</text>
           </view>
           <view
-            class="mt-2 flex min-h-11 items-center justify-between rounded-lg bg-[#f5f6f7] p-3"
+            class="mt-2 min-h-11 flex items-center justify-between rounded-lg bg-[#f5f6f7] p-3"
             @click="handleOpenTagSelector"
           >
             <text v-if="tags.length === 0" class="text-sm text-[#bbb]">
@@ -312,7 +319,7 @@ const tagsCountText = computed(() => `${tags.value.length}/${TAGS_MAX}`)
         <!-- 3. 描述 -->
         <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
           <view class="flex items-center justify-between">
-            <text class="text-sm font-medium text-[#333]">
+            <text class="text-sm text-[#333] font-medium">
               圈子介绍 <text class="text-[#f53f3f]">*</text>
             </text>
             <text class="text-xs text-[#999]">{{ descCount }}</text>
@@ -329,7 +336,7 @@ const tagsCountText = computed(() => `${tags.value.length}/${TAGS_MAX}`)
         <!-- 3.5 轮播图片 -->
         <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
           <view class="flex items-center justify-between">
-            <text class="text-sm font-medium text-[#333]">轮播图片</text>
+            <text class="text-sm text-[#333] font-medium">轮播图片</text>
             <text class="text-xs text-[#999]">{{ coverImages.length }}/{{ COVER_IMAGES_MAX }}</text>
           </view>
           <text class="mt-1 block text-xs text-[#999]">
@@ -346,7 +353,7 @@ const tagsCountText = computed(() => `${tags.value.length}/${TAGS_MAX}`)
                 <text class="text-[10px] text-white">封面</text>
               </view>
               <view
-                class="absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-bl-lg bg-black/50"
+                class="absolute right-0 top-0 h-5 w-5 flex items-center justify-center rounded-bl-lg bg-black/50"
                 @click="handleRemoveCover(idx)"
               >
                 <text class="text-xs text-white">×</text>
@@ -354,7 +361,7 @@ const tagsCountText = computed(() => `${tags.value.length}/${TAGS_MAX}`)
             </view>
             <view
               v-if="coverImages.length < COVER_IMAGES_MAX"
-              class="flex h-20 w-20 flex-col items-center justify-center rounded-lg border border-dashed border-[#e0e0e0] bg-[#fafafa]"
+              class="h-20 w-20 flex flex-col items-center justify-center border border-[#e0e0e0] rounded-lg border-dashed bg-[#fafafa]"
               @click="handlePickCover"
             >
               <text class="text-2xl text-[#ccc]">+</text>
@@ -365,7 +372,7 @@ const tagsCountText = computed(() => `${tags.value.length}/${TAGS_MAX}`)
 
         <!-- 4. 活动地点 -->
         <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
-          <text class="text-sm font-medium text-[#333]">
+          <text class="text-sm text-[#333] font-medium">
             活动地点 <text class="text-[#f53f3f]">*</text>
           </text>
           <view class="mt-2 flex items-center justify-between rounded-lg bg-[#f5f6f7] p-3" @click="handleChooseLocation">
@@ -378,7 +385,7 @@ const tagsCountText = computed(() => `${tags.value.length}/${TAGS_MAX}`)
 
         <!-- 5. 联系电话 -->
         <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
-          <text class="text-sm font-medium text-[#333]">联系电话</text>
+          <text class="text-sm text-[#333] font-medium">联系电话</text>
           <input
             v-model="contactPhone"
             class="mt-2 h-10 rounded-lg bg-[#f5f6f7] px-3 text-sm"
@@ -386,29 +393,29 @@ const tagsCountText = computed(() => `${tags.value.length}/${TAGS_MAX}`)
             :maxlength="11"
             placeholder="11 位手机号(与微信号至少填一个)"
             placeholder-class="text-[#bbb]"
-          />
+          >
         </view>
 
         <!-- 6. 微信号 -->
         <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
-          <text class="text-sm font-medium text-[#333]">微信号</text>
+          <text class="text-sm text-[#333] font-medium">微信号</text>
           <input
             v-model="wechat"
             class="mt-2 h-10 rounded-lg bg-[#f5f6f7] px-3 text-sm"
             placeholder="微信号(与联系电话至少填一个)"
             placeholder-class="text-[#bbb]"
-          />
+          >
         </view>
 
         <!-- 7. 活动时间 -->
         <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
-          <text class="text-sm font-medium text-[#333]">活动时间</text>
+          <text class="text-sm text-[#333] font-medium">活动时间</text>
           <input
             v-model="activityTime"
             class="mt-2 h-10 rounded-lg bg-[#f5f6f7] px-3 text-sm"
             placeholder="如:每周六上午 9:00-11:00"
             placeholder-class="text-[#bbb]"
-          />
+          >
         </view>
 
         <!-- 审核提示 -->

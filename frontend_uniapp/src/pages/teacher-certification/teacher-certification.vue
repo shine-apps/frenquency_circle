@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
 import { useUserStore } from '@/store/user'
-import { uploadFile } from '@/api/upload'
+import { uploadFileToCos } from '@/api/upload'
 import { getMyApplication, submitTeacherApplication } from '@/api/teacher-applications'
 import { canCreateCircle } from '@/utils/role'
 import type { CertificationFile, TeacherApplicationDTO } from '@/api/teacher-applications'
@@ -114,7 +114,7 @@ async function handlePickCert() {
       try {
         const file: string | File = f.originalFileObj ?? f.tempFilePath
         const name = f.originalFileObj?.name || f.tempFilePath || `cert-${Date.now()}`
-        const result = await uploadFile({ file, name, purpose: 'generic' })
+        const result = await uploadFileToCos({ file, name, purpose: 'generic' })
         uploaded.push({
           url: result.url,
           key: result.key,
@@ -169,7 +169,7 @@ async function handlePickIdCard(side: 'front' | 'back') {
     const f = tempFiles[0]
     const file: string | File = f.originalFileObj ?? f.tempFilePath
     const name = f.originalFileObj?.name || f.tempFilePath || `idcard-${side}-${Date.now()}`
-    const result = await uploadFile({ file, name, purpose: 'generic' })
+    const result = await uploadFileToCos({ file, name, purpose: 'generic' })
     const cert: CertificationFile = {
       url: result.url,
       key: result.key,

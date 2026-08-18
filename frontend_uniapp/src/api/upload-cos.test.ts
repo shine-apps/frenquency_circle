@@ -81,6 +81,9 @@ describe('api/upload.uploadFileToCos', () => {
     expect(params.Key).toMatch(/^uploads\/[^/]+\/\d{4}\/\d{2}\/[a-f0-9-]{36}\.png$/)
     expect(params.Body).toBe(file)
     expect(params.ContentType).toBe('image/png')
+    // 永久缓存头(扁平 CacheControl 字段,cos-js-sdk-v5 API)
+    expect(params.CacheControl).toBe('public, max-age=31536000, immutable')
+    expect(params.Headers).toBeUndefined()
     expect(result.url).toBe(`https://cdn.example.com/${params.Key}`)
     expect(result.key).toBe(params.Key)
     expect(result.size).toBe(file.size)
@@ -88,8 +91,42 @@ describe('api/upload.uploadFileToCos', () => {
     expect(result.originalName).toBe('avatar.png')
   })
 
-  it('wx path: uses cos.uploadFile with Body=tempFilePath when file is string', async () => {
-    // 模拟微信小程序:传 tempFilePath 字符串
+  it('h5 path: blob/data URL string is fetched to Blob then uploaded via putObject (cropper output)', async () => {
+    // 模拟 H5 裁剪场景:wd-img-cropper 的 canvasToTempFilePath 在 H5 返回 blob: URL 字符串
+    const imageBytes = new Uint8Array([0x89, 0x50, 0x4E, 0x47]) // PNG 魔数占位
+    const fakeBlob = new Blob([imageBytes], { type: '' }) // blob: 通常 type 为空
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      blob: async () => fakeBlob,
+    } as Response)
+
+    try {
+      const blobUrl = 'blob:http://localhost:9000/abc-def'
+      const result = await uploadFileToCos({
+        file: blobUrl,
+        name: 'avatar.jpg',
+        purpose: 'avatar',
+      })
+
+      // 应该先 fetch blob URL
+      expect(fetchSpy).toHaveBeenCalledWith(blobUrl)
+      // 走 putObject(不是 uploadFile)
+      expect(putObjectMock).toHaveBeenCalledTimes(1)
+      expect(uploadFileMock).not.toHaveBeenCalled()
+      const params = putObjectMock.mock.calls[0]?.[0]
+      expect(params.Body).toBeInstanceOf(Blob)
+      expect(params.ContentType).toBe('image/jpeg')
+      expect(params.CacheControl).toBe('public, max-age=31536000, immutable')
+      expect(result.size).toBe(fakeBlob.size)
+      expect(result.mimeType).toBe('image/jpeg')
+    }
+    finally {
+      fetchSpy.mockRestore()
+    }
+  })
+
+  it('wx path: uses cos.uploadFile with Body=tempFilePath for non-fetchable string', async () => {
+    // 模拟微信小程序:传 tempFilePath 字符串(不以 blob:/data: 开头)
     const tempPath = 'wx://tmp/abc.png'
     const result = await uploadFileToCos({
       file: tempPath,
@@ -102,6 +139,8 @@ describe('api/upload.uploadFileToCos', () => {
     expect(params.Bucket).toBe('b-1')
     expect(params.Body).toBe(tempPath)
     expect(params.ContentType).toBe('image/png')
+    expect(params.CacheControl).toBe('public, max-age=31536000, immutable')
+    expect(params.Headers).toBeUndefined()
     expect(result.url).toBe(`https://cdn.example.com/${params.Key}`)
   })
 

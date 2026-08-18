@@ -166,6 +166,19 @@ export async function uploadFile(input: UploadInput): Promise<UploadResult> {
 /** 凭证提前刷新阈值:到期前 5 分钟视为失效 */
 const CREDS_REFRESH_THRESHOLD_SECONDS = 300
 
+/**
+ * 上传到 COS 的 Cache-Control 头:1 年 + immutable,作为"永久缓存"的业界等价方案。
+ *
+ * - `max-age=31536000`:Chrome/Firefox/Safari/Edge 对超出 1 年的 max-age 一律截断,
+ *   1 年是各浏览器实际接受的上限,再多写也无效。
+ * - `immutable`:告知客户端/中间代理该资源 URL 在 max-age 内永远不会变化,
+ *   浏览器将跳过任何条件请求(If-None-Match / If-Modified-Since),真正做到"永久"。
+ *
+ * 注意:此策略要求上传 key 一旦确定便不可再覆盖同 key,否则旧 URL 仍命中缓存。
+ * 本项目 key 形如 `uploads/<userId>/<yyyy>/<mm>/<uuid>.<ext>`,天然满足。
+ */
+const COS_CACHE_CONTROL_PERMANENT = 'public, max-age=31536000, immutable'
+
 let _cachedCreds: CosCredentials | null = null
 
 /** 凭证是否需要刷新(null / 过期 / 即将过期) */
@@ -213,10 +226,23 @@ function isH5File(file: string | File): file is File {
 }
 
 /**
+ * 判断字符串是否为浏览器端"可 fetch 的临时 URL":
+ * - `blob:`:URL.createObjectURL / canvasToTempFilePath(H5) 产生
+ * - `data:`:data URL(base64 内嵌)
+ * 小程序本地临时路径(wxfile://、/var/mobile/...、http://tmp/...) 不在此列,会走 uploadFile 让 SDK 读本地。
+ */
+function isFetchableUrl(p: string): boolean {
+  return p.startsWith('blob:') || p.startsWith('data:')
+}
+
+/**
  * 直传腾讯云 COS(跨平台自动路由)。
  *
- * - **H5**(`input.file` 为 `File`):走 `cos.putObject({ Body: File })`
- * - **微信小程序**(`input.file` 为 `tempFilePath` 字符串):走 `cos.uploadFile({ Body: tempFilePath })`
+ * - **H5**:统一走 `cos.putObject`,Body 必须是 `File | Blob`;
+ *   若传入 `blob:` / `data:` 开头的临时 URL(如 wd-img-cropper 的 canvasToTempFilePath 产物),
+ *   先 `fetch()` 下载成 Blob 再上传,避免 SDK 把字符串当文本内容写入导致图片损坏。
+ * - **微信小程序**:走 `cos.uploadFile`(分片/简单上传由 SDK 自动选择),
+ *   Body 传 `tempFilePath` 字符串,SDK 在小程序环境会读取本地文件内容。
  *
  * 返回的 `UploadResult` 与 `uploadFile` 形状一致,调用方可平滑切换。
  *
@@ -231,9 +257,17 @@ export async function uploadFileToCos(input: UploadInput): Promise<UploadResult>
   const creds = await getValidCreds()
   const client = getCosClient(creds)
 
-  // H5: input.file 是 File;微信小程序: input.file 是 tempFilePath 字符串
-  const mimeType = isH5File(input.file) ? input.file.type : guessMimeFromName(input.name ?? '')
-  const originalName = isH5File(input.file) ? input.file.name : (input.name ?? 'upload.bin')
+  // 统一推导 mimeType / originalName
+  let mimeType: string
+  let originalName: string
+  if (typeof input.file !== 'string') {
+    mimeType = input.file.type || guessMimeFromName(input.name ?? input.file.name)
+    originalName = input.name ?? input.file.name
+  }
+  else {
+    mimeType = guessMimeFromName(input.name ?? '')
+    originalName = input.name ?? 'upload.bin'
+  }
   const key = buildCosObjectKey({
     keyPrefix: creds.keyPrefix,
     userId: creds.userId,
@@ -241,26 +275,52 @@ export async function uploadFileToCos(input: UploadInput): Promise<UploadResult>
     originalName,
   })
 
+  let size = 0
   try {
-    if (isH5File(input.file)) {
-      // H5:走 putObject,Body 直接传 File
+    if (typeof input.file !== 'string') {
+      // H5:原生 File 对象,直接 putObject
       await client.putObject({
         Bucket: creds.bucket,
         Region: creds.region,
         Key: key,
         Body: input.file,
         ContentType: mimeType,
+        CacheControl: COS_CACHE_CONTROL_PERMANENT,
       })
+      size = input.file.size
+    }
+    else if (isFetchableUrl(input.file)) {
+      // H5:blob: / data: 临时 URL,先 fetch 成 Blob 再 putObject(避免把 URL 字符串当文本上传)
+      const fetched = await fetch(input.file)
+      if (!fetched.ok) {
+        throw new Error(`读取临时图片失败: HTTP ${fetched.status}`)
+      }
+      const rawBlob = await fetched.blob()
+      // fetch blob: URL 返回的 Blob.type 可能为空;若能从 filename 推断出更准确的 MIME,则重新包装
+      const body: Blob = (!rawBlob.type || rawBlob.type === 'application/octet-stream') && mimeType !== 'application/octet-stream'
+        ? new Blob([rawBlob], { type: mimeType })
+        : rawBlob
+      await client.putObject({
+        Bucket: creds.bucket,
+        Region: creds.region,
+        Key: key,
+        Body: body,
+        ContentType: mimeType,
+        CacheControl: COS_CACHE_CONTROL_PERMANENT,
+      })
+      size = body.size
     }
     else {
-      // 微信小程序:走 uploadFile(multipart),Body 是 tempFilePath 字符串
+      // 微信小程序:tempFilePath 字符串,走 uploadFile,SDK 内部读本地文件
       await client.uploadFile({
         Bucket: creds.bucket,
         Region: creds.region,
         Key: key,
         Body: input.file,
         ContentType: mimeType,
+        CacheControl: COS_CACHE_CONTROL_PERMANENT,
       })
+      size = await getWxFileSize(input.file)
     }
   }
   catch (e) {
@@ -268,7 +328,6 @@ export async function uploadFileToCos(input: UploadInput): Promise<UploadResult>
     throw new Error(`COS 上传失败: ${msg}`)
   }
 
-  const size = isH5File(input.file) ? input.file.size : await getWxFileSize(input.file)
   return {
     url: buildCosPublicUrl(creds.publicBaseUrl, key),
     key,

@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useUserStore } from '@/store/user'
 import { uploadFileToCos } from '@/api/upload'
+import { chooseImages } from '@/utils/chooseImage'
 import { getMyApplication, submitTeacherApplication } from '@/api/teacher-applications'
 import { canCreateCircle } from '@/utils/role'
 import type { CertificationFile, TeacherApplicationDTO } from '@/api/teacher-applications'
@@ -16,20 +17,6 @@ definePage({
 /** 认证材料数量限制(与后端 1-5 个对齐) */
 const CERT_FILES_MIN = 1
 const CERT_FILES_MAX = 5
-
-/** uni.chooseMedia 返回的临时文件(兼容 H5 的 originalFileObj 与小程序 tempFilePath) */
-interface ChosenMediaFile {
-  tempFilePath: string
-  size: number
-  fileType: 'image' | 'video'
-  /** H5 端原生 File 对象(小程序端不存在) */
-  originalFileObj?: File
-}
-
-/** 从 chooseMedia 结果中提取文件列表(跨端字段差异在此收敛) */
-function extractChosenFiles(res: { tempFiles?: ChosenMediaFile[] }): ChosenMediaFile[] {
-  return res.tempFiles ?? []
-}
 
 /** 申请状态标签映射 */
 const STATUS_MAP: Record<string, { text: string, color: string }> = {
@@ -97,23 +84,13 @@ async function handlePickCert() {
     return
   }
   try {
-    const res = await uni.chooseMedia({
-      count: remaining,
-      mediaType: ['image', 'video'],
-      sourceType: ['album', 'camera'],
-      sizeType: ['compressed'],
-      maxDuration: 60,
-      camera: 'back',
-    })
-    const tempFiles = extractChosenFiles(res as unknown as { tempFiles?: ChosenMediaFile[] })
-    if (tempFiles.length === 0)
+    const chosen = await chooseImages(remaining, { prefix: 'cert', mediaType: ['image', 'video'] })
+    if (chosen.length === 0)
       return
     uploading.value = true
     const uploaded: CertificationFile[] = []
-    for (const f of tempFiles) {
+    for (const { file, name } of chosen) {
       try {
-        const file: string | File = f.originalFileObj ?? f.tempFilePath
-        const name = f.originalFileObj?.name || f.tempFilePath || `cert-${Date.now()}`
         const result = await uploadFileToCos({ file, name, purpose: 'generic' })
         uploaded.push({
           url: result.url,
@@ -136,8 +113,6 @@ async function handlePickCert() {
   }
   catch (e) {
     const err = e as Error & { errMsg?: string }
-    if (err?.errMsg && /cancel/i.test(err.errMsg))
-      return
     uni.showToast({ title: err?.message || '选择文件失败', icon: 'none' })
   }
   finally {
@@ -155,20 +130,11 @@ async function handlePickIdCard(side: 'front' | 'back') {
   if (uploading.value)
     return
   try {
-    const res = await uni.chooseMedia({
-      count: 1,
-      mediaType: ['image'],
-      sourceType: ['album', 'camera'],
-      sizeType: ['compressed'],
-      camera: 'back',
-    })
-    const tempFiles = extractChosenFiles(res as unknown as { tempFiles?: ChosenMediaFile[] })
-    if (tempFiles.length === 0)
+    const chosen = await chooseImages(1, { prefix: `idcard-${side}` })
+    if (chosen.length === 0)
       return
     uploading.value = true
-    const f = tempFiles[0]
-    const file: string | File = f.originalFileObj ?? f.tempFilePath
-    const name = f.originalFileObj?.name || f.tempFilePath || `idcard-${side}-${Date.now()}`
+    const { file, name } = chosen[0]
     const result = await uploadFileToCos({ file, name, purpose: 'generic' })
     const cert: CertificationFile = {
       url: result.url,
@@ -184,8 +150,6 @@ async function handlePickIdCard(side: 'front' | 'back') {
   }
   catch (e) {
     const err = e as Error & { errMsg?: string }
-    if (err?.errMsg && /cancel/i.test(err.errMsg))
-      return
     uni.showToast({ title: err?.message || '上传失败', icon: 'none' })
   }
   finally {

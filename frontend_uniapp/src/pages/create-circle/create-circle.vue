@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useUserStore } from '@/store/user'
 import { createCircle, getCircle, updateCircle } from '@/api/circles'
 import { uploadFileToCos } from '@/api/upload'
+import { chooseImages } from '@/utils/chooseImage'
 import { LOGIN_PAGE } from '@/router/config'
 import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue'
 import type { CircleDetailDTO, UpdateCircleInput } from '@/types'
@@ -163,24 +164,13 @@ async function handlePickCover() {
     return
   }
   try {
-    const res = await uni.chooseMedia({
-      count: remaining,
-      mediaType: ['image'],
-      sourceType: ['album', 'camera'],
-      sizeType: ['compressed'],
-      maxDuration: 60,
-      camera: 'back',
-    })
-    if (!(res as any)?.tempFiles?.length)
+    const chosen = await chooseImages(remaining, { prefix: 'cover' })
+    if (chosen.length === 0)
       return
     uploadingCover.value = true
     const uploaded: string[] = []
-    for (const f of (res as any).tempFiles) {
+    for (const { file, name } of chosen) {
       try {
-        const file: string | File = f.originalFileObj ?? f.tempFilePath
-        const name = (f.originalFileObj && f.originalFileObj.name)
-          || f.tempFilePath
-          || `cover-${Date.now()}`
         const result = await uploadFileToCos({ file, name, purpose: 'generic' })
         uploaded.push(result.url)
       }
@@ -197,8 +187,6 @@ async function handlePickCover() {
   }
   catch (e) {
     const err = e as Error & { errMsg?: string }
-    if (err?.errMsg && /cancel/i.test(err.errMsg))
-      return
     uni.showToast({ title: err?.message || '选择失败', icon: 'none' })
   }
   finally {

@@ -4,6 +4,7 @@ import { useUserStore } from '@/store/user'
 import { getMyProfile, updateMyProfile, updateProfile, verifyPhoneBind } from '@/api/auth'
 import { sendSmsCode } from '@/api/login'
 import { uploadFileToCos } from '@/api/upload'
+import { chooseImages } from '@/utils/chooseImage'
 import { LOGIN_PAGE } from '@/router/config'
 import { useToast } from '@wot-ui/ui/components/wd-toast'
 import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue'
@@ -103,11 +104,6 @@ onShow(() => {
 })
 
 // ===== 头像上传与裁剪 =====
-/** uni.chooseMedia / uni.chooseImage 返回的临时文件(仅取本页用到的字段) */
-interface ChosenMediaFile {
-  tempFilePath: string
-}
-
 /** 从 tempFilePath 推断文件名(裁剪后无扩展名时兜底) */
 function deriveFilenameFromPath(p: string): string {
   if (!p)
@@ -132,44 +128,24 @@ async function doUpload(file: string | File, filename: string) {
   }
 }
 
-/** 选择图片 → 打开 1:1 裁剪弹层(小程序用 chooseMedia,H5 用 chooseImage) */
+/** 选择图片 → 打开 1:1 裁剪弹层(H5/小程序均走 chooseImages 公共方法) */
 async function handlePickAvatar() {
   if (uploading.value)
     return
   try {
-    let src = ''
-    // #ifdef MP-WEIXIN
-    const res = await uni.chooseMedia({
-      count: 1,
-      mediaType: ['image'],
-      sourceType: ['album', 'camera'],
-      sizeType: ['compressed'],
-      maxDuration: 30,
-      camera: 'back',
-    })
-    const tempFiles = (res as unknown as { tempFiles?: ChosenMediaFile[] }).tempFiles ?? []
-    src = tempFiles[0]?.tempFilePath ?? ''
-    // #endif
-    // #ifdef H5
-    const h5Res = await uni.chooseImage({
-      count: 1,
-      sizeType: ['compressed'],
-      sourceType: ['album', 'camera'],
-    })
-    const h5Path = h5Res.tempFilePaths?.[0] ?? ''
-    // H5 端 chooseImage 的 path 是 blob URL,可直接用于 image 与上传
-    src = h5Path
-    // #endif
-    if (!src)
+    const chosen = await chooseImages(1, { prefix: 'avatar' })
+    // H5 的 file 是 blob URL、小程序是 tempFilePath,均可直接作为裁剪源
+    const src = chosen[0]?.file
+    if (!src || typeof src !== 'string') {
+      // 理论上 file 只会是字符串;若未来平台返回 File 对象,明确提示而非静默失败
+      toast.show({ msg: '无法获取所选图片,请重试', iconName: 'error' })
       return
+    }
     cropSrc.value = src
     cropVisible.value = true
   }
   catch (e) {
-    // 用户取消选择时选择 API 会 reject,这里静默
     const err = e as Error & { errMsg?: string }
-    if (err?.errMsg && /cancel/i.test(err.errMsg))
-      return
     toast.show({ msg: `选择图片失败: ${err.message}`, iconName: 'error' })
   }
 }

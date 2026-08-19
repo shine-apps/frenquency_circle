@@ -268,7 +268,7 @@ export async function uploadFileToCos(input: UploadInput): Promise<UploadResult>
     mimeType = guessMimeFromName(input.name ?? '')
     originalName = input.name ?? 'upload.bin'
   }
-  const key = buildCosObjectKey({
+  let key = buildCosObjectKey({
     keyPrefix: creds.keyPrefix,
     userId: creds.userId,
     mimeType,
@@ -296,6 +296,13 @@ export async function uploadFileToCos(input: UploadInput): Promise<UploadResult>
         throw new Error(`读取临时图片失败: HTTP ${fetched.status}`)
       }
       const rawBlob = await fetched.blob()
+      // 浏览器从文件头精确推断的 MIME 优先于 name 猜测(如 H5 chooseImage 的 .jpg 回退名),
+      // 避免真实为 PNG/GIF/WEBP 时 ContentType 与 key 扩展名失真
+      const realMime = rawBlob.type && rawBlob.type !== 'application/octet-stream' ? rawBlob.type : ''
+      if (realMime && realMime !== mimeType) {
+        mimeType = realMime
+        key = buildCosObjectKey({ keyPrefix: creds.keyPrefix, userId: creds.userId, mimeType, originalName })
+      }
       // fetch blob: URL 返回的 Blob.type 可能为空;若能从 filename 推断出更准确的 MIME,则重新包装
       const body: Blob = (!rawBlob.type || rawBlob.type === 'application/octet-stream') && mimeType !== 'application/octet-stream'
         ? new Blob([rawBlob], { type: mimeType })

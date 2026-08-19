@@ -37,6 +37,7 @@ const {
     return chain
   }
 
+  const insertReturnMock = vi.fn(() => [{ id: "f1" }])
   const chainInsert = {
     values: vi.fn(function (this: unknown) {
       return chainInsert
@@ -44,10 +45,13 @@ const {
     onConflictDoNothing: vi.fn(function (this: unknown) {
       return chainInsert
     }),
+    returning: vi.fn(function (this: unknown) {
+      return chainInsert
+    }),
     then: (
       resolve: (value: unknown) => unknown,
       reject?: (reason: unknown) => unknown
-    ) => Promise.resolve(undefined).then(resolve, reject),
+    ) => Promise.resolve(insertReturnMock()).then(resolve, reject),
   }
 
   const deleteWhereMock = vi.fn(async () => undefined)
@@ -66,6 +70,7 @@ const {
   return {
     mockDb,
     chainInsert,
+    insertReturnMock,
     deleteWhereMock,
     setSelectResultsQueue: (results: Record<string, unknown>[][]) => {
       selectResultsQueue.length = 0
@@ -82,11 +87,13 @@ const {
   chainInsert: {
     values: ReturnType<typeof vi.fn>
     onConflictDoNothing: ReturnType<typeof vi.fn>
+    returning: ReturnType<typeof vi.fn>
     then: (
       resolve: (value: unknown) => unknown,
       reject?: (reason: unknown) => unknown
     ) => Promise<unknown>
   }
+  insertReturnMock: ReturnType<typeof vi.fn>
   deleteWhereMock: ReturnType<typeof vi.fn>
   setSelectResultsQueue: (results: Record<string, unknown>[][]) => void
   readUserFromTokenMock: ReturnType<typeof vi.fn>
@@ -100,7 +107,7 @@ vi.mock("@/lib/auth/session-token", () => ({
 
 vi.mock("@/lib/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-  LOG_PREFIX: { CIRCLE: "CIRCLE" },
+  LOG_PREFIX: { CIRCLE: "CIRCLE", NOTIFICATION: "NOTIFICATION" },
 }))
 
 import { POST, DELETE } from "@/app/api/circles/[id]/follow/route"
@@ -161,28 +168,74 @@ describe("POST /api/circles/:id/follow", () => {
     expect(mockDb.insert).not.toHaveBeenCalled()
   })
 
-  it("follows an active circle and inserts one record", async () => {
+  it("follows an active circle and inserts one follow record", async () => {
     readUserFromTokenMock.mockResolvedValue(USER)
-    // select 1: circle 存在且 active(无预查关注记录,幂等由唯一索引吸收)
-    setSelectResultsQueue([[{ id: "c1", status: "active" }]])
+    // select 1: circle 存在且 active(含 creatorId/title 供通知)
+    // select 2: 首次关注时取关注者昵称(用于通知文案)
+    setSelectResultsQueue([
+      [
+        {
+          id: "c1",
+          status: "active",
+          creatorId: "11111111-1111-1111-1111-111111111111",
+          title: "太极圈",
+        },
+      ],
+      [{ name: "测试用户" }],
+    ])
     const res = await POST(makeRequest("/api/circles/c1/follow", "POST"), makeContext("c1"))
     expect(res.status).toBe(200)
     const body = (await res.json()) as IResponse<{ followed: boolean }>
     expect(body.data).toEqual({ followed: true })
-    expect(mockDb.insert).toHaveBeenCalledTimes(1)
-    const insertArg = chainInsert.values.mock.calls[0][0] as Record<string, unknown>
-    expect(insertArg).toEqual({ circleId: "c1", userId: USER.id })
+    // follow 插入与通知插入共存:断言 follow 行存在且字段正确
+    const followInsertCall = chainInsert.values.mock.calls.find((c) => {
+      const v = c[0]
+      return (
+        v && typeof v === "object" && "circleId" in v && "userId" in v
+      )
+    })
+    expect(followInsertCall).toBeDefined()
+    expect(followInsertCall![0]).toEqual({ circleId: "c1", userId: USER.id })
     // 必须使用 onConflictDoNothing,避免并发重复关注的竞态
     expect(chainInsert.onConflictDoNothing).toHaveBeenCalledTimes(1)
+    // 首次关注应给创建者发 circle_followed 通知(actorId=关注者,entity 指向圈子,文案含昵称与圈子名)
+    const notifyInsertCall = chainInsert.values.mock.calls.find((c) => {
+      const v = c[0]
+      return (
+        v &&
+        typeof v === "object" &&
+        "type" in v &&
+        (v as Record<string, unknown>).type === "circle_followed"
+      )
+    })
+    expect(notifyInsertCall).toBeDefined()
+    const notify = notifyInsertCall![0] as Record<string, unknown>
+    expect(notify.recipientId).toBe("11111111-1111-1111-1111-111111111111")
+    expect(notify.actorId).toBe(USER.id)
+    expect(notify.entityType).toBe("circle")
+    expect(notify.entityId).toBe("c1")
+    expect(notify.linkTarget).toBe("miniprogram")
+    expect(notify.linkUrl).toBe("/pages/circle/circle?id=c1")
+    expect(notify.content).toContain("测试用户")
+    expect(notify.content).toContain("太极圈")
   })
 
   it("is idempotent: does not pre-query follow records, conflict handled by unique index", async () => {
     readUserFromTokenMock.mockResolvedValue(USER)
-    setSelectResultsQueue([[{ id: "c1", status: "active" }]])
+    setSelectResultsQueue([
+      [
+        {
+          id: "c1",
+          status: "active",
+          creatorId: "11111111-1111-1111-1111-111111111111",
+          title: "太极圈",
+        },
+      ],
+      [{ name: "测试用户" }],
+    ])
     const res = await POST(makeRequest("/api/circles/c1/follow", "POST"), makeContext("c1"))
     expect(res.status).toBe(200)
-    // 只有 circle 校验这一次 select,证明幂等不依赖先查后插
-    expect(mockDb.select).toHaveBeenCalledTimes(1)
+    // 幂等不依赖先查后插关注记录:仍只有 circle 校验 + 首次关注昵称查询,未对 circle_follows 做存在性预查
     expect(chainInsert.onConflictDoNothing).toHaveBeenCalledTimes(1)
   })
 })

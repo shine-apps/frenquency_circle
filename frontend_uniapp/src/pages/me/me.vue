@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useUserStore } from '@/store/user'
 import { useTokenStore } from '@/store/token'
 import { getMyProfile, updateMyTags } from '@/api/auth'
+import { getUnreadNotificationCount } from '@/api/notifications'
 import { canCreateCircle } from '@/utils/role'
 import { LOGIN_PAGE } from '@/router/config'
 import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue'
@@ -34,7 +35,28 @@ onShow(() => {
     .catch(() => {
       // 静默:token 失效由拦截器跳登录
     })
+  // 同步未读消息数(失败静默,不影响其他功能)
+  void fetchUnreadCount()
 })
+
+/** 未读消息数量(>0 时我的页显示角标) */
+const unreadCount = ref(0)
+
+/** 拉取未读消息数 */
+async function fetchUnreadCount() {
+  try {
+    const res = await getUnreadNotificationCount()
+    unreadCount.value = res.count ?? 0
+  }
+  catch {
+    // 静默
+  }
+}
+
+/** 跳消息中心 */
+function handleNotifications() {
+  uni.navigateTo({ url: '/pages/notifications/notifications' })
+}
 
 /** 未登录点击用户卡片 → 跳登录页 */
 function handleProfileClick() {
@@ -179,6 +201,25 @@ const roleChipClass = computed(() => {
 
     <!-- ====== 设置入口列表 ====== -->
     <view class="mx-4 rounded-2xl bg-white">
+      <view class="flex items-center justify-between border-b border-[#f5f5f5] px-4 py-4" @click="handleNotifications">
+        <text class="text-sm text-[#333] font-medium">
+          消息
+        </text>
+        <view class="flex items-center gap-2">
+          <view
+            v-if="unreadCount > 0"
+            class="h-5 min-w-5 flex items-center justify-center rounded-full bg-[#f44336] px-1.5"
+          >
+            <text class="text-xs text-white">
+              {{ unreadCount > 99 ? '99+' : unreadCount }}
+            </text>
+          </view>
+          <text class="text-sm text-[#ccc]">
+            ›
+          </text>
+        </view>
+      </view>
+
       <view class="flex items-center justify-between border-b border-[#f5f5f5] px-4 py-4" @click="handleTags">
         <text class="text-sm text-[#333] font-medium">
           我的兴趣

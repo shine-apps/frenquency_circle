@@ -6,6 +6,7 @@ import { circles, teacherApplications, users } from "@/db/schema"
 import { fail, ok } from "@/lib/api"
 import { requireAdmin } from "@/lib/auth-utils"
 import { logger, LOG_PREFIX } from "@/lib/logger"
+import { notifyUser } from "@/lib/notifications"
 import type { CircleDTO } from "@/types/api"
 
 type RouteContext = { params: Promise<{ id: string }> }
@@ -124,6 +125,26 @@ export async function PATCH(req: Request, context: RouteContext) {
         updatedAt: new Date(),
       })
       .where(eq(teacherApplications.circleId, id))
+  }
+
+  // 审核结果通知创建者:仅 pending 转出为 active / rejected 时发送
+  // (offline / violated 等状态变更不发通知,避免噪音)。失败仅 log,不影响主流程。
+  if (current.status === "pending" && (status === "active" || status === "rejected")) {
+    const approved = status === "active"
+    const reviewText = reviewNote ? `（备注:${reviewNote}）` : ""
+    await notifyUser({
+      recipientId: current.creatorId,
+      actorId: guard.userId, // 操作的管理员
+      entityType: "circle",
+      entityId: id,
+      type: "circle_review_result",
+      title: approved ? "圈子审核通过" : "圈子审核未通过",
+      content: approved
+        ? `你创建的圈子「${current.title}」已通过审核并上线${reviewText}`
+        : `你创建的圈子「${current.title}」未通过审核${reviewText}`,
+      linkUrl: approved ? `/pages/circle/circle?id=${id}` : null,
+      linkTarget: "miniprogram",
+    })
   }
 
   logger.info(LOG_PREFIX.ADMIN, "Circle status updated", {

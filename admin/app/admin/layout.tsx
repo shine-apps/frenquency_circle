@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
 import { AppSidebar } from "@/components/app-sidebar"
+import { NotificationBell } from "@/components/notification-bell"
 
 export default async function AdminLayout({
   children,
@@ -31,6 +32,7 @@ export default async function AdminLayout({
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 h-4" />
           <div className="flex-1" />
+          <NotificationBell />
           <div className="text-sm text-muted-foreground">
             {session.user.email}
           </div>

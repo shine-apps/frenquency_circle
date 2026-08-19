@@ -4,7 +4,11 @@ import {
   accounts,
   circles,
   smsVerificationCodes,
+  notifications,
   type UserRole,
+  type NotificationType,
+  type NotificationLinkTarget,
+  type NotificationEntityType,
 } from "@/db/schema"
 
 describe("db/schema", () => {
@@ -93,5 +97,51 @@ describe("db/schema", () => {
         "updatedAt",
       ])
     )
+  })
+
+  it("exports notifications table", () => {
+    expect(notifications).toBeDefined()
+  })
+
+  it("notifications table has the expected columns", () => {
+    const cols = Object.keys(notifications)
+    expect(cols).toEqual(
+      expect.arrayContaining([
+        "id",
+        "recipientId",
+        "actorId", // 触发者(可空)
+        "entityType",
+        "entityId",
+        "type",
+        "title",
+        "content",
+        "linkUrl",
+        "linkTarget",
+        "readAt",
+        "createdAt",
+        "updatedAt",
+      ])
+    )
+  })
+
+  it("NotificationType union covers the first-batch scenarios", () => {
+    const t: NotificationType = "circle_review"
+    expect(t).toBe("circle_review")
+    const t2: NotificationType = "circle_review_result"
+    expect(t2).toBe("circle_review_result")
+    const t3: NotificationType = "circle_followed"
+    expect(t3).toBe("circle_followed")
+  })
+
+  it("NotificationLinkTarget defaults to miniprogram", () => {
+    const lt: NotificationLinkTarget = "miniprogram"
+    expect(lt).toBe("miniprogram")
+    const lt2: NotificationLinkTarget = "admin"
+    expect(lt2).toBe("admin")
+  })
+
+  it("NotificationEntityType is 'circle' for now", () => {
+    const et: NotificationEntityType = "circle"
+    expect(et).toBe("circle")
   })
 })

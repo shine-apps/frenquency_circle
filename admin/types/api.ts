@@ -270,3 +270,32 @@ export interface CategoryNode extends CategoryDTO {
 export interface CategoryTreeResponse {
   tree: CategoryNode[]
 }
+
+/**
+ * 通知 / 消息 DTO(`notifications` 表对外的投影)。
+ * 文案中的人名 / 圈子名已在创建时快照进 `title` / `content`,
+ * `actorId` / `entityId` 为关联引用(可空),本期前端可选择性消费。
+ */
+export type NotificationDTO = {
+  id: string
+  /** 触发者 id(可空);系统通知为 null */
+  actorId: string | null
+  /** 关联业务对象类型(可空),本期仅 'circle' */
+  entityType: "circle" | null
+  /** 关联业务对象 id(可空),如 circleId */
+  entityId: string | null
+  /** 通知类型:circle_review / circle_review_result / circle_followed */
+  type: "circle_review" | "circle_review_result" | "circle_followed"
+  title: string
+  content: string
+  /** 引导打开的页面链接(小程序页面路径或后台路由) */
+  linkUrl: string | null
+  /** 跳转目标入口:miniprogram / admin */
+  linkTarget: "miniprogram" | "admin"
+  /** 已读时间(可空,null 表示未读) */
+  readAt: string | null
+  createdAt: string
+}
+
+/** 通知跳转目标入口:miniprogram = 小程序端,admin = 后台管理端 */
+export type NotificationLinkTarget = "miniprogram" | "admin"

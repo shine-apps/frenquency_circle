@@ -6,6 +6,7 @@ import { circles, circleMembers, hobbyTags } from "@/db/schema"
 import { corsOptions, fail, ok, withCors } from "@/lib/api"
 import { requireSession } from "@/lib/auth-utils"
 import { logger, LOG_PREFIX } from "@/lib/logger"
+import { notifyAdmins } from "@/lib/notifications"
 
 /** 手机号格式(与 lib/sms/phone.ts PHONE_RE 一致) */
 const PHONE_RE = /^1[3-9]\d{9}$/
@@ -171,6 +172,19 @@ export async function POST(req: Request) {
     circleId: circleRow.id,
     userId,
     role: "creator",
+  })
+
+  // 7. 通知所有管理员审核(写入即扇出,失败仅 log,不影响建圈主流程)
+  await notifyAdmins({
+    actorId: userId,
+    entityType: "circle",
+    entityId: circleRow.id,
+    type: "circle_review",
+    title: "新圈子待审核",
+    content: `「${title}」已提交,等待管理员审核`,
+    linkUrl: "/admin/circles",
+    linkTarget: "admin",
+    excludeUserId: userId, // 创建者本人若是管理员也不自收
   })
 
   logger.info(LOG_PREFIX.CIRCLE, "Circle created", {

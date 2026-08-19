@@ -501,3 +501,93 @@ export const contactLogs = pgTable(
 
 export type ContactLog = typeof contactLogs.$inferSelect
 export type NewContactLog = typeof contactLogs.$inferInsert
+
+/**
+ * 通知类型字面量联合。
+ * - `circle_review`        圈子待审核(→管理员)
+ * - `circle_review_result` 圈子审核结果(→创建者)
+ * - `circle_followed`      有人关注圈子(→创建者)
+ * 预留:teacher_application / teacher_application_result 等。
+ */
+export const NOTIFICATION_TYPES = [
+  "circle_review",
+  "circle_review_result",
+  "circle_followed",
+] as const
+export type NotificationType = (typeof NOTIFICATION_TYPES)[number]
+
+/**
+ * 通知跳转目标字面量联合。决定前端入口:
+ * - `miniprogram` 用户侧小程序页面
+ * - `admin`       管理员后台页面
+ */
+export const NOTIFICATION_LINK_TARGETS = ["miniprogram", "admin"] as const
+export type NotificationLinkTarget =
+  (typeof NOTIFICATION_LINK_TARGETS)[number]
+
+/**
+ * 通知关联业务对象类型字面量联合(本期仅 `circle`)。
+ * 与项目既有惯例一致:用 `text` 列 + TS 联合类型,不用 pgEnum。
+ */
+export const NOTIFICATION_ENTITY_TYPES = ["circle"] as const
+export type NotificationEntityType =
+  (typeof NOTIFICATION_ENTITY_TYPES)[number]
+
+/**
+ * 消息 / 通知表。
+ *
+ * 系统通知用户的消息,含标题、正文与引导打开的页面链接(linkUrl)。
+ * 写入即扇出(见 lib/notifications.ts),与业务同请求顺序执行,不引入消息队列。
+ *
+ * 字段语义:
+ * - `actorId`  触发者(可空)。关注者 / 审核管理员 / 建圈者;系统通知为 null。`onDelete: 'set null'`。
+ * - `entityType`/`entityId` 关联业务对象(本期 `'circle'`),为未来聚合 / 撤回 / 失效预留,本期仅写入不消费。
+ * - `title`/`content` 中的人名与圈子名在创建时快照进字符串;改名不影响历史通知。
+ * - `linkTarget` 必须双向过滤:用户侧只渲染 `miniprogram`,后台铃铛只渲染 `admin`。
+ */
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    recipientId: uuid("recipient_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** 触发者(可空):谁触发了这条通知。系统通知为 null。 */
+    actorId: uuid("actor_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    /** 关联业务对象类型(可空):本期仅 'circle'。 */
+    entityType: text("entity_type").$type<NotificationEntityType>(),
+    /** 关联业务对象 id(可空),如 circleId。 */
+    entityId: uuid("entity_id"),
+    type: text("type").$type<NotificationType>().notNull(),
+    title: text("title").notNull(),
+    content: text("content").notNull(),
+    linkUrl: text("link_url"),
+    linkTarget: text("link_target")
+      .$type<NotificationLinkTarget>()
+      .notNull()
+      .default("miniprogram"),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("notifications_recipient_read_idx").on(
+      table.recipientId,
+      table.readAt,
+    ),
+    index("notifications_recipient_created_idx").on(
+      table.recipientId,
+      table.createdAt,
+    ),
+    index("notifications_entity_idx").on(table.entityType, table.entityId),
+  ],
+)
+
+export type Notification = typeof notifications.$inferSelect
+export type NewNotification = typeof notifications.$inferInsert

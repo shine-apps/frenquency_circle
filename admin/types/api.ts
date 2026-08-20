@@ -94,7 +94,7 @@ export type TagDTO = {
   name: string
   /** 一级大类名称(如"传统与民族文化"),由 categories 关联得出 */
   category: string
-  /** 二级中类名称(如"武术养生");由 categories 关联得出;本节点为 level=1 叶子大类时为 null */
+  /** 二级中类名称(如"运动健身");由 categories 关联得出;本节点为 level=1 叶子大类时为 null */
   subCategory?: string | null
   /** 所属分类节点 id(指向 categories.id,可为 level=1 叶子或 level=2 中类) */
   categoryId?: string | null

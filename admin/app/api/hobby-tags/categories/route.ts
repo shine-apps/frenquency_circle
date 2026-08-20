@@ -18,7 +18,7 @@ type TagBrief = {
 }
 
 type SubCategoryNode = {
-  /** 二级中类名称(如"武术养生");叶子一级大类时为同名 */
+  /** 二级中类名称(如"运动健身");叶子一级大类时为同名 */
   name: string
   /** 中类 / 叶子大类节点 id(指向 categories.id) */
   categoryId: string

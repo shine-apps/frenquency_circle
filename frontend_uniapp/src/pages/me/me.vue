@@ -120,6 +120,11 @@ function handlePrivacy() {
   uni.navigateTo({ url: '/pages/privacy/privacy' })
 }
 
+/** 跳关于页 */
+function handleAbout() {
+  uni.navigateTo({ url: '/pages/about/about' })
+}
+
 /** 退出登录:showModal 确认后执行 */
 function handleLogout() {
   uni.showModal({
@@ -200,7 +205,7 @@ const roleChipClass = computed(() => {
 
     <!-- ====== 设置入口列表 ====== -->
     <view class="mx-4 rounded-2xl bg-white">
-      <view class="flex items-center justify-between border-b border-[#f5f5f5] px-4 py-4" @click="handleNotifications">
+      <view class="flex items-center justify-between border-b-inset border-[#f5f5f5] px-4 py-4" @click="handleNotifications">
         <text class="text-sm text-[#333] font-medium">
           消息
         </text>
@@ -219,7 +224,7 @@ const roleChipClass = computed(() => {
         </view>
       </view>
 
-      <view class="flex items-center justify-between border-b border-[#f5f5f5] px-4 py-4" @click="handleTags">
+      <view class="flex items-center justify-between border-b-inset border-[#f5f5f5] px-4 py-4" @click="handleTags">
         <text class="text-sm text-[#333] font-medium">
           我的兴趣
         </text>
@@ -233,7 +238,7 @@ const roleChipClass = computed(() => {
         </view>
       </view>
 
-      <view class="flex items-center justify-between border-b border-[#f5f5f5] px-4 py-4" @click="handleMyCircles">
+      <view class="flex items-center justify-between border-b-inset border-[#f5f5f5] px-4 py-4" @click="handleMyCircles">
         <view class="flex flex-col">
           <text class="text-sm text-[#333] font-medium">
             我的圈子
@@ -247,7 +252,7 @@ const roleChipClass = computed(() => {
         </text>
       </view>
 
-      <view class="flex items-center justify-between border-b border-[#f5f5f5] px-4 py-4" @click="handleFollowedCircles">
+      <view class="flex items-center justify-between border-b-inset border-[#f5f5f5] px-4 py-4" @click="handleFollowedCircles">
         <view class="flex flex-col">
           <text class="text-sm text-[#333] font-medium">
             我关注的圈子
@@ -263,7 +268,7 @@ const roleChipClass = computed(() => {
 
       <view
         v-if="canCreateCircle(user?.role)"
-        class="flex items-center justify-between border-b border-[#f5f5f5] px-4 py-4"
+        class="flex items-center justify-between border-b-inset border-[#f5f5f5] px-4 py-4"
         @click="handleMyPublished"
       >
         <view class="flex flex-col">
@@ -281,7 +286,7 @@ const roleChipClass = computed(() => {
 
       <view
         v-if="!canCreateCircle(user?.role)"
-        class="flex items-center justify-between border-b border-[#f5f5f5] px-4 py-4"
+        class="flex items-center justify-between border-b-inset border-[#f5f5f5] px-4 py-4"
         @click="handleTeacherCert"
       >
         <view class="flex flex-col">
@@ -297,9 +302,18 @@ const roleChipClass = computed(() => {
         </text>
       </view>
 
-      <view class="flex items-center justify-between px-4 py-4" @click="handlePrivacy">
+      <view class="flex items-center justify-between border-b-inset border-[#f5f5f5] px-4 py-4" @click="handlePrivacy">
         <text class="text-sm text-[#333] font-medium">
           隐私设置
+        </text>
+        <text class="text-sm text-[#ccc]">
+          ›
+        </text>
+      </view>
+
+      <view class="flex items-center justify-between px-4 py-4" @click="handleAbout">
+        <text class="text-sm text-[#333] font-medium">
+          关于我们
         </text>
         <text class="text-sm text-[#ccc]">
           ›

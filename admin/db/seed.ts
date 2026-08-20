@@ -86,12 +86,18 @@ const CATEGORY_TREE: CategorySeed[] = [
   },
   {
     slug: "martial-wellness",
-    name: "武术养生",
+    name: "运动健身",
     sortOrder: 5,
     subCategories: [
       { slug: "fitness-qigong", name: "健身气功", sortOrder: 1 },
       { slug: "taiji", name: "太极拳", sortOrder: 2 },
-      { slug: "other-wushu", name: "其他武术", sortOrder: 3 },
+      { slug: "traditional-wushu", name: "传统武术", sortOrder: 3 },
+      { slug: "ball-sports", name: "球类运动", sortOrder: 4 },
+      { slug: "fitness-shaping", name: "健身塑形", sortOrder: 5 },
+      { slug: "dance-fitness", name: "舞蹈健身", sortOrder: 6 },
+      { slug: "outdoor-sports", name: "户外运动", sortOrder: 7 },
+      { slug: "water-sports", name: "水上运动", sortOrder: 8 },
+      { slug: "martial-arts", name: "现代搏击", sortOrder: 9 },
     ],
   },
   {
@@ -114,13 +120,13 @@ type TagDefinition = {
 }
 
 const TAG_DEFINITIONS: TagDefinition[] = [
-  // === 武术养生 → 健身气功 ===
+  // === 运动健身 → 健身气功 ===
   { name: "八段锦", subCategorySlug: "fitness-qigong" },
   { name: "五禽戏", subCategorySlug: "fitness-qigong" },
   { name: "易筋经", subCategorySlug: "fitness-qigong" },
   { name: "六字诀", subCategorySlug: "fitness-qigong" },
 
-  // === 武术养生 → 太极拳(具体流派) ===
+  // === 运动健身 → 太极拳(具体流派) ===
   { name: "太极拳", subCategorySlug: "taiji" },
   { name: "陈式太极拳", subCategorySlug: "taiji" },
   { name: "杨式太极拳", subCategorySlug: "taiji" },
@@ -129,13 +135,71 @@ const TAG_DEFINITIONS: TagDefinition[] = [
   { name: "孙式太极拳", subCategorySlug: "taiji" },
   { name: "和式太极拳", subCategorySlug: "taiji" },
 
-  // === 武术养生 → 其他武术(具体拳种) ===
-  { name: "少林拳", subCategorySlug: "other-wushu" },
-  { name: "咏春", subCategorySlug: "other-wushu" },
-  { name: "形意拳", subCategorySlug: "other-wushu" },
-  { name: "八卦掌", subCategorySlug: "other-wushu" },
-  { name: "南拳", subCategorySlug: "other-wushu" },
-  { name: "长拳", subCategorySlug: "other-wushu" },
+  // === 运动健身 → 传统武术(具体拳种) ===
+  { name: "少林拳", subCategorySlug: "traditional-wushu" },
+  { name: "咏春", subCategorySlug: "traditional-wushu" },
+  { name: "形意拳", subCategorySlug: "traditional-wushu" },
+  { name: "八卦掌", subCategorySlug: "traditional-wushu" },
+  { name: "南拳", subCategorySlug: "traditional-wushu" },
+  { name: "长拳", subCategorySlug: "traditional-wushu" },
+  { name: "螳螂拳", subCategorySlug: "traditional-wushu" },
+  { name: "通背拳", subCategorySlug: "traditional-wushu" },
+  { name: "八极拳", subCategorySlug: "traditional-wushu" },
+  { name: "翻子拳", subCategorySlug: "traditional-wushu" },
+  { name: "劈挂拳", subCategorySlug: "traditional-wushu" },
+  { name: "查拳", subCategorySlug: "traditional-wushu" },
+
+  // === 运动健身 → 球类运动 ===
+  { name: "乒乓球", subCategorySlug: "ball-sports" },
+  { name: "羽毛球", subCategorySlug: "ball-sports" },
+  { name: "篮球", subCategorySlug: "ball-sports" },
+  { name: "足球", subCategorySlug: "ball-sports" },
+  { name: "网球", subCategorySlug: "ball-sports" },
+  { name: "排球", subCategorySlug: "ball-sports" },
+  { name: "匹克球", subCategorySlug: "ball-sports" },
+  { name: "台球", subCategorySlug: "ball-sports" },
+
+  // === 运动健身 → 健身塑形 ===
+  { name: "瑜伽", subCategorySlug: "fitness-shaping" },
+  { name: "普拉提", subCategorySlug: "fitness-shaping" },
+  { name: "有氧操", subCategorySlug: "fitness-shaping" },
+  { name: "力量训练", subCategorySlug: "fitness-shaping" },
+  { name: "搏击操", subCategorySlug: "fitness-shaping" },
+  { name: "减脂塑形", subCategorySlug: "fitness-shaping" },
+  { name: "体态矫正", subCategorySlug: "fitness-shaping" },
+
+  // === 运动健身 → 舞蹈健身 ===
+  { name: "爵士舞", subCategorySlug: "dance-fitness" },
+  { name: "广场舞", subCategorySlug: "dance-fitness" },
+  { name: "尊巴", subCategorySlug: "dance-fitness" },
+  { name: "曳步舞", subCategorySlug: "dance-fitness" },
+  { name: "排舞", subCategorySlug: "dance-fitness" },
+  { name: "交谊舞", subCategorySlug: "dance-fitness" },
+
+  // === 运动健身 → 户外运动 ===
+  { name: "徒步", subCategorySlug: "outdoor-sports" },
+  { name: "登山", subCategorySlug: "outdoor-sports" },
+  { name: "骑行", subCategorySlug: "outdoor-sports" },
+  { name: "跑步", subCategorySlug: "outdoor-sports" },
+  { name: "露营", subCategorySlug: "outdoor-sports" },
+  { name: "飞盘", subCategorySlug: "outdoor-sports" },
+  { name: "攀岩", subCategorySlug: "outdoor-sports" },
+  { name: "定向越野", subCategorySlug: "outdoor-sports" },
+
+  // === 运动健身 → 水上运动 ===
+  { name: "游泳", subCategorySlug: "water-sports" },
+  { name: "桨板", subCategorySlug: "water-sports" },
+  { name: "皮划艇", subCategorySlug: "water-sports" },
+  { name: "钓鱼", subCategorySlug: "water-sports" },
+  { name: "潜水", subCategorySlug: "water-sports" },
+
+  // === 运动健身 → 现代搏击 ===
+  { name: "拳击", subCategorySlug: "martial-arts" },
+  { name: "跆拳道", subCategorySlug: "martial-arts" },
+  { name: "空手道", subCategorySlug: "martial-arts" },
+  { name: "柔道", subCategorySlug: "martial-arts" },
+  { name: "巴西柔术", subCategorySlug: "martial-arts" },
+  { name: "自由搏击", subCategorySlug: "martial-arts" },
 
   // === 视觉艺术 → 书画篆刻 ===
   { name: "书法", subCategorySlug: "calligraphy" },

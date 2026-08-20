@@ -180,7 +180,7 @@ export type TagStatus = (typeof TAG_STATUSES)[number]
  * 设计要点:
  * - 一级大类:level=1,parentId=null(如"传统与民族文化""视觉与造型艺术");
  *   一级大类也可作为「叶子分类」直接承载标签(无子节点的 level-1)。
- * - 二级中类:level=2,parentId 指向一级大类(如"武术养生""民族器乐")
+ * - 二级中类:level=2,parentId 指向一级大类(如"运动健身""民族器乐")
  * - UNIQUE(parent_id, name):同一父节点下名称不重复,杜绝分类名拼写漂移
  * - CHECK:level ∈ {1,2} 且 level 与 parentId 一致(level=1 必无父,level=2 必有父)
  * - 分类结构由数据库外键保证一致,运营可在后台动态增删

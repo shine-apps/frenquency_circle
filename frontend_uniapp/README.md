@@ -1,98 +1,105 @@
 <p align="center">
-  <a href="https://github.com/unibest-tech/unibest">
-    <img width="160" src="./src/static/logo.svg">
-  </a>
+  <img width="160" src="./src/static/images/logo_256_circle.png">
 </p>
 
 <h1 align="center">
-  <a href="https://github.com/unibest-tech/unibest" target="_blank">unibest - 最好的 uniapp 开发框架</a>
+  趣邻圈 - 前端小程序 / H5
 </h1>
 
 <div align="center">
-旧仓库 codercup 进不去了，star 也拿不回来，这里也展示一下那个地址的 star.
 
-[![GitHub Repo stars](https://img.shields.io/github/stars/codercup/unibest?style=flat&logo=github)](https://github.com/codercup/unibest)
-[![GitHub forks](https://img.shields.io/github/forks/codercup/unibest?style=flat&logo=github)](https://github.com/codercup/unibest)
+基于 `uniapp` + `Vue3` + `TypeScript` + `Vite` + `UnoCSS` + `wot-ui` + `z-paging` 构建的兴趣圈子匹配平台跨端前端。
 
-</div>
-
-<div align="center">
-
-[![GitHub Repo stars](https://img.shields.io/github/stars/feige996/unibest?style=flat&logo=github)](https://github.com/feige996/unibest)
-[![GitHub forks](https://img.shields.io/github/forks/feige996/unibest?style=flat&logo=github)](https://github.com/feige996/unibest)
-[![star](https://gitee.com/feige996/unibest/badge/star.svg?theme=dark)](https://gitee.com/feige996/unibest/stargazers)
-[![fork](https://gitee.com/feige996/unibest/badge/fork.svg?theme=dark)](https://gitee.com/feige996/unibest/members)
-![node version](https://img.shields.io/badge/node-%3E%3D18-green)
-![pnpm version](https://img.shields.io/badge/pnpm-%3E%3D7.30-green)
-![GitHub package.json version (subfolder of monorepo)](https://img.shields.io/github/package-json/v/feige996/unibest)
-![GitHub License](https://img.shields.io/github/license/feige996/unibest)
+![node version](https://img.shields.io/badge/node-%3E%3D20-green)
+![pnpm version](https://img.shields.io/badge/pnpm-%3E%3D9-green)
 
 </div>
 
-`unibest` —— 最好的 `uniapp` 开发模板，由 `uniapp` + `Vue3` + `Ts` + `Vite5` + `UnoCss` + `wot-ui` + `z-paging` 构成，使用了最新的前端技术栈，无需依靠 `HBuilderX`，通过命令行方式运行 `web`、`小程序` 和 `App`（编辑器推荐 `VSCode`，可选 `webstorm`）。
+## 📱 项目简介
 
-`unibest` 内置了 `约定式路由`、`layout布局`、`请求封装`、`请求拦截`、`登录拦截`、`UnoCSS`、`i18n多语言` 等基础功能，提供了 `代码提示`、`自动格式化`、`统一配置`、`代码片段` 等辅助功能，让你编写 `uniapp` 拥有 `best` 体验 （ `unibest 的由来`）。
+**趣邻圈** 是一款基于地理位置的兴趣圈子匹配平台。无论你热爱运动、艺术、手工、音乐、阅读、美食还是其他任何兴趣爱好，都能通过兴趣标签与定位匹配，在 `1km / 5km / 10km / 30km` 范围内发现同趣的人与圈子，让"同趣"的人在城市中相遇。
 
-![](https://raw.githubusercontent.com/andreasbm/readme/master/screenshots/lines/rainbow.png)
+本目录 `frontend_uniapp` 为趣邻圈的移动端前端，使用 [unibest](https://github.com/feige996/unibest) 框架模板搭建，无需依靠 `HBuilderX`，通过命令行方式运行 `H5` 与各类小程序。
 
-<p align="center">
-  <a href="https://unibest.tech/" target="_blank">📖 文档地址(new)</a>
-  <span style="margin:0 10px;">|</span>
-  <a href="https://unibest-tech.github.io/hello-unibest" target="_blank">📱 DEMO 地址</a>
-</p>
+## ⚙️ 技术栈与环境
 
----
+- `uniapp` (uni-app 3.x)
+- `Vue 3` + `TypeScript`
+- `Vite 5`
+- `UnoCSS`（`@unocss/preset-legacy-compat`）
+- `wot-ui v2` 组件库
+- `z-paging` 分页
+- 自研 HTTP 封装（`src/http/http.ts`，基于 `uni.request` + 全局拦截器 + 双 token 刷新队列）
+- `pinia` 状态管理（含 `pinia-plugin-persistedstate` 持久化）
+- `vue-i18n` 多语言
+- 约定式路由（`vite-plugin-uni-pages`）、`layout` 布局（`vite-plugin-uni-layouts`）、登录拦截
 
-注意旧的地址 [codercup](https://github.com/codercup/unibest) 我进不去了，使用新的 [feige996](https://github.com/feige996/unibest)。PR和 issue 也请使用新地址，否则无法合并。
+### 环境要求
 
-## 平台兼容性
+- node >= 20
+- pnpm >= 9
+- 编辑器推荐 `VSCode`
 
-| H5  | IOS | 安卓 | 微信小程序 | 字节小程序 | 快手小程序 | 支付宝小程序 | 钉钉小程序 | 百度小程序 |
-| --- | --- | ---- | ---------- | ---------- | ---------- | ------------ | ---------- | ---------- |
-| √   | √   | √    | √          | √          | √          | √            | √          | √          |
+## 🖥️ 平台支持
 
-注意每种 `UI框架` 支持的平台有所不同，详情请看各 `UI框架` 的官网，也可以看 `unibest` 文档。
+项目实际构建并支持以下平台（详见 `package.json` 中 `unibest.platforms`）：
 
-## ⚙️ 环境
+| H5 | 微信小程序 | 抖音小程序 |
+| -- | ---------- | ---------- |
+| √  | √          | √          |
 
-- node>=18
-- pnpm>=7.30
-- Vue Official>=2.1.10
-- TypeScript>=5.0
+## 📦 快速开始
 
-## 新版分支 
-- main == base
-- base --> base-i18n
-- base-login --> base-login-i18n
+```bash
+# 安装依赖（项目强制使用 pnpm）
+pnpm i
 
-## &#x1F4C2; 快速开始
+# 本地开发
+pnpm dev:h5    # 运行 H5，打开 http://localhost:9000/
+pnpm dev:mp    # 运行微信小程序，导入 dist/dev/mp-weixin 到微信开发者工具
+pnpm dev:mp-toutiao  # 运行抖音小程序
 
-执行 `pnpm create unibest` 创建项目
-执行 `pnpm i` 安装依赖
-执行 `pnpm dev` 运行 `H5`
-执行 `pnpm dev:mp` 运行 `微信小程序`
+# 类型检查 / 代码规范
+pnpm type-check   # vue-tsc 类型检查
+pnpm lint         # eslint
+```
 
-## 📦 运行（支持热更新）
+## 🚀 发布构建
 
-- web平台： `pnpm dev:h5`, 然后打开 [http://localhost:9000/](http://localhost:9000/)。
-- weixin平台：`pnpm dev:mp` 然后打开微信开发者工具，导入本地文件夹，选择本项目的`dist/dev/mp-weixin` 文件。
-- APP平台：`pnpm dev:app`, 然后打开 `HBuilderX`，导入刚刚生成的`dist/dev/app` 文件夹，选择运行到模拟器(开发时优先使用)，或者运行的安卓/ios基座。(如果是 `安卓` 和 `鸿蒙` 平台，则不用这个方式，可以把整个unibest项目导入到hbx，通过hbx的菜单来运行到对应的平台。)
+```bash
+pnpm build:h5   # 构建 H5，产物在 dist/build/h5
+pnpm build:mp   # 构建微信小程序，产物在 dist/build/mp-weixin
+```
 
-## 🔗 发布
+## 📁 目录结构（核心）
 
-- web平台： `pnpm build:h5`，打包后的文件在 `dist/build/h5`，可以放到web服务器，如nginx运行。如果最终不是放在根目录，可以在 `manifest.config.ts` 文件的 `h5.router.base` 属性进行修改。
-- weixin平台：`pnpm build:mp`, 打包后的文件在 `dist/build/mp-weixin`，然后通过微信开发者工具导入，并点击右上角的“上传”按钮进行上传。
-- APP平台：`pnpm build:app`, 然后打开 `HBuilderX`，导入刚刚生成的`dist/build/app` 文件夹，选择发行 - APP云打包。(如果是 `安卓` 和 `鸿蒙` 平台，则不用这个方式，可以把整个unibest项目导入到hbx，通过hbx的菜单来发行到对应的平台。)
+```
+src/
+├── pages/          # 约定式路由页面（自动注册）
+│   ├── index/      # 首页（圈子/推荐）
+│   ├── auth/       # 登录、注册
+│   ├── circle/     # 圈子详情
+│   ├── me/         # 我的
+│   ├── privacy/    # 隐私设置
+│   └── about/      # 关于我们
+├── layouts/        # 布局
+├── router/         # 路由与登录拦截配置
+├── components/     # 公共组件
+├── store/          # pinia 状态
+├── http/           # 自研 HTTP 封装（uni.request + 拦截器 + 双 token 刷新）
+├── api/            # 业务接口（基于 @/http/http）
+├── service/        # openapi 生成适配层（底层走 @/http/http）
+├── utils/          # 工具方法
+└── static/         # 静态资源（含 logo 等）
+```
+
+## 🔐 登录策略
+
+采用**白名单策略**（默认需要登录才能访问，见 `src/router/config.ts` 的 `LOGIN_STRATEGY`）。
+在 `definePage` 中配置 `excludeLoginPath: true` 的页面（如登录、注册、关于页）可免登录访问。
 
 ## 📄 License
 
-[MIT](https://opensource.org/license/mit/)
+MIT
 
-Copyright (c) 2025 菲鸽
-
-## 捐赠
-
-<p align='center'>
-<img alt="special sponsor appwrite" src="https://oss.laf.run/ukw0y1-site/pay/wepay.png" height="330" style="display:inline-block; height:330px;">
-<img alt="special sponsor appwrite" src="https://oss.laf.run/ukw0y1-site/pay/alipay.jpg" height="330" style="display:inline-block; height:330px; margin-left:10px;">
-</p>
+Copyright (c) 2026 趣邻圈 / 上海祥和一文化科技有限公司

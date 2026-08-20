@@ -4,6 +4,7 @@ import { useTokenStore } from '@/store/token'
 import { HOME_PAGE_PATH } from '@/router/config'
 
 definePage({
+  layout: 'default',
   // 登录页无需登录
   excludeLoginPath: true,
   style: {

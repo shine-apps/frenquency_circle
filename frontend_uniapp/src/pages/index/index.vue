@@ -15,10 +15,8 @@ import { useShare } from '@/composables/useShare'
 import MatchFilterBar from '@/components/MatchFilterBar/MatchFilterBar.vue'
 import type { MatchCircleDTO, MatchPersonDTO } from '@/types'
 
-defineOptions({
-  name: 'Home',
-})
 definePage({
+  layout: 'default',
   // 首页:自动匹配主界面
   type: 'home',
   style: {

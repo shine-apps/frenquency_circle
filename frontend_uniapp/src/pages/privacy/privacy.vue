@@ -6,6 +6,7 @@ import { updatePrivacy } from '@/api/auth'
 import type { PrivacySettings } from '@/types'
 
 definePage({
+  layout: 'default',
   style: {
     navigationBarTitleText: '隐私设置',
   },

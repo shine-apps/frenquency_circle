@@ -9,6 +9,7 @@ import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue
 import type { CircleDetailDTO, UpdateCircleInput } from '@/types'
 
 definePage({
+  layout: 'default',
   style: {
     navigationBarTitleText: '创建圈子',
   },

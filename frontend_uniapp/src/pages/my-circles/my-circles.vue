@@ -8,6 +8,7 @@ import { formatDateTime, formatDistance } from '@/utils/format'
 import type { LocationPoint } from '@/types'
 
 definePage({
+  layout: 'default',
   style: {
     navigationBarTitleText: '我的圈子',
   },

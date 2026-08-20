@@ -16,6 +16,7 @@ import H5LocationPicker from '@/components/H5LocationPicker/H5LocationPicker.vue
 const TAG_VISIBLE_LIMIT = 8
 
 definePage({
+  layout: 'default',
   style: {
     navigationBarTitleText: '个人资料',
   },

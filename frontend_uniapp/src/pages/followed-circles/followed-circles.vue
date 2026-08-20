@@ -6,6 +6,7 @@ import { formatDate } from '@/utils/format'
 import type { FollowedCircleDTO } from '@/types'
 
 definePage({
+  layout: 'default',
   style: {
     navigationBarTitleText: '我关注的圈子',
     enablePullDownRefresh: true,

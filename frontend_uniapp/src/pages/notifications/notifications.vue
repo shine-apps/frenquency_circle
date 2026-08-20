@@ -10,6 +10,7 @@ import { formatDateTime } from '@/utils/format'
 import type { NotificationDTO } from '@/types'
 
 definePage({
+  layout: 'default',
   style: {
     navigationBarTitleText: '消息',
     enablePullDownRefresh: true,

@@ -7,6 +7,7 @@ import { canCreateCircle } from '@/utils/role'
 import type { CircleDTO } from '@/types'
 
 definePage({
+  layout: 'default',
   style: {
     navigationBarTitleText: '我发布的圈子',
   },

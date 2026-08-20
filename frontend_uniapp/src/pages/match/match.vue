@@ -10,6 +10,7 @@ import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue
 import type { LocationPoint, MatchCircleDTO, MatchPersonDTO } from '@/types'
 
 definePage({
+  layout: 'default',
   // 匹配结果展示页
   style: {
     navigationBarTitleText: '匹配结果',

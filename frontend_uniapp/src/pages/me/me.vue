@@ -9,10 +9,8 @@ import { LOGIN_PAGE } from '@/router/config'
 import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue'
 import type { UserRole } from '@/types'
 
-defineOptions({
-  name: 'Me',
-})
 definePage({
+  layout: 'navbar',
   style: {
     navigationBarTitleText: '我的',
   },

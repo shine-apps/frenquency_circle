@@ -8,6 +8,7 @@ import { formatDate, formatDateTime } from '@/utils/format'
 import type { CircleDetailDTO } from '@/types'
 
 definePage({
+  layout: 'default',
   style: {
     navigationBarTitleText: '圈子详情',
   },

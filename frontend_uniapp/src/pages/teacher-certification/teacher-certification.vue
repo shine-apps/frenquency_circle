@@ -9,6 +9,7 @@ import type { CertificationFile, TeacherApplicationDTO } from '@/api/teacher-app
 import { LOGIN_PAGE } from '@/router/config'
 
 definePage({
+  layout: 'default',
   style: {
     navigationBarTitleText: '教师认证',
   },

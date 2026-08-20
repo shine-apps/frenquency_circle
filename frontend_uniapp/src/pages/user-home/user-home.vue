@@ -5,6 +5,7 @@ import { activityLevelShortText, formatDate, practiceYearsText } from '@/utils/f
 import type { PublicUserProfileDTO } from '@/types'
 
 definePage({
+  layout: 'default',
   style: {
     navigationBarTitleText: '用户主页',
   },

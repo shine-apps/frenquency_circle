@@ -15,6 +15,7 @@ definePage({
     navigationBarTitleText: '消息',
     enablePullDownRefresh: true,
   },
+  excludeLoginPath: false
 })
 
 const PAGE_SIZE = 20
@@ -111,7 +112,7 @@ function handleBack() {
 </script>
 
 <template>
-  <view class="min-h-screen flex flex-col bg-[#f7f8fa]">
+  <view class="flex flex-col">
     <view v-if="loading && list.length === 0" class="flex flex-col items-center pt-20">
       <text class="text-sm text-[#999]">
         加载中...

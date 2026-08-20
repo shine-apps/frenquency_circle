@@ -9,6 +9,7 @@ definePage({
   style: {
     navigationBarTitleText: '用户主页',
   },
+  excludeLoginPath: true,
 })
 
 /** 标签展示最大数量 */
@@ -62,7 +63,7 @@ function renderTags(tags: string[]): { visible: string[], rest: number } {
 </script>
 
 <template>
-  <view class="min-h-screen flex flex-col bg-[#f7f8fa]">
+  <view class="flex flex-col">
     <!-- 加载态 -->
     <view v-if="loading" class="flex flex-1 flex-col items-center justify-center">
       <text class="text-sm text-[#999]">加载中...</text>

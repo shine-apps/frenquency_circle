@@ -1,13 +1,18 @@
 <script lang="ts" setup>
 import { ref } from 'vue'
 import { useTokenStore } from '@/store/token'
+import { useUserStore } from '@/store/user'
 import { HOME_PAGE_PATH } from '@/router/config'
+import { currRoute } from '@/utils'
+import { updateMyProfile, fromUserDTO } from '@/api/auth'
+import { useDialog } from '@wot-ui/ui/components/wd-dialog'
 
 definePage({
   layout: 'default',
   // 登录页无需登录
   excludeLoginPath: true,
   style: {
+    navigationStyle: 'custom',
     navigationBarTitleText: '登录',
   },
 })
@@ -20,6 +25,8 @@ const CODE_LEN = 6
 const COUNTDOWN = 60
 
 const tokenStore = useTokenStore()
+const userStore = useUserStore()
+const dialog = useDialog()
 
 // 短信登录表单
 const activeTab = ref<'phone' | 'password'>('phone')
@@ -87,9 +94,46 @@ async function handleSendCode() {
   }
 }
 
-/** 登录成功跳转到首页 */
-function handleLoginSuccess() {
-  uni.reLaunch({ url: HOME_PAGE_PATH })
+/** 纯数字(可能是手机号)用户名 */
+const isNumericName = (v: string) => /^\d+$/.test(v)
+
+/** 跳转来源页(若携带 redirect),否则回首页 */
+function goAfterLogin() {
+  const redirect = currRoute().query.redirect
+  uni.reLaunch({ url: redirect || HOME_PAGE_PATH })
+}
+
+/** 登录成功后的收尾:若用户名是纯数字(可能是手机号),弹窗要求补充用户名 */
+async function handleLoginSuccess() {
+  const name = userStore.userInfo?.name ?? ''
+  if (!isNumericName(name)) {
+    goAfterLogin()
+    return
+  }
+  try {
+    const { value } = await dialog.prompt({
+      title: '设置用户昵称',
+      msg: '检测到您的昵称为纯数字,请设置一个易识别的昵称',
+      inputProps: {
+        type: 'nickname',
+        modelValue: '',
+        placeholder: '请输入用户名',
+        maxlength: 20,
+      },
+      confirmButtonText: '保存',
+    })
+    const username = String(value ?? '').trim()
+    if (username) {
+      const res = await updateMyProfile({ name: username })
+      userStore.updateUser(fromUserDTO(res))
+    }
+  }
+  catch {
+    // 用户取消或不填写,不阻塞跳转
+  }
+  finally {
+    goAfterLogin()
+  }
 }
 
 /** 手机号 + 验证码登录 */
@@ -169,10 +213,10 @@ async function handleGetPhoneNumber(e: any) {
 </script>
 
 <template>
-  <view class="min-h-screen flex flex-col bg-[#f7f8fa]">
+  <view class="flex flex-col">
     <!-- 1. Logo 区 -->
     <view class="flex flex-col items-center py-5">
-      <image src="/static/images/logo_256_circle.png" class="h-[200px] w-[200px]" />
+      <image src="/static/images/logo_256_circle.png" class="h-[150px] w-[150px]" />
       <view class="mt-4 text-2xl text-[#1a1a1a] font-semibold">
         趣邻圈
       </view>
@@ -191,7 +235,7 @@ async function handleGetPhoneNumber(e: any) {
         :loading="submitting"
         @getphonenumber="handleGetPhoneNumber"
       >
-        微信一键登录
+        手机号一键登录
       </wd-button>
       <view class="my-6 flex items-center gap-3">
         <view class="h-px flex-1 bg-[#e5e5e5]" />

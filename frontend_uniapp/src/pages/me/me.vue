@@ -10,10 +10,11 @@ import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue
 import type { UserRole } from '@/types'
 
 definePage({
-  layout: 'navbar',
+  layout: 'default',
   style: {
     navigationBarTitleText: '我的',
   },
+  excludeLoginPath: true,
 })
 
 const userStore = useUserStore()
@@ -165,7 +166,7 @@ const roleChipClass = computed(() => {
 </script>
 
 <template>
-  <view class="min-h-screen flex flex-col bg-[#f7f8fa] pb-32">
+  <view class="flex flex-col pb-32">
     <!-- ====== 顶部用户信息卡片 ====== -->
     <view class="m-4 flex items-center gap-4 rounded-2xl bg-white p-5" @click="handleProfileClick">
       <view class="h-16 w-16 flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#e8f5f1]">

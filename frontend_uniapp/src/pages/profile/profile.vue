@@ -20,6 +20,7 @@ definePage({
   style: {
     navigationBarTitleText: '个人资料',
   },
+  excludeLoginPath: false,
 })
 
 /** 邮箱基础校验(与服务端 zod email() 一致:有 @ 与 .) */
@@ -277,8 +278,8 @@ function handleNameSave() {
     toast.show({ msg: '昵称不能为空', iconName: 'error' })
     return
   }
-  if (name.length > 100) {
-    toast.show({ msg: '昵称最长 100 字符', iconName: 'error' })
+  if (name.length > 20) {
+    toast.show({ msg: '昵称最长 20 字符', iconName: 'error' })
     return
   }
   if (name === (user.value?.name ?? '')) {
@@ -449,7 +450,7 @@ async function handleBindPhone() {
 </script>
 
 <template>
-  <view class="relative min-h-screen bg-[#f7f8fa] pb-20">
+  <view class="relative pb-20">
     <wd-toast />
 
     <!-- 加载骨架屏 -->
@@ -712,13 +713,13 @@ async function handleBindPhone() {
       <view class="w-[320px] px-5 pb-6 pt-5 md:w-[380px]">
         <text class="block text-center text-base text-[#333] font-semibold">修改昵称</text>
         <text class="mt-1 block text-center text-xs text-[#999]">
-          昵称最长 100 字符,保存后即时生效
+          昵称最长 20 字符,保存后即时生效
         </text>
 
         <view class="mt-5">
           <wd-input
             v-model="editName"
-            :maxlength="100"
+            :maxlength="20"
             placeholder="请输入昵称"
             clearable
           />

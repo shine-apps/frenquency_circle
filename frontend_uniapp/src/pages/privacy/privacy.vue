@@ -10,6 +10,7 @@ definePage({
   style: {
     navigationBarTitleText: '隐私设置',
   },
+  excludeLoginPath: true,
 })
 
 /** 默认隐私设置(用户首次进入且 store 为空时使用) */
@@ -102,7 +103,7 @@ function handlePrecisionChange(val: PrivacySettings['locationPrecision']) {
 </script>
 
 <template>
-  <view class="min-h-screen flex flex-col bg-[#f7f8fa]">
+  <view class="flex flex-col">
     <view class="m-4 flex items-center justify-between">
       <text class="text-base text-[#333] font-semibold">
         隐私设置

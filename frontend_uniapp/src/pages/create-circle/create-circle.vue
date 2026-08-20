@@ -13,6 +13,7 @@ definePage({
   style: {
     navigationBarTitleText: '创建圈子',
   },
+  excludeLoginPath: false,
 })
 
 /** 标题最大长度 */
@@ -251,7 +252,7 @@ const tagsCountText = computed(() => `${tags.value.length}/${TAGS_MAX}`)
 </script>
 
 <template>
-  <view class="min-h-screen flex flex-col bg-[#f7f8fa] pb-40">
+  <view class="flex flex-col pb-40">
     <view v-if="loading && isEdit" class="flex flex-col items-center pt-32">
       <text class="text-sm text-[#999]">
         加载中...

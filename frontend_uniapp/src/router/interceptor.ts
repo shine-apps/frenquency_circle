@@ -9,7 +9,7 @@ import { isPageTabbar, tabbarStore } from '@/tabbar/store'
 import { getAllPages, getLastPage, HOME_PAGE, parseUrlToObj } from '@/utils/index'
 import { EXCLUDE_LOGIN_PATH_LIST, isNeedLoginMode, LOGIN_PAGE, LOGIN_PAGE_ENABLE_IN_MP } from './config'
 
-export const FG_LOG_ENABLE = false
+export const FG_LOG_ENABLE = true
 
 export function judgeIsExcludePath(path: string) {
   const isDev = import.meta.env.DEV

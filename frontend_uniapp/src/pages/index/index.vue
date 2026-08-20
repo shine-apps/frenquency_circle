@@ -23,6 +23,7 @@ definePage({
     navigationBarTitleText: '趣邻圈',
     navigationStyle: 'custom',
   },
+  excludeLoginPath: true,
 })
 
 /** 标签展示最大数量 */
@@ -275,7 +276,7 @@ function handleCircleClick(circleId: string): void {
 </script>
 
 <template>
-  <view class="min-h-screen flex flex-col bg-[#f7f8fa]">
+  <view class="flex flex-col">
     <!-- ====== 顶部品牌区(青绿渐变) ====== -->
     <view class="sticky top-0 z-10 from-[#018d71] to-[#0aa07f] bg-gradient-to-b p-6 px-5">
       <view class="flex items-center justify-between">
@@ -411,9 +412,6 @@ function handleCircleClick(circleId: string): void {
 
     <!-- 留白区:ready 为 false 时占位,避免内容过短露出底部 -->
     <view v-if="!ready" class="flex-1" />
-
-    <!-- 登录提示对话框挂载点(供 useDialog 使用) -->
-    <wd-dialog root-portal />
   </view>
 </template>
 

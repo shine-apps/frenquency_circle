@@ -13,6 +13,7 @@ definePage({
   style: {
     navigationBarTitleText: '教师认证',
   },
+  excludeLoginPath: false,
 })
 
 /** 认证材料数量限制(与后端 1-5 个对齐) */
@@ -219,7 +220,7 @@ async function handleGoCreateCircle() {
 </script>
 
 <template>
-  <view class="min-h-screen flex flex-col bg-[#f7f8fa] pb-40">
+  <view class="flex flex-col pb-40">
     <!-- ====== 标题区 ====== -->
     <view class="mx-4 mt-4 rounded-2xl bg-[#018d71] p-5">
       <text class="block text-lg text-white font-semibold">

@@ -35,6 +35,9 @@ defineExpose({
 
     <KuRootView />
 
+    <!-- 全局对话框挂载点(供 useDialog 在各页面统一使用) -->
+    <wd-dialog root-portal />
+
     <FgTabbar v-if="isCurrentPageTabbar" />
   </view>
 </template>

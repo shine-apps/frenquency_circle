@@ -4,8 +4,8 @@ export const LOGIN_STRATEGY_MAP = {
   DEFAULT_NO_NEED_LOGIN: 0, // 黑名单策略，默认可以进入APP
   DEFAULT_NEED_LOGIN: 1, // 白名单策略，默认不可以进入APP，需要强制登录
 }
-// TODO: 1/3 登录策略，默认使用`无需登录策略`，即默认不需要登录就可以访问
-export const LOGIN_STRATEGY = LOGIN_STRATEGY_MAP.DEFAULT_NO_NEED_LOGIN
+// TODO: 1/3 登录策略，默认使用`白名单策略`，即默认需要登录才能访问
+export const LOGIN_STRATEGY = LOGIN_STRATEGY_MAP.DEFAULT_NEED_LOGIN
 export const isNeedLoginMode = LOGIN_STRATEGY === LOGIN_STRATEGY_MAP.DEFAULT_NEED_LOGIN
 
 export const LOGIN_PAGE = '/pages/auth/login'
@@ -29,4 +29,4 @@ export const EXCLUDE_LOGIN_PATH_LIST = [
 // 在小程序里面是否使用H5的登录页，默认为 false
 // 如果为 true 则复用 h5 的登录逻辑
 // TODO: 3/3 确定自己的登录页是否需要在小程序里面使用
-export const LOGIN_PAGE_ENABLE_IN_MP = false
+export const LOGIN_PAGE_ENABLE_IN_MP = true

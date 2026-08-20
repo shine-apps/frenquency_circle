@@ -371,7 +371,7 @@ async function handleSubmitCustom() {
     :close-on-click-modal="true" :lazy-render="false" :z-index="2000" custom-class="tag-popup"
     @update:model-value="handleVisibleChange"
   >
-    <view class="h-[90vh] flex flex-col bg-[#f7f8fa]">
+    <view class="h-[90vh] flex flex-col">
       <!-- ====== 顶部固定区:品牌头 + 操作栏 + 搜索 + 已选胶囊 ====== -->
       <view class="shrink-0 bg-white">
         <!-- 品牌渐变头:取消(左) + 标题 + 完成(右) -->
@@ -606,9 +606,6 @@ async function handleSubmitCustom() {
       :visible="customCategoryPickerVisible" :z-index="2100" title="选择分类" confirm-button-text="确定"
       cancel-button-text="取消" @confirm="handleCategoryConfirm" @update:visible="customCategoryPickerVisible = $event"
     />
-
-    <!-- 未登录确认弹窗(root-portal 脱离外层 popup,z-index 2200 覆盖在其上) -->
-    <wd-dialog root-portal />
   </wd-popup>
 </template>
 

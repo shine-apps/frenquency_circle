@@ -12,6 +12,7 @@ definePage({
   style: {
     navigationBarTitleText: '圈子详情',
   },
+  excludeLoginPath: true
 })
 
 const userStore = useUserStore()
@@ -171,7 +172,7 @@ function handleBack() {
 </script>
 
 <template>
-  <view class="min-h-screen flex flex-col bg-[#f7f8fa]">
+  <view class="flex flex-col">
     <!-- ====== 边界态:加载中 ====== -->
     <view v-if="loading && !circle" class="flex flex-col items-center pt-32">
       <text class="text-sm text-[#999]">

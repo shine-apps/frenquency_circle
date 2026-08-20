@@ -12,6 +12,7 @@ definePage({
   style: {
     navigationBarTitleText: '我的圈子',
   },
+  excludeLoginPath: false,
 })
 
 /** 标签展示最大数量 */
@@ -75,7 +76,7 @@ onShow(() => {
 </script>
 
 <template>
-  <view class="min-h-screen flex flex-col bg-[#f7f8fa]">
+  <view class="flex flex-col">
     <view class="bg-white px-4 py-4">
       <text class="block text-base text-[#333] font-semibold">
         最近匹配的圈子

@@ -16,6 +16,7 @@ definePage({
     navigationBarTitleText: '匹配结果',
     enablePullDownRefresh: true,
   },
+  excludeLoginPath: false,
 })
 
 /** 列表 Tab 类型 */
@@ -180,7 +181,7 @@ function handleGoHome() {
 </script>
 
 <template>
-  <view class="min-h-screen flex flex-col bg-[#f7f8fa]">
+  <view class="flex flex-col">
     <!-- ====== 顶部品牌渐变背景 ====== -->
     <view class="from-[#018d71] to-[#0aa07f] bg-gradient-to-b px-5 pb-4 pt-safe">
       <text class="text-lg text-white font-semibold">

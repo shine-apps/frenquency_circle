@@ -5,20 +5,11 @@
     {
       "idx": 0,
       "version": "7",
-      "tag": "0000_create_activities",
+      "tag": "0000_initial",
       "breakpoints": true,
-      "when": 1766246400000,
-      "checksum": "d0878537f7eaa6f0bee9c10591154891ac629e027c7dba422e7c903068780afc",
-      "identifier": "0000_create_activities"
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "tag": "0001_drop_activity_circle_id",
-      "breakpoints": true,
-      "when": 1766332800000,
-      "checksum": "3cbb39846f2c6d996f41b3fc841c33b51d9030e4ebf4dd193707cfa1668d5f95",
-      "identifier": "0001_drop_activity_circle_id"
+      "when": 1787299760716,
+      "checksum": "09e46336a6ba53fd0417b66f4181008854ed758f3b0586dfb08bdfbffad2c68e",
+      "identifier": "0000_initial"
     }
   ]
 }

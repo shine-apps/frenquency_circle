@@ -591,3 +591,70 @@ export const notifications = pgTable(
 
 export type Notification = typeof notifications.$inferSelect
 export type NewNotification = typeof notifications.$inferInsert
+
+/**
+ * 圈子活动状态字面量联合:
+ * - `active`   正常发布(可报名/查看)
+ * - `cancelled` 已取消(软删除,非创建者不可见)
+ *
+ * 不引入 pgEnum,沿用项目 `text + TS 联合` 惯例。
+ */
+export const ACTIVITY_STATUSES = ["active", "cancelled"] as const
+export type ActivityStatus = (typeof ACTIVITY_STATUSES)[number]
+
+/**
+ * 活动表(顶层独立资源,与圈子解耦)。
+ *
+ * 任何 TEACHER / ADMIN 用户均可直接发布活动,无需圈子归属。设计要点:
+ *
+ * - `creatorId` 快照发布者,校验"只有发布者(TEACHER/ADMIN)可编辑/取消"。
+ * - `title`       活动标题(列表展示必需)。
+ * - `description` 富文本 HTML 字符串(编辑端用 uni `<editor>`,展示端 `<rich-text>`)。
+ *                  服务端仅做白名单式净化,拒绝 `<script`/`<iframe`/`on*=` 等危险片段。
+ * - `startTime` / `registrationDeadline` 带时区时间戳;业务约束 deadline < startTime。
+ * - `contactPhone` 活动联系人电话(可为空)。
+ * - `status`      软取消标记,默认 active;取消仅置 cancelled 不硬删。
+ */
+export const activities = pgTable(
+  "activities",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    creatorId: uuid("creator_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    /** 富文本 HTML(净化后) */
+    description: text("description").notNull(),
+    /** 活动起始时间(带时区) */
+    startTime: timestamp("start_time", { withTimezone: true }).notNull(),
+    /** 报名截止时间(带时区),约束 < startTime */
+    registrationDeadline: timestamp("registration_deadline", {
+      withTimezone: true,
+    }).notNull(),
+    /** 活动联系人电话(可空) */
+    contactPhone: text("contact_phone"),
+    status: text("status")
+      .$type<ActivityStatus>()
+      .notNull()
+      .default("active"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("activities_creator_idx").on(table.creatorId),
+    index("activities_status_idx").on(table.status),
+    index("activities_start_time_idx").on(table.startTime),
+    // 业务约束:报名截止时间必须早于活动起始时间
+    check(
+      "activities_deadline_before_start",
+      sql`${table.registrationDeadline} < ${table.startTime}`
+    ),
+  ]
+)
+
+export type Activity = typeof activities.$inferSelect
+export type NewActivity = typeof activities.$inferInsert

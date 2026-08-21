@@ -1,5 +1,24 @@
 {
   "version": "7",
   "dialect": "postgresql",
-  "entries": []
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "tag": "0000_create_activities",
+      "breakpoints": true,
+      "when": 1766246400000,
+      "checksum": "d0878537f7eaa6f0bee9c10591154891ac629e027c7dba422e7c903068780afc",
+      "identifier": "0000_create_activities"
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "tag": "0001_drop_activity_circle_id",
+      "breakpoints": true,
+      "when": 1766332800000,
+      "checksum": "3cbb39846f2c6d996f41b3fc841c33b51d9030e4ebf4dd193707cfa1668d5f95",
+      "identifier": "0001_drop_activity_circle_id"
+    }
+  ]
 }

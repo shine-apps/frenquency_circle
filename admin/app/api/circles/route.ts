@@ -89,7 +89,7 @@ export async function POST(req: Request) {
   const parsed = createCircleSchema.safeParse(body)
   if (!parsed.success) {
     return withCors(
-      fail(400, "Invalid request body", parsed.error.flatten()),
+      fail(400, "Invalid request body", z.treeifyError(parsed.error)),
       req
     )
   }

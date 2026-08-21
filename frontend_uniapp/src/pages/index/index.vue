@@ -200,6 +200,11 @@ function handleCreateCircle(): void {
   uni.navigateTo({ url: '/pages/create-circle/create-circle' })
 }
 
+/** 跳活动列表页 */
+function handleGoActivities(): void {
+  uni.navigateTo({ url: '/pages/activity-list/activity-list' })
+}
+
 /** 范围切换 */
 function handleRangeChange(range: number): void {
   if (range === rangeKm.value)
@@ -292,6 +297,9 @@ function handleCircleClick(circleId: string): void {
           </text>
         </view>
         <view class="flex gap-2">
+          <wd-button variant="subtle" round @click="handleGoActivities">
+            活动
+          </wd-button>
           <wd-button v-if="canCreateCircle(user?.role)" variant="subtle" round @click="handleCreateCircle">
             创建圈子
           </wd-button>

@@ -12,7 +12,7 @@ definePage({
   style: {
     navigationBarTitleText: '圈子详情',
   },
-  excludeLoginPath: true
+  excludeLoginPath: true,
 })
 
 const userStore = useUserStore()

@@ -252,6 +252,29 @@ export type AdminTeacherApplicationItem = TeacherApplicationDTO & {
   reviewerName?: string | null
 }
 
+/**
+ * 活动 DTO(顶层独立资源,与圈子解耦;由 TEACHER / ADMIN 发布)。
+ * 时间字段均为 ISO 字符串;description 为净化后的富文本 HTML。
+ */
+export type ActivityDTO = {
+  id: string
+  creatorId: string
+  title: string
+  description: string
+  /** 活动起始时间(ISO) */
+  startTime: string
+  /** 报名截止时间(ISO) */
+  registrationDeadline: string
+  /** 活动联系人电话(可空) */
+  contactPhone: string | null
+  status: "active" | "cancelled"
+  createdAt: string
+  updatedAt: string
+}
+
+/** 活动列表分页响应 */
+export type ActivityListDTO = Paginated<ActivityDTO>
+
 // ---- 分类（categories） ----
 
 export interface CategoryDTO {

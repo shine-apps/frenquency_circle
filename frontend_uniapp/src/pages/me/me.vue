@@ -110,6 +110,15 @@ function handleMyPublished() {
   uni.navigateTo({ url: '/pages/my-published/my-published' })
 }
 
+/** 跳活动管理页(TEACHER / ADMIN 专属) */
+function handleMyActivities() {
+  if (!canCreateCircle(user.value?.role)) {
+    uni.showToast({ title: '仅传承人可访问', icon: 'none' })
+    return
+  }
+  uni.navigateTo({ url: '/pages/my-activities/my-activities' })
+}
+
 /** 跳教师认证页(非 TEACHER / ADMIN 角色) */
 function handleTeacherCert() {
   uni.navigateTo({ url: '/pages/teacher-certification/teacher-certification' })
@@ -277,6 +286,24 @@ const roleChipClass = computed(() => {
           </text>
           <text class="mt-0.5 text-xs text-[#999]">
             传承人专属
+          </text>
+        </view>
+        <text class="text-sm text-[#ccc]">
+          ›
+        </text>
+      </view>
+
+      <view
+        v-if="canCreateCircle(user?.role)"
+        class="flex items-center justify-between border-b-inset border-[#f5f5f5] px-4 py-4"
+        @click="handleMyActivities"
+      >
+        <view class="flex flex-col">
+          <text class="text-sm text-[#333] font-medium">
+            活动管理
+          </text>
+          <text class="mt-0.5 text-xs text-[#999]">
+            发布与维护活动
           </text>
         </view>
         <text class="text-sm text-[#ccc]">

@@ -200,9 +200,29 @@ function handleCreateCircle(): void {
   uni.navigateTo({ url: '/pages/create-circle/create-circle' })
 }
 
+/** 跳创建活动页(TEACHER / ADMIN 可发布,页面内校验) */
+function handleCreateActivity(): void {
+  uni.navigateTo({ url: '/pages/create-activity/create-activity' })
+}
+
 /** 跳活动列表页 */
 function handleGoActivities(): void {
   uni.navigateTo({ url: '/pages/activity-list/activity-list' })
+}
+
+// ====== 右下角浮动按钮 ======
+/** fab 展开状态 */
+const fabActive = ref(false)
+/** fab 距底部偏移:避开 tabbar(50px) + 安全区 + 呼吸间距 */
+const fabGap = computed(() => {
+  const safeBottom = uni.getSystemInfoSync().safeAreaInsets?.bottom ?? 0
+  return { right: 16, bottom: 50 + safeBottom + 12 }
+})
+
+/** 点击 fab 菜单项:先收起再执行跳转 */
+function handleFabAction(action: () => void): void {
+  fabActive.value = false
+  action()
 }
 
 /** 范围切换 */
@@ -420,9 +440,47 @@ function handleCircleClick(circleId: string): void {
 
     <!-- 留白区:ready 为 false 时占位,避免内容过短露出底部 -->
     <view v-if="!ready" class="flex-1" />
+
+    <!-- ====== 右下角浮动创建入口 ====== -->
+    <wd-fab
+      v-model:active="fabActive"
+      position="right-bottom"
+      direction="top"
+      type="primary"
+      :gap="fabGap"
+    >
+      <view class="fab-item" @click="handleFabAction(handleCreateActivity)">
+        <text class="i-carbon-calendar fab-item__icon" />
+        <text class="fab-item__label">创建活动</text>
+      </view>
+      <view class="fab-item" @click="handleFabAction(handleCreateCircle)">
+        <text class="i-carbon-group fab-item__icon" />
+        <text class="fab-item__label">创建圈子</text>
+      </view>
+    </wd-fab>
   </view>
 </template>
 
 <style lang="scss" scoped>
-//
+.fab-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20rpx;
+  padding: 20rpx 28rpx;
+  border-radius: 999rpx;
+  background: #fff;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.12);
+}
+
+.fab-item__icon {
+  margin-right: 10rpx;
+  font-size: 28rpx;
+  color: var(--wot-color-theme, #018d71);
+}
+
+.fab-item__label {
+  font-size: 26rpx;
+  color: #333;
+  white-space: nowrap;
+}
 </style>

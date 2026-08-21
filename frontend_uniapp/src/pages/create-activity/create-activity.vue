@@ -3,12 +3,12 @@
  * 活动发布 / 编辑表单页(顶层独立资源,与圈子解耦)。
  *
  * - 路径参数:activityId(编辑态必填,新建态无)。
- * - 仅 TEACHER / ADMIN 可发布;非教师/管理员后端会 403。
+ * - 仅 TEACHER / ADMIN 可发布;非教师/管理员前端引导先完成教师认证,后端兜底 403。
  * - 字段:标题、活动介绍(富文本 RichTextEditor)、活动起始时间、报名截止时间、联系人电话。
  * - 校验:报名截止 < 活动起始;时间用 wd-datetime-picker 选。
  */
 import { computed, ref } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onShow } from '@dcloudio/uni-app'
 import {
   cancelActivity,
   createActivity,
@@ -17,9 +17,12 @@ import {
 } from '@/api/activities'
 import { useDialog } from '@wot-ui/ui/components/wd-dialog'
 import RichTextEditor from '@/components/RichTextEditor/RichTextEditor.vue'
+import { useUserStore } from '@/store/user'
+import { LOGIN_PAGE } from '@/router/config'
 import type { ActivityDTO } from '@/types'
 
 const dialog = useDialog()
+const userStore = useUserStore()
 
 const activityId = ref<string | null>(null)
 const isEdit = ref(false)
@@ -96,10 +99,28 @@ async function loadDetail() {
   }
 }
 
-onLoad((options: Record<string, string | undefined>) => {
-  if (options.activityId) {
-    activityId.value = options.activityId
-    loadDetail()
+let hasFetched = false
+
+onShow(() => {
+  if (!userStore.isLoggedIn) {
+    uni.reLaunch({ url: LOGIN_PAGE })
+    return
+  }
+  // 取路由参数
+  const pages = getCurrentPages()
+  const current = pages[pages.length - 1] as any
+  activityId.value = current?.options?.activityId || current?.$page?.options?.activityId || null
+  // 新建模式:仅 TEACHER / ADMIN 可创建活动,其余角色先完成教师认证
+  if (!activityId.value && !['TEACHER', 'ADMIN'].includes(userStore.userInfo?.role ?? '')) {
+    uni.showToast({ title: '请先完成教师认证', icon: 'none' })
+    uni.navigateTo({ url: '/pages/teacher-certification/teacher-certification' })
+    return
+  }
+  if (activityId.value) {
+    if (!hasFetched) {
+      hasFetched = true
+      void loadDetail()
+    }
   }
   else {
     syncTimeText()

@@ -9,6 +9,8 @@
  * v-model 双向绑定 HTML 字符串;提交侧后端会做白名单净化,展示侧 `<rich-text>` 不执行脚本。
  */
 import { ref, watch } from 'vue'
+import { uploadFileToCos } from '@/api/upload'
+import { chooseImages } from '@/utils/chooseImage'
 
 const props = withDefaults(
   defineProps<{
@@ -81,6 +83,58 @@ function formatClear() {
   editorCtx?.removeFormat()
 }
 
+// ====== 图片上传 ======
+/** 上传中标记(用于按钮禁用与 loading 态) */
+const insertingImage = ref(false)
+
+/**
+ * 选择图片 → 直传 COS → 插入编辑器。
+ * 仅 editor 分支可用;textarea 降级分支不展示图片按钮。
+ */
+async function insertImage() {
+  if (insertingImage.value)
+    return
+
+  let chosen
+  try {
+    chosen = await chooseImages(1, { prefix: 'editor' })
+  }
+  catch (e) {
+    uni.showToast({ title: (e as Error).message || '选择图片失败', icon: 'none' })
+    return
+  }
+  if (chosen.length === 0)
+    return
+
+  if (!editorCtx) {
+    uni.showToast({ title: '编辑器未就绪，请稍后重试', icon: 'none' })
+    return
+  }
+
+  insertingImage.value = true
+  uni.showLoading({ title: '上传中...' })
+  try {
+    const { file, name } = chosen[0]
+    const { url } = await uploadFileToCos({ file, name, purpose: 'generic' })
+    await new Promise<void>((resolve, reject) => {
+      editorCtx!.insertImage({
+        src: url,
+        width: '100%',
+        success: () => resolve(),
+        fail: (err: { errMsg?: string }) => reject(new Error(err?.errMsg || '插入图片失败')),
+      })
+    })
+    syncHtml()
+  }
+  catch (e) {
+    uni.showToast({ title: (e as Error).message || '图片上传失败', icon: 'none' })
+  }
+  finally {
+    uni.hideLoading()
+    insertingImage.value = false
+  }
+}
+
 // ====== textarea 降级分支 ======
 const textareaValue = ref(props.modelValue.replace(/<[^>]+>/g, ''))
 watch(
@@ -125,6 +179,12 @@ function onTextareaInput(e: any) {
       <text class="tool-btn" @click="formatClear">
         ⌫
       </text>
+      <text
+        class="tool-btn" :class="{ 'is-loading': insertingImage }" :disabled="insertingImage"
+        @click="insertImage"
+      >
+        图
+      </text>
     </view>
     <editor
       :id="editorId" class="editor-body min-h-[160px] px-3 py-2" :placeholder="placeholder"
@@ -152,6 +212,10 @@ function onTextareaInput(e: any) {
 }
 .tool-btn:active {
   background: #e8f5f1;
+}
+.tool-btn.is-loading {
+  opacity: 0.5;
+  pointer-events: none;
 }
 .font-italic {
   font-style: italic;

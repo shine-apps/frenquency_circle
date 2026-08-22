@@ -5,9 +5,10 @@
  * - COS_SECRET_ID / COS_SECRET_KEY
  * - COS_BUCKET(如 'frenqency-1234567890',含 APPID 后缀)
  * - COS_REGION(如 'ap-shanghai')
- * - COS_PUBLIC_BASE_URL(公开访问基址,如 'https://cdn.example.com')
  *
  * 可选 env:
+ * - COS_PUBLIC_BASE_URL(公开访问基址,如 'https://cdn.example.com';未设置时回退到
+ *   bucket 默认外部域名 `https://<bucket>.cos.<region>.myqcloud.com`)
  * - COS_KEY_PREFIX(默认 'uploads';空字符串表示无前缀)
  * - COS_STS_DURATION_SECONDS(默认 1800,夹紧到 [60, 7200])
  */
@@ -57,17 +58,21 @@ export function resolveCosConfig(): CosConfig {
     if (!secretKey) throw new Error("COS_SECRET_KEY is required");
     if (!bucket) throw new Error("COS_BUCKET is required");
     if (!region) throw new Error("COS_REGION is required");
-    if (!publicBaseUrlRaw) throw new Error("COS_PUBLIC_BASE_URL is required");
 
     // keyPrefix 允许空字符串(不设前缀,直接挂 bucket 根)
     const keyPrefixRaw = (process.env.COS_KEY_PREFIX ?? DEFAULT_KEY_PREFIX).trim();
+
+    // 公开基址:优先用 CDN/env 指定;未设置则回退到 bucket 默认外部域名
+    const publicBaseUrl = stripSlashes(
+        publicBaseUrlRaw || `https://${bucket}.cos.${region}.myqcloud.com`,
+    );
 
     return {
         secretId,
         secretKey,
         bucket,
         region,
-        publicBaseUrl: stripSlashes(publicBaseUrlRaw),
+        publicBaseUrl,
         keyPrefix: stripSlashes(keyPrefixRaw),
         stsDurationSeconds: resolveDurationSeconds(process.env.COS_STS_DURATION_SECONDS),
     };

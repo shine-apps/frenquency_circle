@@ -50,9 +50,17 @@ describe("lib/cos/config", () => {
         expect(() => resolveCosConfig()).toThrow(/COS_BUCKET/);
     });
 
-    it("throws when COS_PUBLIC_BASE_URL missing", () => {
+    it("falls back to bucket default domain when COS_PUBLIC_BASE_URL missing", () => {
         delete process.env.COS_PUBLIC_BASE_URL;
-        expect(() => resolveCosConfig()).toThrow(/COS_PUBLIC_BASE_URL/);
+        expect(resolveCosConfig().publicBaseUrl).toBe(
+            "https://frenqency-1234567890.cos.ap-shanghai.myqcloud.com",
+        );
+    });
+
+    it("prefers COS_PUBLIC_BASE_URL over bucket default domain", () => {
+        process.env.COS_PUBLIC_BASE_URL = "https://cdn.example.com/";
+        const cfg = resolveCosConfig();
+        expect(cfg.publicBaseUrl).toBe("https://cdn.example.com");
     });
 
     it("defaults keyPrefix to 'uploads' when env empty", () => {

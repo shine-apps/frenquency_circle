@@ -322,3 +322,12 @@ export type NotificationDTO = {
 
 /** 通知跳转目标入口:miniprogram = 小程序端,admin = 后台管理端 */
 export type NotificationLinkTarget = "miniprogram" | "admin"
+
+/**
+ * 热门兴趣 DTO(TagDTO + 热度得分)。
+ * heat = 时间窗口内该标签的得分总和(每用户每自然日至多贡献一条事件)。
+ */
+export type HotInterestDTO = TagDTO & {
+  /** 时间窗口内该标签的得分总和 */
+  heat: number
+}

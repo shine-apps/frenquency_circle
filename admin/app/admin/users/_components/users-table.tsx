@@ -1,9 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import {
   MoreHorizontalIcon,
   EyeIcon,
+  PencilIcon,
+  MapPinIcon,
+  KeyRoundIcon,
 } from "lucide-react"
 
 import {
@@ -30,9 +34,23 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import type { UserDTO } from "@/types/api"
+import { EditUserDialog } from "./edit-user-dialog"
+import { EditAddressDialog } from "./edit-address-dialog"
+import { EditPasswordDialog } from "./edit-password-dialog"
 
 export function UsersTable({ items }: { items: UserDTO[] }) {
+  const router = useRouter()
+  const [, startTransition] = useTransition()
   const [selected, setSelected] = useState<UserDTO | null>(null)
+  const [editing, setEditing] = useState<UserDTO | null>(null)
+  const [editingAddress, setEditingAddress] = useState<UserDTO | null>(null)
+  const [editingPassword, setEditingPassword] = useState<UserDTO | null>(null)
+
+  function refresh() {
+    startTransition(() => {
+      router.refresh()
+    })
+  }
 
   return (
     <>
@@ -75,6 +93,18 @@ export function UsersTable({ items }: { items: UserDTO[] }) {
                       <DropdownMenuItem onClick={() => setSelected(u)}>
                         <EyeIcon />
                         查看
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setEditing(u)}>
+                        <PencilIcon />
+                        编辑
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setEditingAddress(u)}>
+                        <MapPinIcon />
+                        编辑地址
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setEditingPassword(u)}>
+                        <KeyRoundIcon />
+                        修改密码
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -120,10 +150,56 @@ export function UsersTable({ items }: { items: UserDTO[] }) {
               <dd className="col-span-2">{selected.createdAt}</dd>
               <dt className="text-muted-foreground">Updated</dt>
               <dd className="col-span-2">{selected.updatedAt}</dd>
+              <dt className="text-muted-foreground">Phone</dt>
+              <dd className="col-span-2">{selected.phone || "—"}</dd>
+              <dt className="text-muted-foreground">Practice Years</dt>
+              <dd className="col-span-2">
+                {selected.practiceYears === null ||
+                selected.practiceYears === undefined
+                  ? "—"
+                  : selected.practiceYears}
+              </dd>
+              <dt className="text-muted-foreground">Activity Level</dt>
+              <dd className="col-span-2">{selected.activityLevel ?? "—"}</dd>
+              <dt className="text-muted-foreground">Address</dt>
+              <dd className="col-span-2">{selected.address || "—"}</dd>
             </dl>
           ) : null}
         </DialogContent>
       </Dialog>
+
+      {editing ? (
+        <EditUserDialog
+          user={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null)
+            refresh()
+          }}
+        />
+      ) : null}
+
+      {editingAddress ? (
+        <EditAddressDialog
+          user={editingAddress}
+          onClose={() => setEditingAddress(null)}
+          onSaved={() => {
+            setEditingAddress(null)
+            refresh()
+          }}
+        />
+      ) : null}
+
+      {editingPassword ? (
+        <EditPasswordDialog
+          user={editingPassword}
+          onClose={() => setEditingPassword(null)}
+          onSaved={() => {
+            setEditingPassword(null)
+            refresh()
+          }}
+        />
+      ) : null}
     </>
   )
 }

@@ -10,6 +10,32 @@ import type { UserDTO, UserRole, PrivacySettings } from "@/types/api"
 const updateUserSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   role: z.enum(["ADMIN", "USER", "TEACHER"]).optional(),
+  /** 手机号(可空,空串按 null 处理) */
+  phone: z.string().max(30).nullable().optional(),
+  /** 练习年限(可空,仅整数 0-100) */
+  practiceYears: z.number().int().min(0).max(100).nullable().optional(),
+  /** 活跃度等级 */
+  activityLevel: z.enum(["low", "medium", "high"]).optional(),
+  /** 地址文本(可空) */
+  address: z.string().max(255).nullable().optional(),
+  /** 经纬度位置(可空,成对设置;与 address 通常一起更新) */
+  location: z
+    .object({
+      latitude: z.number().min(-90).max(90),
+      longitude: z.number().min(-180).max(180),
+    })
+    .nullable()
+    .optional(),
+  /** 头像 URL(可空) */
+  avatarUrl: z.string().max(500).nullable().optional(),
+  /** 隐私设置 */
+  privacySettings: z
+    .object({
+      allowMatch: z.boolean(),
+      publicContact: z.boolean(),
+      locationPrecision: z.enum(["exact", "community", "region"]),
+    })
+    .optional(),
 })
 
 function toUserDTO(row: typeof users.$inferSelect): UserDTO {
@@ -66,9 +92,32 @@ export async function PATCH(req: Request, context: RouteContext) {
     return fail(400, "不能降级自己的管理员角色")
   }
 
+  // 空串归一化为 null，避免存下无意义空字符串
+  const data: Record<string, unknown> = { ...parsed.data }
+  if (data.phone === "") data.phone = null
+  if (data.address === "") data.address = null
+  if (data.avatarUrl === "") data.avatarUrl = null
+
+  // location 对象展开为 latitude / longitude 双列，成对清空或设置
+  if ("location" in data) {
+    const loc = data.location
+    if (loc === null || loc === undefined) {
+      data.latitude = null
+      data.longitude = null
+    } else {
+      const { latitude, longitude } = loc as {
+        latitude: number
+        longitude: number
+      }
+      data.latitude = latitude
+      data.longitude = longitude
+    }
+    delete data.location
+  }
+
   const [updated] = await db
     .update(users)
-    .set({ ...parsed.data, updatedAt: new Date() })
+    .set({ ...(data as typeof users.$inferInsert), updatedAt: new Date() })
     .where(eq(users.id, id))
     .returning()
 

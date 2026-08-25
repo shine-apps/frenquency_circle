@@ -116,6 +116,14 @@ export default defineConfig(({ command, mode }) => {
           }
         },
       },
+      // ── 关联编译器 BUG 规避说明（与上面 fix-vite-plugin-vue 同源，但未覆盖到该路径）──
+      // 现象：@dcloudio/uni-mp-compiler 在编译 SelectorQuery 回调等函数时，会把局部变量名
+      //       `container` 在其【使用处】错误重命名为 `_a_container`（声明处仍为 `container`），
+      //       导致运行期 ReferenceError: _a_container is not defined（见 TagSelectorPopup.vue
+      //       的 scrollExpandedIntoView）。根因是 `container` 与编译器内部辅助变量命名冲突。
+      // 规避：业务代码中避免使用 `container` 作为局部变量名（已改为 scrollView 等），
+      //       也不要轻易恢复为 container，否则该报错会重现。
+      // 注：此 BUG 与 `??` 无关——`??` 会被正确编译为 `!= null ? _a : ...`，无需替换。
       UnoCSS(),
       AutoImport({
         imports: ['vue', 'uni-app'],

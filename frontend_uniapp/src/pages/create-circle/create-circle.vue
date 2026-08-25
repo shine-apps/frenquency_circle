@@ -49,6 +49,8 @@ const pickerVisible = ref(false)
 const coverImages = ref<string[]>([])
 const uploadingCover = ref(false)
 const tagSelectorOpen = ref(false)
+/** 生成描述模板中 */
+const generatingDesc = ref(false)
 
 /** 打开兴趣标签选择弹窗 */
 function handleOpenTagSelector() {
@@ -58,6 +60,67 @@ function handleOpenTagSelector() {
 /** 弹窗确认:更新圈子标签 */
 function handleTagConfirm(newTags: string[]) {
   tags.value = newTags
+}
+
+/**
+ * 根据已填写的标题、标签、地点、活动时间,生成本地结构化描述模板。
+ * 纯前端拼装,不依赖后端 AI 接口;用户可在此基础上继续编辑。
+ */
+function buildDescriptionTemplate(): string {
+  const parts: string[] = []
+  const t = trimmedTitle.value
+  const tagText = tags.value.length ? tags.value.join('、') : ''
+
+  // 开场:圈子定位
+  if (t) {
+    parts.push(`欢迎来到「${t}」!这里是一个专注于${tagText || '兴趣交流'}的线下圈子,旨在为大家提供一个持续成长、互相陪伴的交流空间。`)
+  }
+  else {
+    parts.push('欢迎加入我们的圈子!这里是一个专注兴趣交流、持续成长的线下社群。')
+  }
+
+  // 我们做什么
+  const what = tagText
+    ? `我们围绕【${tagText}】开展丰富的活动,既有系统性的学习分享,也有轻松的线下交流,帮助每位成员在实践中提升、在陪伴中坚持。`
+    : '我们定期开展主题分享、互动交流与线下活动,帮助成员在实践中提升、在陪伴中坚持。'
+  parts.push(what)
+
+  // 适合谁
+  parts.push('无论你是刚刚入门的新手,还是希望找到同好、共同进步的老手,都能在这里找到属于自己的节奏。我们欢迎所有怀有热情、愿意分享的你。')
+
+  // 时间地点
+  const where = address.value || '具体活动地点将在群内通知'
+  const when = activityTime.value.trim() || '活动时间请关注群内公告'
+  parts.push(`📍 活动地点:${where}\n🕒 活动时间:${when}`)
+
+  // 联系方式
+  const contactBits: string[] = []
+  if (contactPhone.value.trim())
+    contactBits.push(`电话 ${contactPhone.value.trim()}`)
+  if (wechat.value.trim())
+    contactBits.push(`微信 ${wechat.value.trim()}`)
+  if (contactBits.length)
+    parts.push(`如需咨询或报名,可通过 ${contactBits.join(' / ')} 联系我们,期待与你相遇!`)
+
+  return parts.join('\n\n')
+}
+
+/** 点击「生成模板」:填充描述文本框(受最大长度限制) */
+function handleGenerateDescription() {
+  if (generatingDesc.value)
+    return
+  generatingDesc.value = true
+  try {
+    const template = buildDescriptionTemplate()
+    description.value = template.slice(0, DESCRIPTION_MAX)
+    uni.showToast({ title: '已生成模板', icon: 'success' })
+  }
+  catch (e) {
+    uni.showToast({ title: (e as Error).message || '生成失败', icon: 'none' })
+  }
+  finally {
+    generatingDesc.value = false
+  }
 }
 
 /** 拉取圈子详情用于编辑预填 */
@@ -306,7 +369,15 @@ const tagsCountText = computed(() => `${tags.value.length}/${TAGS_MAX}`)
             <text class="text-sm text-[#333] font-medium">
               圈子介绍 <text class="text-[#f53f3f]">*</text>
             </text>
-            <text class="text-xs text-[#999]">{{ descCount }}</text>
+            <view class="flex items-center gap-2">
+              <text
+                class="text-xs text-[#018d71]"
+                @click="handleGenerateDescription"
+              >
+                {{ generatingDesc ? '生成中…' : '生成模板' }}
+              </text>
+              <text class="text-xs text-[#999]">{{ descCount }}</text>
+            </view>
           </view>
           <textarea
             v-model="description"

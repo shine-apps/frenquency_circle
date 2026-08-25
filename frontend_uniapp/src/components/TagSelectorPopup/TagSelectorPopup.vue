@@ -256,15 +256,13 @@ function scrollExpandedIntoView(index: number) {
     query.select(`#cat-expand-${index}`).boundingClientRect()
     query.exec((res) => {
       const offsetInfo = res?.[0] as { scrollTop: number } | null
-      const container = res?.[1] as { top: number, height: number } | null
+      const scrollView = res?.[1] as { top: number, height: number } | null
       const target = res?.[2] as { top: number, height: number } | null
-      if (!offsetInfo || !container || !target)
+      if (!offsetInfo || !scrollView || !target)
         return
-      const rel = target.top - container.top
-      // 注:这里刻意不用 `??`(改用 `||`),避免编译降级注入 `_a` 辅助变量时,
-      // 触发小程序差量编译补丁错位导致 `_a_container is not defined` 运行时错误
-      const next = (offsetInfo.scrollTop || 0) + rel - container.height / 2 + target.height / 2
-      categoryScrollTop.value = Math.max(0, Math.round(next))
+      const rel = target.top - scrollView.top
+      const next = (offsetInfo.scrollTop || 0) + rel - (scrollView.height || 0) / 2 + (target.height || 0) / 2
+      categoryScrollTop.value = Math.max(0, Math.round(next || 0))
     })
   })
 }
@@ -321,15 +319,15 @@ const customCategoryPickerValue = ref<Array<string | number>>([])
 
 /** wd-picker 确认回调:取第一列选中项(slug),并解析展示文案 */
 function handleCategoryConfirm({ value }: { value: Array<string | number> }) {
-  const slug = String(value[0] ?? '')
+  const slug = String(value[0] || '')
   customCategorySlug.value = slug
   const opt = customCategoryOptions.value.find(o => o.value === slug)
-  customCategoryLabel.value = opt?.label ?? ''
+  customCategoryLabel.value = (opt && opt.label) || ''
   customCategoryPickerVisible.value = false
 }
 
 function handleCustomNameChange(e: any) {
-  customName.value = String(e.detail.value ?? '').slice(0, CUSTOM_NAME_MAX)
+  customName.value = String(e.detail.value || '').slice(0, CUSTOM_NAME_MAX)
 }
 
 async function handleSubmitCustom() {
@@ -354,13 +352,13 @@ async function handleSubmitCustom() {
     // 若所选分类不在骨架中,按需注入占位节点(用后端返回的 category/subCategory)
     let target = categories.value.find(c => c.category === tag.category)
     if (!target) {
-      target = { category: tag.category, categoryId: tag.categoryId ?? '', subCategories: [] }
+      target = { category: tag.category, categoryId: tag.categoryId || '', subCategories: [] }
       categories.value = [...categories.value, target]
     }
-    const subName = tag.subCategory ?? tag.name
+    const subName = tag.subCategory || tag.name
     let sub = target.subCategories.find(s => s.name === subName)
     if (!sub) {
-      sub = { name: subName, categoryId: tag.categoryId ?? '', slug: tag.categoryId ?? `${tag.category}/${subName}`, tags: [] }
+      sub = { name: subName, categoryId: tag.categoryId || '', slug: tag.categoryId || `${tag.category}/${subName}`, tags: [] }
       target.subCategories = [...target.subCategories, sub]
     }
     if (!sub.tags.some(t => t.name === tag.name)) {

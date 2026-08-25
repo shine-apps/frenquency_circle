@@ -278,7 +278,7 @@ function handleBack() {
             活动时间
           </text>
           <text class="mt-2 block text-sm text-[#666]">
-            {{ formatDateTime(circle.activityTime) }}
+            {{ circle.activityTime }}
           </text>
         </view>
 

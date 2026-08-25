@@ -134,7 +134,7 @@ describe("resolveWindow", () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-08-25T04:00:00Z")) // 2026-08-25 12:00 CST
     const w = resolveWindow({})
-    expect(w.start).toBe("2026-07-26")
+    expect(w.start).toBe("2026-07-27") // [8-25 .. 8-25] 含今日共 30 个中国日
     expect(w.end).toBe("2026-08-25")
   })
 
@@ -142,7 +142,7 @@ describe("resolveWindow", () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-08-25T04:00:00Z"))
     const w = resolveWindow({ days: 7 })
-    expect(w.start).toBe("2026-08-18")
+    expect(w.start).toBe("2026-08-19") // [8-25 .. 8-19] 含今日共 7 个中国日
     expect(w.end).toBe("2026-08-25")
   })
 
@@ -158,6 +158,15 @@ describe("resolveWindow", () => {
     const w = resolveWindow({ startDate: "2026-08-01", endDate: "2026-08-24" })
     expect(w.start).toBe("2026-08-01")
     expect(w.end).toBe("2026-08-24")
+  })
+
+  it("avoids UTC midnight drift: 'last 7 days' stays China-day aligned after midnight UTC", () => {
+    // 调用机 UTC 时间刚过午夜(中国已是早 8 点),旧实现用 UTC 当下时间回推会漂移 ±1 天。
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-08-25T00:30:00Z")) // 2026-08-25 08:30 CST,同为中国 8-25
+    const w = resolveWindow({ days: 7 })
+    expect(w.end).toBe("2026-08-25") // 仍锚定中国今日
+    expect(w.start).toBe("2026-08-19") // 回推 7 个中国日,而非 UTC 回推导致的 8-18/8-20
   })
 })
 

@@ -6,8 +6,6 @@ import { selectTagsWithCategory, toTagDTO } from "@/lib/search/tag-search"
 import type { HotInterestDTO } from "@/types/api"
 import { chinaDay } from "@/lib/interest-events"
 
-const DAY_MS = 86_400_000
-
 export type HotInterestsParams = {
   /** 最近 N 天,默认 30 */
   days?: number
@@ -35,9 +33,11 @@ export function resolveWindow(params: HotInterestsParams): Window {
       end: endDate ?? today,
     }
   }
-  const endMs = new Date().getTime()
-  const startMs = endMs - days * DAY_MS
-  return { start: chinaDay(new Date(startMs)), end: today }
+  // 统一以东八区自然日为基准:从「中国今日」回推 N 天的中国日,
+  // 避免用 UTC 当下时间回推导致的跨午夜 ±1 天漂移。
+  const [y, m, d] = today.split("-").map(Number)
+  const start = chinaDay(new Date(Date.UTC(y, m - 1, d - days + 1)))
+  return { start, end: today }
 }
 
 /**

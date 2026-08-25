@@ -43,4 +43,5 @@ export const LOG_PREFIX = {
   CATEGORY: "CATEGORY",
   TAG: "TAG",
   NOTIFICATION: "NOTIFICATION",
+  INTEREST: "INTEREST",
 } as const

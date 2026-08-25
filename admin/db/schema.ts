@@ -4,6 +4,7 @@ import {
   uuid,
   timestamp,
   integer,
+  date,
   doublePrecision,
   jsonb,
   index,
@@ -658,3 +659,51 @@ export const activities = pgTable(
 
 export type Activity = typeof activities.$inferSelect
 export type NewActivity = typeof activities.$inferInsert
+
+/**
+ * 兴趣行为事件类型:
+ * - `hobby_tag_save`    保存个人兴趣标签(PUT /api/users/me/hobby-tags)
+ * - `tag_search`        搜索兴趣关键词(GET /api/hobby-tags/search 带 q)
+ * - `circle_tag_create` 创建圈子选择标签(POST /api/circles)
+ */
+export const INTEREST_EVENT_TYPES = ["hobby_tag_save", "tag_search", "circle_tag_create"] as const
+export type InterestEventType = (typeof INTEREST_EVENT_TYPES)[number]
+
+/**
+ * 兴趣行为事件表(append-only + 每日幂等)。
+ *
+ * 每行 = 用户 + 标签名 + 事件类型 + 事件日期 + 得分。
+ * - `tagName` 存 hobby_tags.name 快照(与 users.tags / circles.tags 惯例一致,不设 FK);
+ * - `eventDate` 为东八区自然日 YYYY-MM-DD;
+ * - `score` = 事件日与锚定日期 2026-08-24 的天数差(写入时计算,>=0);
+ * - `UNIQUE(user_id, tag_name, event_date)` 保证同用户同标签同天仅一条(幂等)。
+ */
+export const interestEvents = pgTable(
+  "interest_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tagName: text("tag_name").notNull(),
+    eventType: text("event_type").$type<InterestEventType>().notNull(),
+    eventDate: date("event_date").notNull(),
+    score: integer("score").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // 幂等:同一用户同一天对同一标签仅一条
+    uniqueIndex("interest_events_user_tag_day_idx").on(
+      table.userId,
+      table.tagName,
+      table.eventDate
+    ),
+    // 读路径:时间窗口过滤 + 分组聚合
+    index("interest_events_date_tag_idx").on(table.eventDate, table.tagName),
+  ]
+)
+
+export type InterestEvent = typeof interestEvents.$inferSelect
+export type NewInterestEvent = typeof interestEvents.$inferInsert

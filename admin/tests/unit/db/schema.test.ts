@@ -5,10 +5,13 @@ import {
   circles,
   smsVerificationCodes,
   notifications,
+  interestEvents,
+  INTEREST_EVENT_TYPES,
   type UserRole,
   type NotificationType,
   type NotificationLinkTarget,
   type NotificationEntityType,
+  type InterestEventType,
 } from "@/db/schema"
 
 describe("db/schema", () => {
@@ -143,5 +146,41 @@ describe("db/schema", () => {
   it("NotificationEntityType is 'circle' for now", () => {
     const et: NotificationEntityType = "circle"
     expect(et).toBe("circle")
+  })
+
+  it("exports interestEvents table", () => {
+    expect(interestEvents).toBeDefined()
+  })
+
+  it("interestEvents table has the expected columns", () => {
+    const cols = Object.keys(interestEvents)
+    expect(cols).toEqual(
+      expect.arrayContaining([
+        "id",
+        "userId",
+        "tagName",
+        "eventType",
+        "eventDate",
+        "score",
+        "createdAt",
+      ])
+    )
+  })
+
+  it("InterestEventType covers the three event sources", () => {
+    const t: InterestEventType = "hobby_tag_save"
+    expect(t).toBe("hobby_tag_save")
+    const t2: InterestEventType = "tag_search"
+    expect(t2).toBe("tag_search")
+    const t3: InterestEventType = "circle_tag_create"
+    expect(t3).toBe("circle_tag_create")
+  })
+
+  it("INTEREST_EVENT_TYPES contains exactly three types", () => {
+    expect(INTEREST_EVENT_TYPES).toEqual([
+      "hobby_tag_save",
+      "tag_search",
+      "circle_tag_create",
+    ])
   })
 })

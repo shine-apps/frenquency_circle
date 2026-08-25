@@ -47,7 +47,7 @@ function makeTagRow(overrides: Partial<TagRow> = {}): TagRow {
   }
 }
 
-const { mockDb, chainSelect, whereSpy, limitSpy, orderBySpy } = vi.hoisted(() => {
+const { mockDb, chainSelect, whereSpy, limitSpy } = vi.hoisted(() => {
   let selectResult: TagRow[] = []
 
   // 链式 mock:支持 select().from().leftJoin().leftJoin().where().orderBy().limit()
@@ -89,7 +89,6 @@ const { mockDb, chainSelect, whereSpy, limitSpy, orderBySpy } = vi.hoisted(() =>
     chainSelect,
     whereSpy: chainSelect.where,
     limitSpy: chainSelect.limit,
-    orderBySpy: chainSelect.orderBy,
   }
 }) as {
   mockDb: {
@@ -109,7 +108,6 @@ const { mockDb, chainSelect, whereSpy, limitSpy, orderBySpy } = vi.hoisted(() =>
   }
   whereSpy: ReturnType<typeof vi.fn>
   limitSpy: ReturnType<typeof vi.fn>
-  orderBySpy: ReturnType<typeof vi.fn>
 }
 
 vi.mock("@/lib/db", () => ({ db: mockDb }))

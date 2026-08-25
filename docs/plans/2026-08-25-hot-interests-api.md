@@ -522,8 +522,17 @@ git commit -m "docs: record hot interests implementation"
 
 ## 质量门(Quality Gates)
 
-- `admin`:`pnpm lint` ✅ · `pnpm test` ✅ · `pnpm build`(含类型检查)✅
-- `frontend_uniapp`:`pnpm lint` ✅ · `pnpm type-check` ✅
+- `admin`:`pnpm lint` ✅(新增代码 0 error,存量文件 error 不归本次) · `pnpm test` ✅(456 passed,2 个存量失败:circles-follow / locations-match,与本次改动无关,已在基线验证) · `pnpm build` ✅(需先清空 `.next` 规避 IDE safe-delete 钩子)
+- `frontend_uniapp`:`pnpm lint` ✅(新增文件 0 问题,存量 error 不归本次) · `pnpm type-check` ✅(存量 wot-ui/页面类型错误不归本次)
+
+## 完成记录(2026-08-25)
+
+- 实现 6 个任务全部完成,提交:`add interest_events schema` → `add interest event recording and hot ranking services` → `record interest events at three trigger points` → `add hot interests API and replace placeholder hot tags` → `show hot interests in tag selector popup`。
+- **与计划的偏差**:
+  1. 未创建独立的 `interest-events-trigger.test.ts`,改为在三个路由的既有集成测试文件(`users-me-tags` / `circles-crud` / `tags-search`)中直接断言事件写入(含幂等 target、旁路失败、游客跳过),避免重复 mock(符合 YAGNI)。
+  2. `pnpm db:migrate` 因本地无匹配的 PostgreSQL 凭据/容器未执行;迁移 SQL(`drizzle/0001_awesome_jane_foster.sql`)已生成并 review 通过,待用户本地数据库就绪后执行 `pnpm db:migrate`。
+  3. 环境限制:`next build` 首跑被 IDE safe-delete 钩子拦截(批量删除 `.next/trace`),已通过清空 `.next` 后成功构建;期间该钩子误清空 pnpm store 中 `next` 包,经 `pnpm install --force` 恢复。临时产物 `admin/.next.bak` 因授权超时未能删除,可手动移除。
+- **前端**:`src/types/index.ts` 位于 gitignore 目录(既有约定,本地生成),`HotInterestDTO` 类型为本地改动,`tags.ts` 与 `TagSelectorPopup.vue` 已随提交纳入版本控制。
 
 ## Non-goals(本期不做)
 

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
-import { auth } from "@/auth"
+import { auth, signOut } from "@/auth"
+import { LogOutIcon } from "lucide-react"
 
 import {
   SidebarInset,
@@ -7,6 +8,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
+import { Button } from "@/components/ui/button"
 import { AppSidebar } from "@/components/app-sidebar"
 import { NotificationBell } from "@/components/notification-bell"
 
@@ -33,9 +35,20 @@ export default async function AdminLayout({
           <Separator orientation="vertical" className="mr-2 h-4" />
           <div className="flex-1" />
           <NotificationBell />
-          <div className="text-sm text-muted-foreground">
+          <div className="hidden text-sm text-muted-foreground sm:block">
             {session.user.email}
           </div>
+          <form
+            action={async () => {
+              "use server"
+              await signOut({ redirectTo: "/login" })
+            }}
+          >
+            <Button variant="ghost" size="sm" type="submit" title="退出登录">
+              <LogOutIcon />
+              登出
+            </Button>
+          </form>
         </header>
         <div className="flex-1 p-4 md:p-6">{children}</div>
       </SidebarInset>

@@ -1,9 +1,9 @@
 import { http } from '@/http/http'
-import type { CategoryNode, TagDTO } from '@/types'
+import type { CategoryNode, HotInterestDTO, TagDTO } from '@/types'
 
 /**
  * 搜索兴趣标签。
- * - `q` 为空时后端返回热门标签 top N
+ * - `q` 为空时后端返回热门兴趣 top N(基于 interest_events 得分总和)
  * - `q` 非空时按 5 个策略合并去重(精确 / ILIKE / 拼音 / 拼音首字母)
  *
  * @param q 关键词(可选)
@@ -14,6 +14,30 @@ export function searchTags(q: string, limit?: number) {
   return http.get<{ list: TagDTO[] }>('/api/hobby-tags/search', {
     ...(q !== '' ? { q } : {}),
     ...(limit !== undefined ? { limit } : {}),
+  })
+}
+
+/**
+ * 获取热门兴趣列表(公开)。
+ * - 按时间窗口聚合 interest_events 得分总和,按热度降序返回 Top N
+ *
+ * @param params.days 最近 N 天(1-90,默认 30)
+ * @param params.startDate 起始日期 YYYY-MM-DD(东八区,含当日,优先于 days)
+ * @param params.endDate 结束日期 YYYY-MM-DD(东八区,含当日,优先于 days)
+ * @param params.limit 返回条数(1-50,默认 10)
+ * @returns `{ list: HotInterestDTO[] }`
+ */
+export function getHotInterests(params?: {
+  days?: number
+  startDate?: string
+  endDate?: string
+  limit?: number
+}) {
+  return http.get<{ list: HotInterestDTO[] }>('/api/interests/hot', {
+    ...(params?.days !== undefined ? { days: params.days } : {}),
+    ...(params?.startDate ? { startDate: params.startDate } : {}),
+    ...(params?.endDate ? { endDate: params.endDate } : {}),
+    ...(params?.limit !== undefined ? { limit: params.limit } : {}),
   })
 }
 

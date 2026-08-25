@@ -1,10 +1,10 @@
 <script lang="ts" setup>
 import { computed, getCurrentInstance, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { createCustomTag, getCategories, searchTags } from '@/api/tags'
+import { createCustomTag, getCategories, getHotInterests, searchTags } from '@/api/tags'
 import { useDialog } from '@wot-ui/ui/components/wd-dialog'
 import { useUserStore } from '@/store/user'
 import { toLoginPage } from '@/utils/toLoginPage'
-import type { CategoryNode, TagBrief, TagDTO } from '@/types'
+import type { CategoryNode, HotInterestDTO, TagBrief, TagDTO } from '@/types'
 
 /**
  * 兴趣标签选择弹窗(wd-popup 封装),已合并原 `TagSelector` 组件内容。
@@ -44,12 +44,13 @@ const emit = defineEmits<{
 /** 已选标签名称列表(打开时用 initialTags 预填,存 hobby_tags.name) */
 const selectedTags = ref<string[]>([])
 
-// 打开弹窗时用 initialTags 预填,不读写用户 store
+// 打开弹窗时用 initialTags 预填,不读写用户 store;同时刷新热门兴趣
 watch(
   () => props.modelValue,
   (visible) => {
     if (visible) {
       selectedTags.value = props.initialTags?.length ? [...props.initialTags] : []
+      loadHotInterests()
     }
   },
 )
@@ -163,6 +164,24 @@ getCategories()
   .catch(() => {
     // 拉取失败不阻塞,分类区静默不展示
   })
+
+// ====== 热门兴趣(未输入关键词时展示,失败静默隐藏) ======
+/** 热门兴趣标签列表(HotInterestDTO 含 heat 得分,展示时仅用标签信息) */
+const hotInterests = ref<HotInterestDTO[]>([])
+
+/** 拉取最近 7 天热门兴趣 Top 12;失败静默隐藏,不阻塞分类树加载 */
+async function loadHotInterests() {
+  try {
+    const res = await getHotInterests({ days: 7, limit: 12 })
+    hotInterests.value = res.list || []
+  }
+  catch (e) {
+    hotInterests.value = []
+  }
+}
+
+// 挂载时拉取一次,弹窗每次打开时再刷新(保持数据新鲜)
+loadHotInterests()
 
 // ====== 防抖搜索 ======
 async function runSearch(q: string) {
@@ -485,8 +504,33 @@ async function handleSubmitCustom() {
             </view>
           </template>
 
-          <!-- 分类态:兴趣分类树(三级) -->
+          <!-- 分类态:热门兴趣 + 兴趣分类树(三级) -->
           <template v-else>
+            <!-- 热门兴趣区:最近 7 天热门,点击直接选中;失败时为空自动隐藏 -->
+            <view
+              v-if="hotInterests.length > 0"
+              class="mb-1 overflow-hidden rounded-2xl bg-white shadow-sm"
+            >
+              <view class="flex items-center justify-between px-4 pb-2 pt-3">
+                <text class="text-base text-[#333] font-medium">
+                  热门兴趣
+                </text>
+                <text class="text-sm text-[#999]">
+                  最近 7 天大家的选择
+                </text>
+              </view>
+              <view class="flex flex-wrap gap-2.5 px-4 pb-3">
+                <text
+                  v-for="t in hotInterests" :key="t.id"
+                  class="rounded-full px-4 py-2 text-sm active:scale-95"
+                  :class="selectedTags.includes(t.name) ? 'bg-[#e8f5f1] text-[#018d71]' : 'bg-[#f5f6f7] text-[#666]'"
+                  @click="handleToggleTag(t)"
+                >
+                  {{ selectedTags.includes(t.name) ? `✓ ${t.name}` : t.name }}
+                </text>
+              </view>
+            </view>
+
             <view class="flex items-center justify-between">
               <text class="text-base text-[#333] font-medium">
                 全部兴趣大类

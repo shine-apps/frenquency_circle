@@ -2,6 +2,8 @@ import { z } from "zod"
 
 import { corsOptions, fail, ok, withCors } from "@/lib/api"
 import { listPopularTags, searchTags } from "@/lib/search/tag-search"
+import { readUserFromToken } from "@/lib/auth/session-token"
+import { recordInterestEvents } from "@/lib/interest-events"
 import type { TagDTO } from "@/types/api"
 
 /**
@@ -49,6 +51,18 @@ export async function GET(req: Request) {
     list = await listPopularTags(limit)
   } else {
     list = await searchTags(q, limit)
+  }
+
+  // 记录搜索事件(仅登录用户;记录命中标签名,旁路失败不影响搜索结果)
+  const searchUser = await readUserFromToken(req)
+  if (q && searchUser) {
+    await recordInterestEvents([
+      {
+        userId: searchUser.id,
+        tagNames: list.map((t) => t.name),
+        eventType: "tag_search",
+      },
+    ])
   }
 
   return withCors(ok({ list }), req)

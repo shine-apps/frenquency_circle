@@ -35,6 +35,7 @@ const {
   mockDb,
   selectResults,
   chainUpdate,
+  chainInsert,
   readUserFromTokenMock,
 } = vi.hoisted(() => {
   const selectResults: { value: Record<string, unknown>[] } = { value: [] }
@@ -57,26 +58,49 @@ const {
     where: vi.fn(async () => undefined),
   }
 
+  // insert().values().onConflictDoNothing() 链(用于 recordInterestEvents)
+  const chainInsert = {
+    values: vi.fn(function (this: unknown) { return chainInsert }),
+    onConflictDoNothing: vi.fn(function (this: unknown) { return chainInsert }),
+    returning: vi.fn(function (this: unknown) { return chainInsert }),
+    then: (
+      resolve: (value: unknown) => unknown,
+      reject?: (reason: unknown) => unknown
+    ) => Promise.resolve([]).then(resolve, reject),
+  }
+
   const mockDb = {
     select: vi.fn(() => makeSelectChain(selectResults.value)),
     update: vi.fn(() => chainUpdate),
+    insert: vi.fn(() => chainInsert),
   }
 
   return {
     mockDb,
     selectResults,
     chainUpdate,
+    chainInsert,
     readUserFromTokenMock: vi.fn(),
   }
 }) as {
   mockDb: {
     select: ReturnType<typeof vi.fn>
     update: ReturnType<typeof vi.fn>
+    insert: ReturnType<typeof vi.fn>
   }
   selectResults: { value: Record<string, unknown>[] }
   chainUpdate: {
     set: ReturnType<typeof vi.fn>
     where: ReturnType<typeof vi.fn>
+  }
+  chainInsert: {
+    values: ReturnType<typeof vi.fn>
+    onConflictDoNothing: ReturnType<typeof vi.fn>
+    returning: ReturnType<typeof vi.fn>
+    then: (
+      resolve: (value: unknown) => unknown,
+      reject?: (reason: unknown) => unknown
+    ) => Promise<unknown>
   }
   readUserFromTokenMock: ReturnType<typeof vi.fn>
 }
@@ -131,8 +155,11 @@ function makeJsonRequest(body: unknown): Request {
 beforeEach(() => {
   mockDb.select.mockClear()
   mockDb.update.mockClear()
+  mockDb.insert.mockClear()
   chainUpdate.set.mockClear()
   chainUpdate.where.mockClear()
+  chainInsert.values.mockClear()
+  chainInsert.onConflictDoNothing.mockClear()
   readUserFromTokenMock.mockReset()
   selectResults.value = []
 })
@@ -166,6 +193,32 @@ describe("PUT /api/users/me/hobby-tags", () => {
     const setArg = chainUpdate.set.mock.calls[0]?.[0] as Record<string, unknown>
     expect(setArg.tags).toEqual(["太极拳", "书法"])
     expect(chainUpdate.where).toHaveBeenCalledTimes(1)
+    // 记录 hobby_tag_save 兴趣事件(每条标签一行,含 eventDate/score)
+    expect(mockDb.insert).toHaveBeenCalledTimes(1)
+    const insertRows = chainInsert.values.mock.calls[0]?.[0] as Record<string, unknown>[]
+    expect(insertRows).toHaveLength(2)
+    expect(insertRows[0]).toMatchObject({
+      userId: FAKE_USER.id,
+      tagName: "太极拳",
+      eventType: "hobby_tag_save",
+    })
+    expect(typeof insertRows[0]?.eventDate).toBe("string")
+    expect(typeof insertRows[0]?.score).toBe("number")
+    expect(chainInsert.onConflictDoNothing).toHaveBeenCalled()
+  })
+
+  it("still returns 200 when interest event recording fails (side-effect)", async () => {
+    readUserFromTokenMock.mockResolvedValue(FAKE_USER)
+    selectResults.value = [makeTagRow({ name: "太极拳" })] as unknown as Record<string, unknown>[]
+    chainInsert.values.mockImplementationOnce(() => {
+      throw new Error("db down")
+    })
+
+    const res = await PUT(makeJsonRequest({ tags: ["太极拳"] }))
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as IResponse<{ tags: string[] }>
+    expect(body.code).toBe(200)
+    expect(mockDb.update).toHaveBeenCalledTimes(1)
   })
 
   it("dedupes duplicate names before persisting", async () => {

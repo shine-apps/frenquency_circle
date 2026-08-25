@@ -83,6 +83,9 @@ const {
     values: vi.fn(function (this: unknown) {
       return chainInsert
     }),
+    onConflictDoNothing: vi.fn(function (this: unknown) {
+      return chainInsert
+    }),
     returning: vi.fn(async function () {
       return insertResult
     }),
@@ -144,6 +147,7 @@ const {
   }
   chainInsert: {
     values: ReturnType<typeof vi.fn>
+    onConflictDoNothing: ReturnType<typeof vi.fn>
     returning: ReturnType<typeof vi.fn>
   }
   findFirstHobbyTagsMock: ReturnType<typeof vi.fn>
@@ -226,6 +230,7 @@ beforeEach(() => {
   chainSelect.limit.mockClear()
   mockDb.insert.mockClear()
   chainInsert.values.mockClear()
+  chainInsert.onConflictDoNothing.mockClear()
   chainInsert.returning.mockClear()
   findFirstHobbyTagsMock.mockReset()
   findFirstCategoriesMock.mockReset()
@@ -340,6 +345,44 @@ describe("GET /api/hobby-tags/search", () => {
     })
     const res = await searchGet(req)
     expect(res.status).toBe(400)
+  })
+
+  it("records a tag_search interest event for logged-in users", async () => {
+    readUserFromTokenMock.mockResolvedValue(FAKE_USER)
+    mockDb._setTagRows([
+      makeTagRow({ id: "tag-1", name: "太极拳" }),
+      makeTagRow({ id: "tag-2", name: "太极剑" }),
+    ])
+
+    const req = new Request(makeUrl("/api/hobby-tags/search?q=太极"), {
+      method: "GET",
+    })
+    const res = await searchGet(req)
+    expect(res.status).toBe(200)
+
+    expect(mockDb.insert).toHaveBeenCalledTimes(1)
+    const insertRows = chainInsert.values.mock.calls[0]?.[0] as Record<string, unknown>[]
+    expect(insertRows).toHaveLength(2)
+    expect(insertRows[0]).toMatchObject({
+      userId: FAKE_USER.id,
+      tagName: "太极拳",
+      eventType: "tag_search",
+    })
+    expect(typeof insertRows[0]?.eventDate).toBe("string")
+    expect(typeof insertRows[0]?.score).toBe("number")
+    expect(chainInsert.onConflictDoNothing).toHaveBeenCalled()
+  })
+
+  it("does not record a tag_search event for guests", async () => {
+    readUserFromTokenMock.mockResolvedValue(null)
+    mockDb._setTagRows([makeTagRow({ id: "tag-1", name: "太极拳" })])
+
+    const req = new Request(makeUrl("/api/hobby-tags/search?q=太极"), {
+      method: "GET",
+    })
+    const res = await searchGet(req)
+    expect(res.status).toBe(200)
+    expect(mockDb.insert).not.toHaveBeenCalled()
   })
 })
 

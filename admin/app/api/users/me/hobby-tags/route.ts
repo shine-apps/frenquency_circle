@@ -6,6 +6,7 @@ import { users, hobbyTags } from "@/db/schema"
 import { corsOptions, fail, ok, withCors } from "@/lib/api"
 import { requireSession } from "@/lib/auth-utils"
 import { logger, LOG_PREFIX } from "@/lib/logger"
+import { recordInterestEvents } from "@/lib/interest-events"
 
 /**
  * 用户标签更新请求体 schema。
@@ -76,6 +77,11 @@ export async function PUT(req: Request) {
     userId,
     count: uniqueTags.length,
   })
+
+  // 记录兴趣事件(旁路,失败仅 log,不影响保存兴趣)
+  await recordInterestEvents([
+    { userId, tagNames: uniqueTags, eventType: "hobby_tag_save" },
+  ])
 
   return withCors(ok({ tags: uniqueTags }), req)
 }

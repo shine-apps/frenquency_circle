@@ -7,6 +7,7 @@ import { corsOptions, fail, ok, withCors } from "@/lib/api"
 import { requireSession } from "@/lib/auth-utils"
 import { logger, LOG_PREFIX } from "@/lib/logger"
 import { notifyAdmins } from "@/lib/notifications"
+import { recordInterestEvents } from "@/lib/interest-events"
 
 /** 手机号格式(与 lib/sms/phone.ts PHONE_RE 一致) */
 const PHONE_RE = /^1[3-9]\d{9}$/
@@ -186,6 +187,11 @@ export async function POST(req: Request) {
     linkTarget: "admin",
     excludeUserId: userId, // 创建者本人若是管理员也不自收
   })
+
+  // 8. 记录兴趣事件(旁路,失败仅 log,不影响建圈主流程)
+  await recordInterestEvents([
+    { userId, tagNames: uniqueTags, eventType: "circle_tag_create" },
+  ])
 
   logger.info(LOG_PREFIX.CIRCLE, "Circle created", {
     circleId: circleRow.id,

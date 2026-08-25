@@ -88,6 +88,9 @@ const {
     values: vi.fn(function (this: unknown) {
       return chainInsert
     }),
+    onConflictDoNothing: vi.fn(function (this: unknown) {
+      return chainInsert
+    }),
     returning: insertReturningMock,
     then: (
       resolve: (value: unknown) => unknown,
@@ -134,6 +137,7 @@ const {
   }
   chainInsert: {
     values: ReturnType<typeof vi.fn>
+    onConflictDoNothing: ReturnType<typeof vi.fn>
     returning: ReturnType<typeof vi.fn>
     then: (
       resolve: (value: unknown) => unknown,
@@ -312,6 +316,7 @@ beforeEach(() => {
   mockDb.insert.mockClear()
   mockDb.update.mockClear()
   chainInsert.values.mockClear()
+  chainInsert.onConflictDoNothing.mockClear()
   insertReturningMock.mockReset()
   chainUpdate.set.mockClear()
   updateWhereMock.mockClear()
@@ -364,8 +369,8 @@ describe("POST /api/circles", () => {
     expect(body.code).toBe(201)
     expect(body.data.circleId).toBe(newCircleId)
     expect(body.data.status).toBe("pending")
-    // 验证 insert 链路:circles + circleMembers = 2 次(无桥接表)
-    expect(mockDb.insert).toHaveBeenCalledTimes(2)
+    // 验证 insert 链路:circles + circleMembers + interest_events = 3 次(无桥接表)
+    expect(mockDb.insert).toHaveBeenCalledTimes(3)
     // circles insert 应有 returning
     expect(insertReturningMock).toHaveBeenCalledTimes(1)
     // circles insert 的 values 应包含 tags 名称数组
@@ -377,6 +382,13 @@ describe("POST /api/circles", () => {
     expect(circleInsert).toBeDefined()
     const insertArg = circleInsert![0] as Record<string, unknown>
     expect(insertArg.tags).toEqual([TAG_NAME_1, TAG_NAME_2])
+    // 第三条 insert 为 circle_tag_create 兴趣事件(幂等 onConflictDoNothing)
+    const interestInsert = valuesCalls.find((call) => {
+      const v = call[0] as Record<string, unknown> | undefined
+      return Array.isArray(v) && (v[0] as Record<string, unknown> | undefined)?.eventType === "circle_tag_create"
+    })
+    expect(interestInsert).toBeDefined()
+    expect(chainInsert.onConflictDoNothing).toHaveBeenCalled()
   })
 
   it("returns 429 when 24h quota reached (5 existing circles)", async () => {

@@ -59,7 +59,7 @@ COPY frontend_uniapp/scripts/ ./scripts/
 # CI=true + HUSKY=0:跳过 husky 的 git hook 初始化,保留 init-baseFiles
 # (该脚本生成 src/manifest.json / src/pages.json,构建所必需)
 ENV CI=true HUSKY=0
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --no-scripts
 
 # 复制源码(含 env/ 目录,见 .dockerignore 中对前端 env 的例外)
 COPY frontend_uniapp/ ./

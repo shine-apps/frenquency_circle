@@ -4,6 +4,7 @@
 # 未列出或设为 false 的包构建脚本会被跳过,不再触发 ERR_PNPM_IGNORED_BUILDS。
 allowBuilds:
   "@alicloud/openapi-core": true
+  "@parcel/watcher": true
   esbuild: true
   msw: true
   sharp: true

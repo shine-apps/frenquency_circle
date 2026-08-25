@@ -81,6 +81,7 @@ export default defineConfig({
     'i-carbon-code',
     'i-carbon-home',
     'i-carbon-user',
+    'i-carbon-user-activity',
     'i-carbon-scan',
     'i-carbon-ibm-watson-language-translator',
     'i-carbon-menu',

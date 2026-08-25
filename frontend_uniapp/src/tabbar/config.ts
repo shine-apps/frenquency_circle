@@ -49,6 +49,12 @@ export const customTabbarList: CustomTabBarItem[] = [
     icon: 'i-carbon-home',
   },
   {
+    text: '活动广场',
+    pagePath: 'pages/activity-list/activity-list',
+    iconType: 'unocss',
+    icon: 'i-carbon-user-activity',
+  },
+  {
     pagePath: 'pages/me/me',
     text: '我的',
     iconType: 'unocss',

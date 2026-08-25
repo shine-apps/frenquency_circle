@@ -110,13 +110,27 @@ function handleMyPublished() {
   uni.navigateTo({ url: '/pages/my-published/my-published' })
 }
 
-/** 跳活动管理页(TEACHER / ADMIN 专属) */
+/** 跳我的活动页:TEACHER / ADMIN 直达,其他角色弹框引导教师认证 */
 function handleMyActivities() {
-  if (!canCreateCircle(user.value?.role)) {
-    uni.showToast({ title: '仅传承人可访问', icon: 'none' })
+  if (!isLoggedIn.value) {
+    uni.navigateTo({ url: LOGIN_PAGE })
     return
   }
-  uni.navigateTo({ url: '/pages/my-activities/my-activities' })
+  if (canCreateCircle(user.value?.role)) {
+    uni.navigateTo({ url: '/pages/my-activities/my-activities' })
+    return
+  }
+  uni.showModal({
+    title: '提示',
+    content: '仅认证教师可发布与管理活动,是否前往教师认证?',
+    confirmText: '去认证',
+    cancelText: '暂不',
+    success(res) {
+      if (res.confirm) {
+        uni.navigateTo({ url: '/pages/teacher-certification/teacher-certification' })
+      }
+    },
+  })
 }
 
 /** 跳教师认证页(非 TEACHER / ADMIN 角色) */
@@ -294,13 +308,12 @@ const roleChipClass = computed(() => {
       </view>
 
       <view
-        v-if="canCreateCircle(user?.role)"
         class="flex items-center justify-between border-b-inset border-[#f5f5f5] px-4 py-4"
         @click="handleMyActivities"
       >
         <view class="flex flex-col">
           <text class="text-sm text-[#333] font-medium">
-            活动管理
+            我的活动
           </text>
           <text class="mt-0.5 text-xs text-[#999]">
             发布与维护活动

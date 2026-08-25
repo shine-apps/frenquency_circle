@@ -230,6 +230,7 @@ async function handleGetPhoneNumber(e: any) {
     <view class="mt-10 px-8">
       <wd-button
         block
+        size="large"
         custom-class="bg-[#07c160]! border-transparent! text-white"
         open-type="getPhoneNumber"
         :loading="submitting"

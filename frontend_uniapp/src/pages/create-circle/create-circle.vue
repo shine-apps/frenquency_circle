@@ -60,8 +60,6 @@ function handleTagConfirm(newTags: string[]) {
   tags.value = newTags
 }
 
-let hasFetched = false
-
 /** 拉取圈子详情用于编辑预填 */
 async function fetchForEdit(id: string) {
   loading.value = true
@@ -86,23 +84,19 @@ async function fetchForEdit(id: string) {
   }
 }
 
-onShow(() => {
+onLoad((options) => {
   if (!userStore.isLoggedIn) {
     uni.reLaunch({ url: LOGIN_PAGE })
     return
   }
-  // 取路由参数
-  const pages = getCurrentPages()
-  const current = pages[pages.length - 1] as any
-  editId.value = current?.options?.id || current?.$page?.options?.id || ''
+  editId.value = (options as any)?.id || ''
   // 新建模式:仅 TEACHER / ADMIN 可创建圈子,其余角色先完成教师认证
   if (!isEdit.value && !['TEACHER', 'ADMIN'].includes(userStore.userInfo?.role ?? '')) {
     uni.showToast({ title: '请先完成教师认证', icon: 'none' })
-    uni.navigateTo({ url: '/pages/teacher-certification/teacher-certification' })
+    uni.redirectTo({ url: '/pages/teacher-certification/teacher-certification' })
     return
   }
-  if (isEdit.value && !hasFetched) {
-    hasFetched = true
+  if (isEdit.value) {
     void fetchForEdit(editId.value)
   }
 })

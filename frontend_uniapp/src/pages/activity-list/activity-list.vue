@@ -73,7 +73,7 @@ function goActivity(id: string) {
         暂无活动,敬请期待
       </text>
     </view>
-    <view v-else class="mx-4 mt-3 flex flex-col gap-3">
+    <view v-else class="mx-4 mt-3 flex flex-col gap-3 pb-32">
       <view
         v-for="a in list"
         :key="a.id"

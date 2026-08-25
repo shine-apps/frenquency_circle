@@ -8,7 +8,7 @@
  * - 校验:报名截止 < 活动起始;时间用 wd-datetime-picker 选。
  */
 import { computed, ref } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onLoad } from '@dcloudio/uni-app'
 import {
   cancelActivity,
   createActivity,
@@ -99,28 +99,20 @@ async function loadDetail() {
   }
 }
 
-let hasFetched = false
-
-onShow(() => {
+onLoad((options) => {
   if (!userStore.isLoggedIn) {
     uni.reLaunch({ url: LOGIN_PAGE })
     return
   }
-  // 取路由参数
-  const pages = getCurrentPages()
-  const current = pages[pages.length - 1] as any
-  activityId.value = current?.options?.activityId || current?.$page?.options?.activityId || null
+  activityId.value = (options as any)?.activityId || null
   // 新建模式:仅 TEACHER / ADMIN 可创建活动,其余角色先完成教师认证
   if (!activityId.value && !['TEACHER', 'ADMIN'].includes(userStore.userInfo?.role ?? '')) {
     uni.showToast({ title: '请先完成教师认证', icon: 'none' })
-    uni.navigateTo({ url: '/pages/teacher-certification/teacher-certification' })
+    uni.redirectTo({ url: '/pages/teacher-certification/teacher-certification' })
     return
   }
   if (activityId.value) {
-    if (!hasFetched) {
-      hasFetched = true
-      void loadDetail()
-    }
+    void loadDetail()
   }
   else {
     syncTimeText()

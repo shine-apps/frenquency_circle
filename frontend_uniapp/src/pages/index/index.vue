@@ -205,9 +205,9 @@ function handleCreateActivity(): void {
   uni.navigateTo({ url: '/pages/create-activity/create-activity' })
 }
 
-/** 跳活动列表页 */
-function handleGoActivities(): void {
-  uni.navigateTo({ url: '/pages/activity-list/activity-list' })
+/** 跳通知消息页 */
+function handleGoNotification(): void {
+  uni.navigateTo({ url: '/pages/notifications/notifications' })
 }
 
 // ====== 右下角浮动按钮 ======
@@ -304,24 +304,20 @@ function handleCircleClick(circleId: string): void {
   <view class="flex flex-col">
     <!-- ====== 顶部品牌区(青绿渐变) ====== -->
     <view class="sticky top-0 z-10 from-[#018d71] to-[#0aa07f] bg-gradient-to-b p-6 px-5">
-      <view class="flex items-center justify-between">
-        <view class="flex flex-col">
+      <view class="flex items-center justify-between pt-8">
+        <view class="flex flex-col  justify-betweeen">
           <view class="flex items-center gap-1">
             <image src="/static/images/logo_256_circle.png" class="h-[40px] w-[40px]" />
             <text class="text-xl text-white font-semibold">
               趣邻圈
             </text>
           </view>
-          <text class="mt-1 text-xs text-white/80">
-            选择兴趣,遇见同趣的人与圈子
+          <text class="mt-1 text-md text-white/80">
+            选择兴趣,遇见附近同趣的人与圈子
           </text>
         </view>
-        <view class="flex gap-2">
-          <wd-button variant="subtle" round @click="handleGoActivities">
-            活动
-          </wd-button>
-          <wd-button v-if="canCreateCircle(user?.role)" variant="subtle" round @click="handleCreateCircle">
-            创建圈子
+        <view class="flex gap-2 items-end">
+          <wd-button v-if="userStore.isLoggedIn" type="info" variant="text" size="large" icon="notification" @click="handleGoNotification"> 
           </wd-button>
         </view>
       </view>

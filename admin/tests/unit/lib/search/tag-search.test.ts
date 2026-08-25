@@ -8,7 +8,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
  * - limit 截断
  * - status='approved' 过滤(通过断言 where 条件被调用)
  * - 空查询 / 非法 limit 返回空数组
- * - listPopularTags 排序与限流
  *
  * mock 层级:
  * - @/lib/db:可链式调用 select().from().where().limit() / .orderBy()
@@ -115,7 +114,7 @@ const { mockDb, chainSelect, whereSpy, limitSpy, orderBySpy } = vi.hoisted(() =>
 
 vi.mock("@/lib/db", () => ({ db: mockDb }))
 
-import { searchTags, listPopularTags, toTagDTO } from "@/lib/search/tag-search"
+import { searchTags, toTagDTO } from "@/lib/search/tag-search"
 
 beforeEach(() => {
   mockDb.select.mockClear()
@@ -270,35 +269,6 @@ describe("lib/search/tag-search", () => {
       await searchTags("  太极  ", 10)
       expect(mockDb.select).toHaveBeenCalledTimes(1)
       expect(limitSpy).toHaveBeenCalledWith(10)
-    })
-  })
-
-  describe("listPopularTags", () => {
-    it("queries approved tags ordered by createdAt desc with limit", async () => {
-      const rows = [
-        makeTagRow({ id: "t1", createdAt: new Date("2026-01-03") }),
-        makeTagRow({ id: "t2", createdAt: new Date("2026-01-02") }),
-      ]
-      mockDb._setSelectResult(rows)
-
-      const result = await listPopularTags(5)
-      expect(result).toHaveLength(2)
-      expect(chainSelect.from).toHaveBeenCalledTimes(1)
-      expect(whereSpy).toHaveBeenCalledTimes(1)
-      expect(orderBySpy).toHaveBeenCalledTimes(1)
-      expect(limitSpy).toHaveBeenCalledWith(5)
-    })
-
-    it("uses default limit of 10 when not specified", async () => {
-      mockDb._setSelectResult([])
-      await listPopularTags()
-      expect(limitSpy).toHaveBeenCalledWith(10)
-    })
-
-    it("returns empty array when no approved tags exist", async () => {
-      mockDb._setSelectResult([])
-      const result = await listPopularTags(10)
-      expect(result).toEqual([])
     })
   })
 })

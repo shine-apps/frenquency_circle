@@ -22,7 +22,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
  */
 
 // 真实 schema 表对象,用于 from() 引用比较(需在 mock db 之前导入)
-import { categories, hobbyTags } from "@/db/schema"
+import { categories, hobbyTags, interestEvents } from "@/db/schema"
 
 const {
   mockDb,
@@ -34,9 +34,11 @@ const {
 } = vi.hoisted(() => {
   let tagRows: TagRow[] = []
   let catRows: unknown[] = []
+  let aggRows: unknown[] = []
   let insertResult: TagRow[] = []
   let currentFromTable: unknown = null
   let categoriesRef: unknown = null
+  let interestEventsRef: unknown = null
 
   const chainSelect = {
     from: vi.fn(function (this: unknown, table: unknown) {
@@ -49,12 +51,15 @@ const {
     where: vi.fn(function (this: unknown) {
       return chainSelect
     }),
+    groupBy: vi.fn(function (this: unknown) {
+      return chainSelect
+    }),
     orderBy: vi.fn(function (this: unknown) {
       return chainSelect
     }),
     limit: vi.fn(async function () {
-      // limit 仅用于 hobby_tags 查询
-      return tagRows
+      // 聚合查询(from interestEvents)返回聚合行;hobby_tags 查询返回标签行
+      return currentFromTable === interestEventsRef ? aggRows : tagRows
     }),
     then: (
       resolve: (value: unknown) => unknown,
@@ -66,10 +71,14 @@ const {
     _setCategoriesRef: (t: unknown) => {
       categoriesRef = t
     },
+    _setInterestEventsRef: (t: unknown) => {
+      interestEventsRef = t
+    },
   } as {
     from: ReturnType<typeof vi.fn>
     leftJoin: ReturnType<typeof vi.fn>
     where: ReturnType<typeof vi.fn>
+    groupBy: ReturnType<typeof vi.fn>
     orderBy: ReturnType<typeof vi.fn>
     limit: ReturnType<typeof vi.fn>
     then: (
@@ -77,6 +86,7 @@ const {
       reject?: (reason: unknown) => unknown
     ) => Promise<unknown>
     _setCategoriesRef: (t: unknown) => void
+    _setInterestEventsRef: (t: unknown) => void
   }
 
   const chainInsert = {
@@ -108,6 +118,9 @@ const {
     _setCatRows(rows: unknown[]) {
       catRows = rows
     },
+    _setAggRows(rows: unknown[]) {
+      aggRows = rows
+    },
     _setInsertResult(rows: TagRow[]) {
       insertResult = rows
     },
@@ -131,12 +144,14 @@ const {
     }
     _setTagRows: (rows: TagRow[]) => void
     _setCatRows: (rows: unknown[]) => void
+    _setAggRows: (rows: unknown[]) => void
     _setInsertResult: (rows: TagRow[]) => void
   }
   chainSelect: {
     from: ReturnType<typeof vi.fn>
     leftJoin: ReturnType<typeof vi.fn>
     where: ReturnType<typeof vi.fn>
+    groupBy: ReturnType<typeof vi.fn>
     orderBy: ReturnType<typeof vi.fn>
     limit: ReturnType<typeof vi.fn>
     then: (
@@ -144,6 +159,7 @@ const {
       reject?: (reason: unknown) => unknown
     ) => Promise<unknown>
     _setCategoriesRef: (t: unknown) => void
+    _setInterestEventsRef: (t: unknown) => void
   }
   chainInsert: {
     values: ReturnType<typeof vi.fn>
@@ -170,8 +186,9 @@ type TagRow = {
   categoryLevel?: number | null
 }
 
-// 注入 categories 表对象引用,用于 from() 结果切分
+// 注入 categories / interest_events 表对象引用,用于 from() 结果切分
 chainSelect._setCategoriesRef(categories)
+chainSelect._setInterestEventsRef(interestEvents)
 
 vi.mock("@/lib/db", () => ({ db: mockDb }))
 vi.mock("@/lib/auth/session-token", () => ({
@@ -226,6 +243,7 @@ beforeEach(() => {
   chainSelect.from.mockClear()
   chainSelect.leftJoin.mockClear()
   chainSelect.where.mockClear()
+  chainSelect.groupBy.mockClear()
   chainSelect.orderBy.mockClear()
   chainSelect.limit.mockClear()
   mockDb.insert.mockClear()
@@ -237,6 +255,7 @@ beforeEach(() => {
   readUserFromTokenMock.mockReset()
   mockDb._setTagRows([])
   mockDb._setCatRows([])
+  mockDb._setAggRows([])
   mockDb._setInsertResult([])
 })
 
@@ -293,22 +312,29 @@ describe("GET /api/hobby-tags/search", () => {
   })
 
   it("returns popular tags when q is missing", async () => {
-    const rows = [
+    mockDb._setAggRows([
+      { tagName: "古筝", totalScore: 10 },
+      { tagName: "琵琶", totalScore: 5 },
+    ])
+    mockDb._setTagRows([
       makeTagRow({ id: "p1", name: "古筝" }),
       makeTagRow({ id: "p2", name: "琵琶" }),
-    ]
-    mockDb._setTagRows(rows)
+    ])
 
     const req = new Request(makeUrl("/api/hobby-tags/search"), { method: "GET" })
     const res = await searchGet(req)
     expect(res.status).toBe(200)
     const body = (await res.json()) as IResponse<{ list: TagDTO[] }>
     expect(body.data.list).toHaveLength(2)
+    expect(body.data.list[0]!.name).toBe("古筝")
+    expect((body.data.list[0] as { heat?: number }).heat).toBe(10)
+    // 聚合链路:groupBy + orderBy(SUM desc)
+    expect(chainSelect.groupBy).toHaveBeenCalledTimes(1)
     expect(chainSelect.orderBy).toHaveBeenCalledTimes(1)
   })
 
   it("returns popular tags when q is empty string", async () => {
-    mockDb._setTagRows([])
+    mockDb._setAggRows([])
     const req = new Request(makeUrl("/api/hobby-tags/search?q="), {
       method: "GET",
     })

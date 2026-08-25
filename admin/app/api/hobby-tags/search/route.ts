@@ -1,7 +1,8 @@
 import { z } from "zod"
 
 import { corsOptions, fail, ok, withCors } from "@/lib/api"
-import { listPopularTags, searchTags } from "@/lib/search/tag-search"
+import { searchTags } from "@/lib/search/tag-search"
+import { computeHotInterests } from "@/lib/interest-ranking"
 import { readUserFromToken } from "@/lib/auth/session-token"
 import { recordInterestEvents } from "@/lib/interest-events"
 import type { TagDTO } from "@/types/api"
@@ -21,7 +22,7 @@ const searchQuerySchema = z.object({
  *
  * 标签搜索接口(公开,不需要鉴权)。
  *
- * - `q` 为空或未提供:返回热门标签 top N(目前按 createdAt 排序,后续可改为 searchCount)
+ * - `q` 为空或未提供:返回热门兴趣 top N(基于 interest_events 得分总和聚合)
  * - `q` 非空:调 `searchTags(q, limit)`,内部按 5 个策略合并去重
  *
  * 响应:`IResponse<{ list: TagDTO[] }>`
@@ -48,7 +49,8 @@ export async function GET(req: Request) {
 
   let list: TagDTO[]
   if (!q) {
-    list = await listPopularTags(limit)
+    const { list: hotList } = await computeHotInterests({ limit })
+    list = hotList
   } else {
     list = await searchTags(q, limit)
   }

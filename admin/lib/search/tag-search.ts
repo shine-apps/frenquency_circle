@@ -1,4 +1,4 @@
-import { and, eq, ilike, like, or, desc, sql, aliasedTable } from "drizzle-orm"
+import { and, eq, ilike, like, or, sql, aliasedTable } from "drizzle-orm"
 
 import { db } from "@/lib/db"
 import { hobbyTags, categories } from "@/db/schema"
@@ -150,22 +150,6 @@ export async function searchTags(
   }
 
   return unique.map(toTagDTO)
-}
-
-/**
- * 返回热门标签 top N(目前按 createdAt 排序取前 N,后续可改为 searchCount)。
- *
- * @param limit 最大返回条数,默认 10
- */
-export async function listPopularTags(
-  limit: number = 10
-): Promise<TagDTO[]> {
-  const rows = await selectTagsWithCategory()
-    .where(eq(hobbyTags.status, "approved"))
-    .orderBy(desc(hobbyTags.createdAt))
-    .limit(limit)
-
-  return rows.map(toTagDTO)
 }
 
 // 重导出搜索辅助函数,便于其他模块(如 /api/hobby-tags/custom)复用

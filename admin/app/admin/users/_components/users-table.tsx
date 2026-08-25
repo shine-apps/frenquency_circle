@@ -8,6 +8,7 @@ import {
   PencilIcon,
   MapPinIcon,
   KeyRoundIcon,
+  BadgeCheckIcon,
 } from "lucide-react"
 
 import {
@@ -37,6 +38,7 @@ import type { UserDTO } from "@/types/api"
 import { EditUserDialog } from "./edit-user-dialog"
 import { EditAddressDialog } from "./edit-address-dialog"
 import { EditPasswordDialog } from "./edit-password-dialog"
+import { EditRoleDialog } from "./edit-role-dialog"
 
 export function UsersTable({ items }: { items: UserDTO[] }) {
   const router = useRouter()
@@ -45,6 +47,7 @@ export function UsersTable({ items }: { items: UserDTO[] }) {
   const [editing, setEditing] = useState<UserDTO | null>(null)
   const [editingAddress, setEditingAddress] = useState<UserDTO | null>(null)
   const [editingPassword, setEditingPassword] = useState<UserDTO | null>(null)
+  const [editingRole, setEditingRole] = useState<UserDTO | null>(null)
 
   function refresh() {
     startTransition(() => {
@@ -105,6 +108,10 @@ export function UsersTable({ items }: { items: UserDTO[] }) {
                       <DropdownMenuItem onClick={() => setEditingPassword(u)}>
                         <KeyRoundIcon />
                         修改密码
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setEditingRole(u)}>
+                        <BadgeCheckIcon />
+                        设置角色
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -196,6 +203,17 @@ export function UsersTable({ items }: { items: UserDTO[] }) {
           onClose={() => setEditingPassword(null)}
           onSaved={() => {
             setEditingPassword(null)
+            refresh()
+          }}
+        />
+      ) : null}
+
+      {editingRole ? (
+        <EditRoleDialog
+          user={editingRole}
+          onClose={() => setEditingRole(null)}
+          onSaved={() => {
+            setEditingRole(null)
             refresh()
           }}
         />

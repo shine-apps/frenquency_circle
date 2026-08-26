@@ -32,6 +32,7 @@ type ActivityRow = {
   startTime: Date
   registrationDeadline: Date
   contactPhone: string | null
+  coverImages: string[]
   status: string
   createdAt: Date
   updatedAt: Date
@@ -201,6 +202,7 @@ function makeActivityRow(overrides: Partial<ActivityRow> = {}): ActivityRow {
     startTime: overrides.startTime ?? new Date(START),
     registrationDeadline: overrides.registrationDeadline ?? new Date(DEADLINE),
     contactPhone: overrides.contactPhone ?? "13800138000",
+    coverImages: overrides.coverImages ?? [],
     status: overrides.status ?? "active",
     createdAt: overrides.createdAt ?? new Date("2026-08-20T00:00:00Z"),
     updatedAt: overrides.updatedAt ?? new Date("2026-08-20T00:00:00Z"),
@@ -336,6 +338,39 @@ describe("POST /api/activities", () => {
     const body = (await res.json()) as IResponse<ActivityDTO>
     expect(body.data.creatorId).toBe(ADMIN.id)
   })
+
+  it("persists coverImages when provided on create", async () => {
+    readUserFromTokenMock.mockResolvedValue(TEACHER)
+    const coverImages = ["https://cdn.example.com/a.png", "https://cdn.example.com/b.png"]
+    insertReturningMock.mockResolvedValue([makeActivityRow({ coverImages })])
+    const res = await POST(
+      makeJsonRequest({ ...VALID_BODY, coverImages }, `/api/activities`)
+    )
+    expect(res.status).toBe(201)
+    const body = (await res.json()) as IResponse<ActivityDTO>
+    expect(body.data.coverImages).toEqual(coverImages)
+    const valuesArg = chainInsert.values.mock.calls[0]?.[0] as Record<string, unknown>
+    expect(valuesArg.coverImages).toEqual(coverImages)
+  })
+
+  it("rejects more than 9 coverImages", async () => {
+    readUserFromTokenMock.mockResolvedValue(TEACHER)
+    const tooMany = Array.from({ length: 10 }, (_, i) => `https://cdn.example.com/${i}.png`)
+    const res = await POST(
+      makeJsonRequest({ ...VALID_BODY, coverImages: tooMany }, `/api/activities`)
+    )
+    expect(res.status).toBe(400)
+    expect(mockDb.insert).not.toHaveBeenCalled()
+  })
+
+  it("rejects coverImages item that is not a valid URL", async () => {
+    readUserFromTokenMock.mockResolvedValue(TEACHER)
+    const res = await POST(
+      makeJsonRequest({ ...VALID_BODY, coverImages: ["not-a-url"] }, `/api/activities`)
+    )
+    expect(res.status).toBe(400)
+    expect(mockDb.insert).not.toHaveBeenCalled()
+  })
 })
 
 describe("GET /api/activities", () => {
@@ -461,6 +496,23 @@ describe("PATCH /api/activities/:activityId", () => {
     expect(res.status).toBe(200)
     const body = (await res.json()) as IResponse<ActivityDTO>
     expect(body.data.title).toBe("新标题")
+  })
+
+  it("updates coverImages successfully", async () => {
+    readUserFromTokenMock.mockResolvedValue(TEACHER)
+    const coverImages = ["https://cdn.example.com/x.png"]
+    setSelectResultsQueue([[makeActivityRow()]])
+    updateReturningMock.mockResolvedValue([makeActivityRow({ coverImages })])
+
+    const res = await patchActivity(
+      makePatchRequest({ coverImages }, `/api/activities/activity-1`),
+      makeDetailContext("activity-1")
+    )
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as IResponse<ActivityDTO>
+    expect(body.data.coverImages).toEqual(coverImages)
+    const setArg = chainUpdate.set.mock.calls[0]?.[0] as Record<string, unknown>
+    expect(setArg.coverImages).toEqual(coverImages)
   })
 })
 

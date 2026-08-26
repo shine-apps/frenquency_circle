@@ -145,6 +145,11 @@ function statusText(status: string): string {
     <view v-else class="mx-4 mt-3 flex flex-col gap-3">
       <view v-for="a in list" :key="a.id" class="rounded-2xl bg-white p-4">
         <view class="flex items-start justify-between gap-2" @click="handleDetail(a.id)">
+          <image
+            v-if="a.coverImages && a.coverImages.length > 0"
+            :src="a.coverImages[0]" mode="aspectFill"
+            class="h-16 w-16 shrink-0 rounded-lg bg-[#f0f0f0]"
+          />
           <view class="min-w-0 flex-1">
             <view class="flex items-center gap-2">
               <text class="truncate text-base text-[#333] font-medium">

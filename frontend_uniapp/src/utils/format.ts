@@ -86,3 +86,11 @@ export function activityLevelShortText(level: string): string {
     return '中活跃'
   return '高活跃'
 }
+
+/**
+ * 去除 HTML 标签,返回纯文本。
+ * 用于历史富文本数据降级展示/编辑回填(项目从富文本编辑器迁移到纯文本 textarea)。
+ */
+export function stripHtmlTags(html: string): string {
+  return html.replace(/<[^>]+>/g, '')
+}

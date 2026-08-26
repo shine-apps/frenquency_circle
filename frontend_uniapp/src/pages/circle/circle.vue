@@ -193,21 +193,16 @@ function handleBack() {
     <template v-else>
       <scroll-view scroll-y class="flex-1">
         <!-- ====== 0. 轮播 Swiper(coverImages.length > 0 才渲染) ====== -->
-        <swiper
+        <wd-swiper
           v-if="circle.coverImages.length > 0"
-          class="h-56 w-full"
-          indicator-color="rgba(255,255,255,0.5)"
-          indicator-active-color="#fff"
-          indicator-dots
-          autoplay
+          :list="circle.coverImages"
+          height="224"
+          :autoplay="circle.coverImages.length > 1"
+          :loop="circle.coverImages.length > 1"
           :interval="4000"
-          circular
-          :duration="500"
-        >
-          <swiper-item v-for="(url, idx) in circle.coverImages" :key="`${url}-${idx}`">
-            <image :src="url" class="h-full w-full" mode="aspectFill" />
-          </swiper-item>
-        </swiper>
+          image-mode="aspectFill"
+          indicator-position="bottom"
+        />
 
         <!-- ====== 1. 状态横幅(仅 pending / rejected 展示) ====== -->
         <view v-if="circle.status === 'pending'" class="bg-[#fff7e6] px-4 py-3">

@@ -1,13 +1,12 @@
 import { z } from "zod"
 
 /**
- * 活动富文本净白名单:服务端兜底净化,拒绝明显危险片段。
- * 编辑端用 uni `<editor>`(输出 HTML),展示端 `<rich-text>`(不执行脚本);
- * 这里再做一层字符串守卫,防止绕过前端直接调 API。
+ * 活动介绍:前端现为纯文本 textarea 提交;此处仍保留一层字符串守卫,
+ * 拒绝明显危险片段,防止绕过前端直接调 API。
  */
 const DANGEROUS_HTML = /<script|<iframe| on\w+\s*=|javascript:/i
 
-/** 富文本 HTML(净化后)校验 */
+/** 活动介绍(纯文本,兼容历史 HTML 数据)校验 */
 export const activityDescriptionSchema = z
   .string()
   .trim()
@@ -33,6 +32,8 @@ export const createActivitySchema = z
     startTime: z.string().min(1, "活动起始时间不能为空"),
     registrationDeadline: z.string().min(1, "报名截止时间不能为空"),
     contactPhone: phoneSchema.optional().or(z.literal("").transform(() => undefined)),
+    /** 轮播图片 URL 数组(最多 9 张,可空) */
+    coverImages: z.array(z.string().url("轮播图片需为有效 URL")).max(9, "轮播图片最多 9 张").optional(),
   })
   .superRefine((val, ctx) => {
     const start = Date.parse(val.startTime)
@@ -70,6 +71,8 @@ export const updateActivitySchema = z
     startTime: z.string().min(1).optional(),
     registrationDeadline: z.string().min(1).optional(),
     contactPhone: phoneSchema.optional().or(z.literal("").transform(() => undefined)),
+    /** 轮播图片 URL 数组(最多 9 张,可空) */
+    coverImages: z.array(z.string().url("轮播图片需为有效 URL")).max(9, "轮播图片最多 9 张").optional(),
   })
   .superRefine((val, ctx) => {
     // 仅在两端都提供时校验先后关系(部分更新无法单独判定)

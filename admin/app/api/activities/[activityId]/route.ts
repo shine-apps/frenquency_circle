@@ -24,6 +24,7 @@ function toActivityDTO(row: typeof activities.$inferSelect): ActivityDTO {
     startTime: row.startTime.toISOString(),
     registrationDeadline: row.registrationDeadline.toISOString(),
     contactPhone: row.contactPhone ?? null,
+    coverImages: row.coverImages ?? [],
     status: row.status,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -106,6 +107,9 @@ export async function PATCH(req: Request, context: RouteContext) {
         : {}),
       ...(input.contactPhone !== undefined
         ? { contactPhone: input.contactPhone ?? null }
+        : {}),
+      ...(input.coverImages !== undefined
+        ? { coverImages: input.coverImages }
         : {}),
       updatedAt: new Date(),
     })

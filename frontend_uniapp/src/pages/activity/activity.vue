@@ -3,12 +3,13 @@
  * 活动详情页(顶层独立资源,与圈子解耦)。
  *
  * - 路径参数:activityId。
- * - 富文本介绍用 uni `<rich-text>` 渲染(仅展示,不执行脚本)。
+ * - 介绍为纯文本,用只读 textarea 展示(兼容历史富文本 HTML,展示前去标签)。
  * - 非创建者访问已取消活动:后端返回 404,这里提示不存在。
  */
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getActivity } from '@/api/activities'
+import { stripHtmlTags } from '@/utils/format'
 import type { ActivityDTO } from '@/types'
 
 const activityId = ref('')
@@ -16,6 +17,9 @@ const activityId = ref('')
 const loading = ref(true)
 const notFound = ref(false)
 const activity = ref<ActivityDTO | null>(null)
+
+/** 纯文本介绍(兼容历史富文本 HTML 数据,去除标签后展示) */
+const plainDescription = computed(() => stripHtmlTags(activity.value?.description || ''))
 
 function formatTs(iso: string): string {
   const d = new Date(iso)
@@ -73,6 +77,18 @@ async function load() {
         </view>
       </view>
 
+      <view v-if="activity.coverImages && activity.coverImages.length > 0" class="overflow-hidden rounded-2xl bg-white">
+        <wd-swiper
+          :list="activity.coverImages"
+          height="192"
+          :autoplay="activity.coverImages.length > 1"
+          :loop="activity.coverImages.length > 1"
+          :interval="5000"
+          image-mode="aspectFill"
+          indicator-position="bottom"
+        />
+      </view>
+
       <view class="flex flex-col gap-3 rounded-2xl bg-white px-4 py-4">
         <view class="flex items-center justify-between">
           <text class="text-sm text-[#999]">
@@ -104,17 +120,13 @@ async function load() {
         <text class="mb-2 block text-sm text-[#666]">
           活动介绍
         </text>
-        <rich-text :nodes="activity.description" class="rich-content" />
+        <textarea
+          :value="plainDescription"
+          disabled
+          auto-height
+          class="w-full bg-transparent text-sm leading-6 text-[#666]"
+        />
       </view>
     </view>
   </view>
 </template>
-
-<style scoped>
-.rich-content {
-  font-size: 28rpx;
-  line-height: 1.6;
-  color: #333;
-  word-break: break-word;
-}
-</style>

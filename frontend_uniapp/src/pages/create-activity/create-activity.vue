@@ -4,7 +4,7 @@
  *
  * - 路径参数:activityId(编辑态必填,新建态无)。
  * - 仅 TEACHER / ADMIN 可发布;非教师/管理员前端引导先完成教师认证,后端兜底 403。
- * - 字段:标题、活动介绍(富文本 RichTextEditor)、活动起始时间、报名截止时间、联系人电话。
+ * - 字段:标题、活动介绍(纯文本 textarea)、轮播图片、活动起始时间、报名截止时间、联系人电话。
  * - 校验:报名截止 < 活动起始;时间用 wd-datetime-picker 选。
  */
 import { computed, ref } from 'vue'
@@ -15,11 +15,16 @@ import {
   getActivity,
   updateActivity,
 } from '@/api/activities'
+import { uploadFileToCos } from '@/api/upload'
+import { chooseImages } from '@/utils/chooseImage'
+import { stripHtmlTags } from '@/utils/format'
 import { useDialog } from '@wot-ui/ui/components/wd-dialog'
-import RichTextEditor from '@/components/RichTextEditor/RichTextEditor.vue'
 import { useUserStore } from '@/store/user'
 import { LOGIN_PAGE } from '@/router/config'
 import type { ActivityDTO } from '@/types'
+
+/** 轮播图片最大数量 */
+const COVER_IMAGES_MAX = 9
 
 const dialog = useDialog()
 const userStore = useUserStore()
@@ -35,6 +40,8 @@ const description = ref('')
 const startTimeTs = ref<number>(Date.now())
 const deadlineTs = ref<number>(Date.now())
 const contactPhone = ref('')
+const coverImages = ref<string[]>([])
+const uploadingCover = ref(false)
 
 // datetime-picker 控制
 const pickerField = ref<'start' | 'deadline' | null>(null)
@@ -84,10 +91,12 @@ async function loadDetail() {
     const res = await getActivity(activityId.value)
     const a = res as ActivityDTO
     title.value = a.title
-    description.value = a.description
+    // 兼容历史富文本 HTML 数据:去除标签后回填纯文本
+    description.value = stripHtmlTags(a.description || '')
     startTimeTs.value = new Date(a.startTime).getTime()
     deadlineTs.value = new Date(a.registrationDeadline).getTime()
     contactPhone.value = a.contactPhone ?? ''
+    coverImages.value = a.coverImages || []
     isEdit.value = true
     syncTimeText()
   }
@@ -119,11 +128,55 @@ onLoad((options) => {
   }
 })
 
+// ====== 封面上传 ======
+async function handlePickCover() {
+  if (uploadingCover.value)
+    return
+  const remaining = COVER_IMAGES_MAX - coverImages.value.length
+  if (remaining <= 0) {
+    uni.showToast({ title: `最多 ${COVER_IMAGES_MAX} 张`, icon: 'none' })
+    return
+  }
+  try {
+    const chosen = await chooseImages(remaining, { prefix: 'cover' })
+    if (chosen.length === 0)
+      return
+    uploadingCover.value = true
+    const uploaded: string[] = []
+    for (const { file, name } of chosen) {
+      try {
+        const result = await uploadFileToCos({ file, name, purpose: 'generic' })
+        uploaded.push(result.url)
+      }
+      catch (e) {
+        console.warn('[create-activity] cover upload failed:', e)
+      }
+    }
+    if (uploaded.length === 0) {
+      uni.showToast({ title: '上传失败', icon: 'none' })
+      return
+    }
+    coverImages.value = [...coverImages.value, ...uploaded].slice(0, COVER_IMAGES_MAX)
+    uni.showToast({ title: `已上传 ${uploaded.length} 张`, icon: 'success' })
+  }
+  catch (e) {
+    const err = e as Error & { errMsg?: string }
+    uni.showToast({ title: err?.message || '选择失败', icon: 'none' })
+  }
+  finally {
+    uploadingCover.value = false
+  }
+}
+
+function handleRemoveCover(idx: number) {
+  coverImages.value = coverImages.value.filter((_, i) => i !== idx)
+}
+
 // ====== 校验 + 提交 ======
 function validate(): string | null {
   if (!title.value.trim())
     return '请填写活动标题'
-  if (!description.value.trim() || description.value === '<p><br></p>')
+  if (!description.value.trim())
     return '请填写活动介绍'
   if (!PHONE_RE.test(contactPhone.value.trim()))
     return '联系电话格式不正确'
@@ -145,6 +198,7 @@ async function handleSubmit() {
     startTime: new Date(startTimeTs.value).toISOString(),
     registrationDeadline: new Date(deadlineTs.value).toISOString(),
     contactPhone: contactPhone.value.trim(),
+    coverImages: coverImages.value,
   }
   try {
     if (isEdit.value && activityId.value) {
@@ -212,12 +266,55 @@ async function handleCancel() {
         >
       </view>
 
-      <!-- 活动介绍(富文本) -->
+      <!-- 活动介绍(纯文本) -->
       <view class="rounded-2xl bg-white px-4 py-3">
         <text class="mb-2 block text-sm text-[#666]">
           活动介绍
         </text>
-        <RichTextEditor v-model="description" placeholder="介绍活动内容、流程、注意事项等" />
+        <textarea
+          v-model="description"
+          class="mt-2 h-32 rounded-lg bg-[#f5f6f7] p-3 text-sm leading-6"
+          :maxlength="50000"
+          placeholder="介绍活动内容、流程、注意事项等"
+          placeholder-class="text-[#bbb]"
+        />
+      </view>
+
+      <!-- 轮播图片 -->
+      <view class="rounded-2xl bg-white px-4 py-3">
+        <view class="flex items-center justify-between">
+          <text class="text-sm text-[#666]">轮播图片</text>
+          <text class="text-xs text-[#999]">{{ coverImages.length }}/{{ COVER_IMAGES_MAX }}</text>
+        </view>
+        <text class="mt-1 block text-xs text-[#999]">
+          可上传 0-9 张图片,首张为默认封面
+        </text>
+        <view class="mt-3 flex flex-wrap gap-2">
+          <view
+            v-for="(url, idx) in coverImages"
+            :key="`${url}-${idx}`"
+            class="relative h-20 w-20 overflow-hidden rounded-lg"
+          >
+            <image :src="url" class="h-full w-full" mode="aspectFill" />
+            <view v-if="idx === 0" class="absolute left-0 top-0 rounded-br-lg bg-[#018d71] px-1.5 py-0.5">
+              <text class="text-[10px] text-white">封面</text>
+            </view>
+            <view
+              class="absolute right-0 top-0 h-5 w-5 flex items-center justify-center rounded-bl-lg bg-black/50"
+              @click="handleRemoveCover(idx)"
+            >
+              <text class="text-xs text-white">×</text>
+            </view>
+          </view>
+          <view
+            v-if="coverImages.length < COVER_IMAGES_MAX"
+            class="h-20 w-20 flex flex-col items-center justify-center border border-[#e0e0e0] rounded-lg border-dashed bg-[#fafafa]"
+            @click="handlePickCover"
+          >
+            <text class="text-2xl text-[#ccc]">+</text>
+            <text class="mt-0.5 text-xs text-[#999]">{{ uploadingCover ? '上传中' : '添加' }}</text>
+          </view>
+        </view>
       </view>
 
       <!-- 活动起始时间 -->

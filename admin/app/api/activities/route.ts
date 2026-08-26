@@ -21,6 +21,7 @@ function toActivityDTO(row: typeof activities.$inferSelect): ActivityDTO {
     startTime: row.startTime.toISOString(),
     registrationDeadline: row.registrationDeadline.toISOString(),
     contactPhone: row.contactPhone ?? null,
+    coverImages: row.coverImages ?? [],
     status: row.status,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -65,6 +66,7 @@ export async function POST(req: Request) {
       startTime: new Date(input.startTime),
       registrationDeadline: new Date(input.registrationDeadline),
       contactPhone: input.contactPhone ?? null,
+      coverImages: input.coverImages ?? [],
     })
     .returning()
 

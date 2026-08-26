@@ -634,6 +634,11 @@ export const activities = pgTable(
     }).notNull(),
     /** 活动联系人电话(可空) */
     contactPhone: text("contact_phone"),
+    /** 轮播图片 URL 数组(0-9 个,可空数组);默认空数组避免 NULL 语义混乱 */
+    coverImages: text("cover_images")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     status: text("status")
       .$type<ActivityStatus>()
       .notNull()

@@ -267,6 +267,8 @@ export type ActivityDTO = {
   registrationDeadline: string
   /** 活动联系人电话(可空) */
   contactPhone: string | null
+  /** 轮播图片 URL 数组(0-9 张) */
+  coverImages: string[]
   status: "active" | "cancelled"
   createdAt: string
   updatedAt: string

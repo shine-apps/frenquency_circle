@@ -73,6 +73,73 @@ jobs:
           fetch-depth: 0  # 完整历史,便于 metadata-action 提取 semver
 
       # ============================================================
+      # 1.5 构建 frontend_uniapp H5 产物
+      #     H5 不再在 Dockerfile 内构建,而是在 runner 上先构建好,
+      #     产物复制到 frontend_uniapp/h5-dist/ 后由 Dockerfile
+      #     COPY 进镜像(.dockerignore 排除了 **/dist 与 **/build,
+      #     故必须使用不被排除的暂存目录 h5-dist)。
+      # ============================================================
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          # 自动读取 frontend_uniapp/package.json 的 packageManager 字段(pnpm@10.10.0),
+          # 避免硬编码版本与项目声明漂移
+          package_json_file: frontend_uniapp/package.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          # 与 Dockerfile 基础镜像 node:24-slim 对齐,保持与改造前(Docker 内构建 H5)一致
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: frontend_uniapp/pnpm-lock.yaml
+
+      - name: Build frontend_uniapp H5
+        id: h5
+        env:
+          # 与原 Dockerfile 构建约定一致:
+          #   - CI=true + HUSKY=0   跳过 husky 的 git hook 初始化
+          #   - --no-scripts        跳过 prepare(init-husky / init-baseFiles),
+          #                         src/manifest.json 与 src/pages.json 已提交入库,构建不受影响
+          CI: 'true'
+          HUSKY: '0'
+          # 生产 API 地址:默认空串 = 同源部署(H5 请求相对路径 /api/* 直达本容器)
+          # 如需独立 API 域名,配置仓库变量 VITE_SERVER_BASEURL=https://api.example.com
+          VITE_SERVER_BASEURL: ${{ vars.VITE_SERVER_BASEURL }}
+        run: |
+          set -euo pipefail
+
+          echo "::group::安装 frontend_uniapp 依赖"
+          cd frontend_uniapp
+          pnpm install --frozen-lockfile --no-scripts
+          echo "::endgroup::"
+
+          echo "::group::注入构建期环境变量(.env.production 优先级高于 .env)"
+          #   VITE_APP_PUBLIC_BASE=/ui/   静态资源与路由 base(与容器 /ui/ 部署目录一致)
+          #   VITE_SERVER_BASEURL=        生产 API 地址(默认同源)
+          grep -q '^VITE_APP_PUBLIC_BASE=' env/.env.production \
+            && sed -i 's|^VITE_APP_PUBLIC_BASE=.*|VITE_APP_PUBLIC_BASE=/ui/|' env/.env.production \
+            || printf 'VITE_APP_PUBLIC_BASE=/ui/\n' >> env/.env.production
+          grep -q '^VITE_SERVER_BASEURL=' env/.env.production \
+            && sed -i "s|^VITE_SERVER_BASEURL=.*|VITE_SERVER_BASEURL=$VITE_SERVER_BASEURL|" env/.env.production \
+            || printf 'VITE_SERVER_BASEURL=%s\n' "$VITE_SERVER_BASEURL" >> env/.env.production
+          echo "::endgroup::"
+
+          echo "::group::构建 H5 (uni build)"
+          pnpm build:h5
+          echo "::endgroup::"
+
+          echo "::group::复制产物到暂存目录 h5-dist(供 Docker COPY)"
+          test -f dist/build/h5/index.html || {
+            echo "::error::H5 构建产物 dist/build/h5/index.html 不存在"
+            exit 1
+          }
+          rm -rf h5-dist
+          cp -r dist/build/h5 h5-dist
+          echo "✅ H5 产物已就绪: frontend_uniapp/h5-dist ($(find h5-dist -type f | wc -l) 个文件)"
+          echo "::endgroup::"
+
+      # ============================================================
       # 2. Dockerfile 静态校验(Hadolint)
       # ============================================================
       - name: Validate Dockerfile with Hadolint
@@ -346,6 +413,7 @@ jobs:
       - name: Generate workflow summary
         if: always()
         env:
+          H5_OUTCOME: ${{ steps.h5.outcome }}
           LINT_OUTCOME: ${{ steps.lint.outcome }}
           BUILD_OUTCOME: ${{ steps.build.outcome }}
           VERIFY_OUTCOME: ${{ steps.verify.outcome }}
@@ -370,6 +438,7 @@ jobs:
             esac
           }
           # 空值兜底为 skipped
+          [ -z "$H5_OUTCOME" ] && H5_OUTCOME="skipped"
           [ -z "$LINT_OUTCOME" ] && LINT_OUTCOME="skipped"
           [ -z "$BUILD_OUTCOME" ] && BUILD_OUTCOME="skipped"
           [ -z "$VERIFY_OUTCOME" ] && VERIFY_OUTCOME="skipped"
@@ -380,6 +449,7 @@ jobs:
             echo ""
             echo "| 步骤 | 状态 |"
             echo "|------|------|"
+            echo "| frontend_uniapp H5 构建 | $(icon "$H5_OUTCOME") $H5_OUTCOME |"
             echo "| Dockerfile 校验 (Hadolint) | $(icon "$LINT_OUTCOME") $LINT_OUTCOME |"
             echo "| 镜像构建 | $(icon "$BUILD_OUTCOME") $BUILD_OUTCOME |"
             echo "| 功能验证 | $(icon "$VERIFY_OUTCOME") $VERIFY_OUTCOME |"

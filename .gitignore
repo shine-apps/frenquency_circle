@@ -6,6 +6,8 @@ node_modules/
 out/
 build/
 dist/
+# H5 构建产物暂存目录(由 GitHub CI 构建后生成,供 Dockerfile COPY 进镜像,不入库)
+h5-dist/
 
 # env
 .env

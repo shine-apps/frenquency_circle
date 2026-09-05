@@ -248,7 +248,7 @@ function handleBack() {
                 {{ circle.creator.name }}
               </text>
               <text class="shrink-0 rounded-full bg-[#fff7e6] px-2 py-0.5 text-xs text-[#e68a00]">
-                传承人
+                老师
               </text>
             </view>
             <text class="mt-1 block text-xs text-[#999]">

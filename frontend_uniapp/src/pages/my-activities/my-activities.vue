@@ -50,7 +50,7 @@ async function fetchList() {
 onShow(() => {
   const role = userStore.userInfo?.role
   if (!canCreateCircle(role)) {
-    uni.showToast({ title: '仅传承人可访问', icon: 'none' })
+    uni.showToast({ title: '仅教师身份可访问', icon: 'none' })
     setTimeout(() => uni.navigateBack(), 800)
     return
   }
@@ -128,7 +128,7 @@ function statusText(status: string): string {
         活动管理
       </text>
       <text class="mt-1 block text-xs text-[#999]">
-        传承人专属;共 {{ list.length }} 个活动
+        教师专属;共 {{ list.length }} 个活动
       </text>
     </view>
 

@@ -15,6 +15,13 @@
       "when": 1787631464356,
       "tag": "0001_awesome_jane_foster",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788595838621,
+      "tag": "0002_blue_stephen_strange",
+      "breakpoints": true
     }
   ]
 }

@@ -17,7 +17,7 @@ export type Paginated<T> = {
 }
 
 /**
- * 用户角色:管理员 / 普通爱好者 / 传承人(老师)。
+ * 用户角色:管理员 / 普通爱好者 / 老师。
  */
 export type UserRole = "ADMIN" | "USER" | "TEACHER"
 

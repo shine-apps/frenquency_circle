@@ -271,7 +271,7 @@ describe("POST /api/activities", () => {
     const res = await POST(makeJsonRequest(VALID_BODY, `/api/activities`))
     expect(res.status).toBe(403)
     const body = (await res.json()) as IResponse<null>
-    expect(body.message).toBe("只有传承人或管理员可以发布活动")
+    expect(body.message).toBe("只有教师或管理员可以发布活动")
     expect(mockDb.insert).not.toHaveBeenCalled()
   })
 

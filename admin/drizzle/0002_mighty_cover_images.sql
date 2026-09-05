@@ -1,1 +1,0 @@
-ALTER TABLE "activities" ADD COLUMN "cover_images" text[] DEFAULT '{}'::text[] NOT NULL;

@@ -12,7 +12,7 @@ export interface UserInfo {
   /** 昵称(手机号登录用户为手机号) */
   name: string
   email: string
-  /** 用户角色:管理员 / 普通爱好者 / 传承人(老师) */
+  /** 用户角色:管理员 / 普通爱好者 / 老师 */
   role: UserRole
   /** 绑定手机号(从 email 提取或用户填写,可能为 null) */
   phone?: string | null

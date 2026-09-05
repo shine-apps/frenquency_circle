@@ -176,7 +176,7 @@ const avatarFallback = computed(() => (user.value?.name ? user.value.name[0] : '
 const roleInfo = computed<{ text: string, type: 'warning' | 'primary' | 'danger' }>(() => {
   const role = user.value?.role
   if (role === 'TEACHER')
-    return { text: '传承人', type: 'warning' }
+    return { text: '教师', type: 'warning' }
   if (role === 'ADMIN')
     return { text: '管理员', type: 'danger' }
   return { text: '爱好者', type: 'primary' }

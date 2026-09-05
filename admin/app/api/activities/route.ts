@@ -45,7 +45,7 @@ export async function POST(req: Request) {
   const { id: userId, role } = guard.user
 
   if (!PUBLISH_ROLES.includes(role as UserRole)) {
-    return withCors(fail(403, "只有传承人或管理员可以发布活动"), req)
+    return withCors(fail(403, "只有教师或管理员可以发布活动"), req)
   }
 
   // 2. 解析并校验请求体

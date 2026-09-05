@@ -104,7 +104,7 @@ function handleFollowedCircles() {
 /** 跳我发布的圈子页(TEACHER / ADMIN 专属) */
 function handleMyPublished() {
   if (!canCreateCircle(user.value?.role)) {
-    uni.showToast({ title: '仅传承人可访问', icon: 'none' })
+    uni.showToast({ title: '仅教师身份可访问', icon: 'none' })
     return
   }
   uni.navigateTo({ url: '/pages/my-published/my-published' })
@@ -173,7 +173,7 @@ const avatarFallback = computed(() => {
 const roleInfo = computed<{ text: string, type: 'warning' | 'primary' | 'danger' }>(() => {
   const role: UserRole | undefined = user.value?.role
   if (role === 'TEACHER')
-    return { text: '传承人', type: 'warning' }
+    return { text: '老师', type: 'warning' }
   if (role === 'ADMIN')
     return { text: '管理员', type: 'danger' }
   return { text: '爱好者', type: 'primary' }
@@ -299,7 +299,7 @@ const roleChipClass = computed(() => {
             我发布的圈子
           </text>
           <text class="mt-0.5 text-xs text-[#999]">
-            传承人专属
+            教师专属
           </text>
         </view>
         <text class="text-sm text-[#ccc]">

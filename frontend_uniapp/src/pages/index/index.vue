@@ -414,7 +414,7 @@ function handleCircleClick(circleId: string): void {
                 </view>
                 <view class="mt-1">
                   <text class="text-xs text-[#999]">
-                    {{ formatDateTime(item.circle.activityTime) }}
+                    {{ item.circle.activityTime }}
                   </text>
                 </view>
               </view>

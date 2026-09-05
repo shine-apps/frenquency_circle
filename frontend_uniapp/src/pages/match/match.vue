@@ -341,7 +341,7 @@ function handleGoHome() {
               </view>
               <view class="mt-1 flex items-center gap-1">
                 <text class="text-xs text-[#999]">
-                  {{ formatDateTime(c.activityTime) }}
+                  {{ c.activityTime }}
                 </text>
               </view>
               <text v-if="c.address" class="mt-0.5 block truncate text-xs text-[#999]">

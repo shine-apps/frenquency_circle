@@ -12,6 +12,7 @@ const sampleUsers: UserProfileDTO[] = [
     email: "admin@example.com",
     name: "Admin",
     role: "ADMIN",
+    wechat: "admin-wechat",
     privacySettings: {
       allowMatch: true,
       publicContact: true,
@@ -26,6 +27,7 @@ const sampleUsers: UserProfileDTO[] = [
     email: "user@example.com",
     name: "User",
     role: "USER",
+    wechat: "user-wechat",
     privacySettings: {
       allowMatch: true,
       publicContact: true,

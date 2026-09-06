@@ -194,12 +194,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               errmsg: err.errmsg,
               raw: err.raw,
             })
-          } else {
-            logger.warn(LOG_PREFIX.WECHAT, "code2Session failed", {
-              error: errMessage(err),
-            })
+            // 透传微信错误,便于登录页直接看到真实原因(而非泛化 401)
+            throw new Error(`[WECHAT] 微信登录凭证校验失败 errcode=${err.errcode} msg=${err.errmsg}`)
           }
-          return null
+          logger.warn(LOG_PREFIX.WECHAT, "code2Session failed", { error: errMessage(err) })
+          throw err
         }
         logger.info(LOG_PREFIX.WECHAT, "code2Session ok", {
           openid: session.openid,
@@ -229,12 +228,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               errmsg: err.errmsg,
               raw: err.raw,
             })
-          } else {
-            logger.warn(LOG_PREFIX.WECHAT, "getPhoneNumber failed", {
-              error: errMessage(err),
-            })
+            // 透传微信错误,便于登录页直接看到真实原因(而非泛化 401)
+            const hint =
+              err.errcode === -10000
+                ? "（开发者工具不支持真实手机号,或小程序未开通「获取手机号」能力;请确认后台已开通并在真机预览/体验版测试）"
+                : ""
+            throw new Error(`[WECHAT] 微信获取手机号失败 errcode=${err.errcode} msg=${err.errmsg}${hint}`)
           }
-          return null
+          logger.warn(LOG_PREFIX.WECHAT, "getPhoneNumber failed", { error: errMessage(err) })
+          throw err
         }
         if (!isValidPhone(phone)) {
           logger.warn(LOG_PREFIX.WECHAT, "Phone invalid from WeChat", { phone })

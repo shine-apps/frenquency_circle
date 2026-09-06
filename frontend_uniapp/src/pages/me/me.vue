@@ -101,6 +101,16 @@ function handleFollowedCircles() {
   uni.navigateTo({ url: '/pages/followed-circles/followed-circles' })
 }
 
+/** 跳我关注的人页 */
+function handleFollowedUsers() {
+  uni.navigateTo({ url: '/pages/followed-users/followed-users' })
+}
+
+/** 跳联系请求页(打招呼的收发处理) */
+function handleContactRequests() {
+  uni.navigateTo({ url: '/pages/contact-requests/contact-requests' })
+}
+
 /** 跳我发布的圈子页(TEACHER / ADMIN 专属) */
 function handleMyPublished() {
   if (!canCreateCircle(user.value?.role)) {
@@ -228,7 +238,7 @@ const roleChipClass = computed(() => {
 
     <!-- ====== 设置入口列表 ====== -->
     <view class="mx-4 rounded-2xl bg-white">
-      <view class="flex items-center justify-between border-b-inset border-[#f5f5f5] px-4 py-4" @click="handleNotifications">
+      <view class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4" @click="handleNotifications">
         <text class="text-sm text-[#333] font-medium">
           消息
         </text>
@@ -247,7 +257,7 @@ const roleChipClass = computed(() => {
         </view>
       </view>
 
-      <view class="flex items-center justify-between border-b-inset border-[#f5f5f5] px-4 py-4" @click="handleTags">
+      <view class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4" @click="handleTags">
         <text class="text-sm text-[#333] font-medium">
           我的兴趣
         </text>
@@ -261,7 +271,7 @@ const roleChipClass = computed(() => {
         </view>
       </view>
 
-      <view class="flex items-center justify-between border-b-inset border-[#f5f5f5] px-4 py-4" @click="handleMyCircles">
+      <view class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4" @click="handleMyCircles">
         <view class="flex flex-col">
           <text class="text-sm text-[#333] font-medium">
             我的圈子
@@ -275,7 +285,7 @@ const roleChipClass = computed(() => {
         </text>
       </view>
 
-      <view class="flex items-center justify-between border-b-inset border-[#f5f5f5] px-4 py-4" @click="handleFollowedCircles">
+      <view class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4" @click="handleFollowedCircles">
         <view class="flex flex-col">
           <text class="text-sm text-[#333] font-medium">
             我关注的圈子
@@ -289,9 +299,37 @@ const roleChipClass = computed(() => {
         </text>
       </view>
 
+      <view class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4" @click="handleFollowedUsers">
+        <view class="flex flex-col">
+          <text class="text-sm text-[#333] font-medium">
+            我关注的人
+          </text>
+          <text class="mt-0.5 text-xs text-[#999]">
+            收藏的同趣伙伴,随时回看
+          </text>
+        </view>
+        <text class="text-sm text-[#ccc]">
+          ›
+        </text>
+      </view>
+
+      <view class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4" @click="handleContactRequests">
+        <view class="flex flex-col">
+          <text class="text-sm text-[#333] font-medium">
+            联系请求
+          </text>
+          <text class="mt-0.5 text-xs text-[#999]">
+            收到与发出的打招呼,同意后互看微信号
+          </text>
+        </view>
+        <text class="text-sm text-[#ccc]">
+          ›
+        </text>
+      </view>
+
       <view
         v-if="canCreateCircle(user?.role)"
-        class="flex items-center justify-between border-b-inset border-[#f5f5f5] px-4 py-4"
+        class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4"
         @click="handleMyPublished"
       >
         <view class="flex flex-col">
@@ -308,7 +346,7 @@ const roleChipClass = computed(() => {
       </view>
 
       <view
-        class="flex items-center justify-between border-b-inset border-[#f5f5f5] px-4 py-4"
+        class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4"
         @click="handleMyActivities"
       >
         <view class="flex flex-col">
@@ -326,7 +364,7 @@ const roleChipClass = computed(() => {
 
       <view
         v-if="!canCreateCircle(user?.role)"
-        class="flex items-center justify-between border-b-inset border-[#f5f5f5] px-4 py-4"
+        class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4"
         @click="handleTeacherCert"
       >
         <view class="flex flex-col">
@@ -342,7 +380,7 @@ const roleChipClass = computed(() => {
         </text>
       </view>
 
-      <view class="flex items-center justify-between border-b-inset border-[#f5f5f5] px-4 py-4" @click="handlePrivacy">
+      <view class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4" @click="handlePrivacy">
         <text class="text-sm text-[#333] font-medium">
           隐私设置
         </text>

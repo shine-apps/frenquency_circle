@@ -8,24 +8,24 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
  *
  * 测试内容:
  * - 空结果
- * - 按加权总分降序(距离 30% + 重合度 50% + 活跃度 20%)
- * - 分页
+ * - 排序/分页由 SQL 层完成(ORDER BY totalScore DESC / LIMIT/OFFSET),mock 按页返回
+ * - 分页 total 来自 COUNT 查询
  * - DTO 形状(tags 为 string[] 名称数组)
  *
- * 注意:circles.tags 为 text[] 数组列,候选行直接携带 tags 名称数组,
- * 不再需要第二次 SELECT 关联标签。
+ * 注意:重构后距离与打分均在 SQL 层计算,候选行直接携带 SQL 计算的
+ * `distance` 字段;circles.tags 为 text[] 数组列,行内直接携带 tags 名称数组。
  */
 
-type CandidateCircle = {
+type CandidateRow = {
   id: string
   title: string
-  latitude: number
-  longitude: number
   address: string
   activityTime: string | null
   memberCount: number
   maxMembers: number | null
   tags: string[]
+  /** SQL 层 Haversine 计算的精确距离(km) */
+  distance: number
 }
 
 const { mockDb, setSelectResultsQueue, setSelectResults } = vi.hoisted(() => {
@@ -87,28 +87,32 @@ import type { MatchCircleDTO } from "@/types/api"
 const REF_LAT = 39.908
 const REF_LNG = 116.397
 
-function makeCandidate(overrides: Partial<CandidateCircle>): CandidateCircle {
+function makeRow(overrides: Partial<CandidateRow>): CandidateRow {
   return {
     id: overrides.id ?? "circle-1",
     title: overrides.title ?? "Circle",
-    latitude: overrides.latitude ?? 39.91,
-    longitude: overrides.longitude ?? 116.40,
     address: overrides.address ?? "某地",
     activityTime: overrides.activityTime ?? null,
     memberCount: overrides.memberCount ?? 0,
     maxMembers: overrides.maxMembers === undefined ? 10 : overrides.maxMembers,
     tags: overrides.tags ?? [],
+    distance: overrides.distance ?? 1,
   }
+}
+
+/** 构造「数据页 + COUNT」select 队列:数据页查询先入队,COUNT 查询随后 */
+function setQueue(pageRows: CandidateRow[], total: number) {
+  setSelectResultsQueue([pageRows, [{ count: total }]])
 }
 
 beforeEach(() => {
   mockDb.select.mockClear()
-  setSelectResults([])
+  setQueue([], 0)
 })
 
 describe("lib/match/circle-matcher - matchCircles", () => {
   it("returns empty list when no candidates found", async () => {
-    setSelectResultsQueue([[]])
+    setQueue([], 0) // 无候选圈子:数据页空,COUNT=0
 
     const result = await matchCircles({
       lat: REF_LAT,
@@ -123,39 +127,34 @@ describe("lib/match/circle-matcher - matchCircles", () => {
     expect(result.total).toBe(0)
   })
 
-  it("sorts circles by weighted total score descending", async () => {
-    // Circle A: 近 + 全标签重合 + 高活跃度
-    const circleA = makeCandidate({
+  it("returns rows in SQL-provided order (ORDER BY totalScore DESC in SQL)", async () => {
+    // 排序已下推 SQL,mock 按总分降序返回;此处验证引擎不再改变顺序
+    const circleA = makeRow({
       id: "circle-a",
       title: "A",
-      latitude: 39.91,
-      longitude: 116.40,
+      distance: 0.5,
       memberCount: 8,
       maxMembers: 10,
       tags: ["太极拳", "气功功法", "站桩"],
     })
-    // Circle B: 中距离 + 部分重合 + 中活跃度
-    const circleB = makeCandidate({
+    const circleB = makeRow({
       id: "circle-b",
       title: "B",
-      latitude: 39.95,
-      longitude: 116.45,
+      distance: 5,
       memberCount: 3,
       maxMembers: 10,
       tags: ["太极拳"],
     })
-    // Circle C: 远 + 无重合 + 低活跃度
-    const circleC = makeCandidate({
+    const circleC = makeRow({
       id: "circle-c",
       title: "C",
-      latitude: 39.98,
-      longitude: 116.48,
+      distance: 9,
       memberCount: 0,
       maxMembers: 10,
       tags: ["书法"],
     })
 
-    setSelectResultsQueue([[circleA, circleB, circleC]])
+    setQueue([circleA, circleB, circleC], 3)
 
     const result = await matchCircles({
       lat: REF_LAT,
@@ -167,25 +166,26 @@ describe("lib/match/circle-matcher - matchCircles", () => {
     })
 
     expect(result.list).toHaveLength(3)
+    expect(result.total).toBe(3)
     expect(result.list[0]!.circleId).toBe("circle-a")
     expect(result.list[1]!.circleId).toBe("circle-b")
     expect(result.list[2]!.circleId).toBe("circle-c")
   })
 
-  it("paginates results correctly", async () => {
-    const circles: CandidateCircle[] = Array.from({ length: 5 }, (_, i) =>
-      makeCandidate({
+  it("returns only current page rows with total from COUNT query", async () => {
+    // LIMIT/OFFSET 已下推 SQL:mock 仅返回当前页 2 行,COUNT 返回总数 5
+    const pageRows: CandidateRow[] = Array.from({ length: 2 }, (_, i) =>
+      makeRow({
         id: `circle-${i}`,
         title: `Circle${i}`,
-        latitude: 39.908 + i * 0.01,
-        longitude: 116.397 + i * 0.01,
+        distance: 1 + i,
         memberCount: 5,
         maxMembers: 10,
         tags: [],
       })
     )
 
-    setSelectResultsQueue([circles])
+    setQueue(pageRows, 5)
 
     const result = await matchCircles({
       lat: REF_LAT,
@@ -203,19 +203,18 @@ describe("lib/match/circle-matcher - matchCircles", () => {
   })
 
   it("returns correct DTO shape with tags as string array", async () => {
-    const circle = makeCandidate({
+    const row = makeRow({
       id: "circle-dto",
       title: "太极拳晨练班",
-      latitude: 39.91,
-      longitude: 116.40,
       address: "朝阳公园南门",
       activityTime: "每周六早 7:00-8:30",
       memberCount: 5,
       maxMembers: 15,
       tags: ["太极拳"],
+      distance: 2.345,
     })
 
-    setSelectResultsQueue([[circle]])
+    setQueue([row], 1)
 
     const result = await matchCircles({
       lat: REF_LAT,
@@ -234,21 +233,21 @@ describe("lib/match/circle-matcher - matchCircles", () => {
     expect(dto.memberCount).toBe(5)
     expect(dto.maxMembers).toBe(15)
     expect(dto.tags).toEqual(["太极拳"])
-    expect(typeof dto.distanceKm).toBe("number")
+    // 距离保留 2 位小数
+    expect(dto.distanceKm).toBe(2.35)
   })
 
   it("handles null maxMembers (uses memberCount/10 for activity)", async () => {
-    const circle = makeCandidate({
+    const row = makeRow({
       id: "circle-no-max",
       title: "No Max",
-      latitude: 39.91,
-      longitude: 116.40,
       memberCount: 3,
       maxMembers: null,
       tags: [],
+      distance: 1,
     })
 
-    setSelectResultsQueue([[circle]])
+    setQueue([row], 1)
 
     const result = await matchCircles({
       lat: REF_LAT,
@@ -261,5 +260,20 @@ describe("lib/match/circle-matcher - matchCircles", () => {
 
     expect(result.list).toHaveLength(1)
     expect(result.list[0]!.maxMembers).toBeNull()
+  })
+
+  it("issues two parallel queries: page data + COUNT", async () => {
+    setQueue([], 0)
+
+    await matchCircles({
+      lat: REF_LAT,
+      lng: REF_LNG,
+      tags: [],
+      rangeKm: 5,
+      page: 1,
+      pageSize: 20,
+    })
+
+    expect(mockDb.select).toHaveBeenCalledTimes(2)
   })
 })

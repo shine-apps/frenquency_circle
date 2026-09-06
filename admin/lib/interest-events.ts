@@ -26,6 +26,12 @@ export function chinaDay(date: Date): string {
   return `${y}-${m}-${d}`
 }
 
+/** 东八区自然日零点对应的 UTC 时刻,与 chinaDay 口径严格一致(供配额计算复用) */
+export function startOfChinaDay(now: Date = new Date()): Date {
+  const [y, m, d] = chinaDay(now).split("-").map(Number)
+  return new Date(Date.UTC(y, m - 1, d, 0, 0, 0) - 8 * 60 * 60 * 1000)
+}
+
 /**
  * 计算事件得分(以天为单位):
  * 得分 = 事件日期与锚定日期 2026-08-24 的天数差,向下取整,早于锚定日按 0 计。

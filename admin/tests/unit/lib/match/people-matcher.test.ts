@@ -8,24 +8,24 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
  *
  * 测试内容:
  * - 空结果(无候选用户)
- * - 按加权总分降序排序
+ * - 排序/分页由 SQL 层完成(ORDER BY totalScore DESC / LIMIT/OFFSET),mock 按页返回
  * - locationPrecision 脱敏(exact / community / region)
- * - 分页
+ * - 数据页与 COUNT 并行查询,total 来自 COUNT 结果
  *
- * 注意:users.tags 为 text[] 数组列,候选行直接携带 tags 名称数组,
- * 不再需要第二次 SELECT 关联标签。
+ * 注意:重构后距离与打分均在 SQL 层计算,候选行直接携带 SQL 计算的
+ * `distance` 字段;users.tags 为 text[] 数组列,行内直接携带 tags 名称数组。
  */
 
-type CandidateUser = {
+type CandidateRow = {
   id: string
   name: string
   avatarUrl: string | null
-  latitude: number | null
-  longitude: number | null
   activityLevel: string
   practiceYears: number | null
   privacySettings: unknown
   tags: string[]
+  /** SQL 层 Haversine 计算的精确距离(km) */
+  distance: number
 }
 
 const { mockDb, setSelectResultsQueue, setSelectResults } = vi.hoisted(() => {
@@ -87,13 +87,11 @@ import type { MatchPersonDTO } from "@/types/api"
 const REF_LAT = 39.908
 const REF_LNG = 116.397
 
-function makeCandidate(overrides: Partial<CandidateUser>): CandidateUser {
+function makeRow(overrides: Partial<CandidateRow>): CandidateRow {
   return {
     id: overrides.id ?? "user-1",
     name: overrides.name ?? "User",
     avatarUrl: overrides.avatarUrl ?? null,
-    latitude: overrides.latitude ?? 39.91,
-    longitude: overrides.longitude ?? 116.40,
     activityLevel: overrides.activityLevel ?? "medium",
     practiceYears: overrides.practiceYears ?? null,
     privacySettings:
@@ -103,17 +101,23 @@ function makeCandidate(overrides: Partial<CandidateUser>): CandidateUser {
         locationPrecision: "exact",
       },
     tags: overrides.tags ?? [],
+    distance: overrides.distance ?? 1,
   }
+}
+
+/** 构造「数据页 + COUNT」select 队列:数据页查询先入队,COUNT 查询随后 */
+function setQueue(pageRows: CandidateRow[], total: number) {
+  setSelectResultsQueue([pageRows, [{ count: total }]])
 }
 
 beforeEach(() => {
   mockDb.select.mockClear()
-  setSelectResults([])
+  setQueue([], 0)
 })
 
 describe("lib/match/people-matcher - matchPeople", () => {
   it("returns empty list when no candidates found", async () => {
-    setSelectResultsQueue([[]]) // 无候选用户
+    setQueue([], 0) // 无候选用户:数据页空,COUNT=0
 
     const result = await matchPeople({
       lat: REF_LAT,
@@ -129,51 +133,31 @@ describe("lib/match/people-matcher - matchPeople", () => {
     expect(result.total).toBe(0)
   })
 
-  it("sorts candidates by weighted total score descending", async () => {
-    // User A: 近距离 + 高活跃度 + 全标签重合
-    const userA = makeCandidate({
+  it("returns rows in SQL-provided order (ORDER BY totalScore DESC in SQL)", async () => {
+    // 排序已下推 SQL,mock 按总分降序返回;此处验证引擎不再改变顺序
+    const userA = makeRow({
       id: "user-a",
       name: "Alice",
-      latitude: 39.91,
-      longitude: 116.40,
+      distance: 0.5,
       activityLevel: "high",
       tags: ["太极拳", "气功功法", "站桩"],
-      privacySettings: {
-        allowMatch: true,
-        publicContact: true,
-        locationPrecision: "exact",
-      },
     })
-    // User B: 中距离 + 中活跃度 + 部分标签重合
-    const userB = makeCandidate({
+    const userB = makeRow({
       id: "user-b",
       name: "Bob",
-      latitude: 39.95,
-      longitude: 116.45,
+      distance: 5,
       activityLevel: "medium",
       tags: ["太极拳"],
-      privacySettings: {
-        allowMatch: true,
-        publicContact: true,
-        locationPrecision: "exact",
-      },
     })
-    // User C: 远距离 + 低活跃度 + 无标签重合
-    const userC = makeCandidate({
+    const userC = makeRow({
       id: "user-c",
       name: "Charlie",
-      latitude: 39.98,
-      longitude: 116.48,
+      distance: 9,
       activityLevel: "low",
       tags: ["书法"],
-      privacySettings: {
-        allowMatch: true,
-        publicContact: true,
-        locationPrecision: "exact",
-      },
     })
 
-    setSelectResultsQueue([[userA, userB, userC]])
+    setQueue([userA, userB, userC], 3)
 
     const result = await matchPeople({
       lat: REF_LAT,
@@ -186,17 +170,17 @@ describe("lib/match/people-matcher - matchPeople", () => {
     })
 
     expect(result.list).toHaveLength(3)
+    expect(result.total).toBe(3)
     expect(result.list[0]!.userId).toBe("user-a")
     expect(result.list[1]!.userId).toBe("user-b")
     expect(result.list[2]!.userId).toBe("user-c")
   })
 
   it("applies locationPrecision to distanceKm", async () => {
-    const userExact = makeCandidate({
+    const userExact = makeRow({
       id: "user-exact",
       name: "Exact",
-      latitude: 39.92,
-      longitude: 116.41,
+      distance: 1.3,
       activityLevel: "medium",
       privacySettings: {
         allowMatch: true,
@@ -204,11 +188,10 @@ describe("lib/match/people-matcher - matchPeople", () => {
         locationPrecision: "exact",
       },
     })
-    const userCommunity = makeCandidate({
+    const userCommunity = makeRow({
       id: "user-community",
       name: "Community",
-      latitude: 39.95,
-      longitude: 116.45,
+      distance: 1.3,
       activityLevel: "medium",
       privacySettings: {
         allowMatch: true,
@@ -216,11 +199,10 @@ describe("lib/match/people-matcher - matchPeople", () => {
         locationPrecision: "community",
       },
     })
-    const userRegion = makeCandidate({
+    const userRegion = makeRow({
       id: "user-region",
       name: "Region",
-      latitude: 39.98,
-      longitude: 116.48,
+      distance: 1.3,
       activityLevel: "medium",
       privacySettings: {
         allowMatch: true,
@@ -229,7 +211,7 @@ describe("lib/match/people-matcher - matchPeople", () => {
       },
     })
 
-    setSelectResultsQueue([[userExact, userCommunity, userRegion]])
+    setQueue([userExact, userCommunity, userRegion], 3)
 
     const result = await matchPeople({
       lat: REF_LAT,
@@ -246,26 +228,25 @@ describe("lib/match/people-matcher - matchPeople", () => {
     const region = result.list.find((m) => m.userId === "user-region")!
 
     // exact: 保留 2 位小数
-    expect(exact.distanceKm).toBe(Math.round(exact.distanceKm * 100) / 100)
-    // community: 0.5 的整数倍
-    expect(community.distanceKm % 0.5).toBe(0)
+    expect(exact.distanceKm).toBe(1.3)
+    // community: 0.5 的整数倍(round(1.3/0.5)=3 → 1.5)
+    expect(community.distanceKm).toBe(1.5)
     // region: 5 的整数倍
-    expect(region.distanceKm % 5).toBe(0)
+    expect(region.distanceKm).toBe(0)
   })
 
-  it("paginates results correctly", async () => {
-    const users: CandidateUser[] = Array.from({ length: 5 }, (_, i) =>
-      makeCandidate({
+  it("returns only current page rows with total from COUNT query", async () => {
+    // LIMIT/OFFSET 已下推 SQL:mock 仅返回当前页 2 行,COUNT 返回总数 5
+    const pageRows: CandidateRow[] = Array.from({ length: 2 }, (_, i) =>
+      makeRow({
         id: `user-${i}`,
         name: `User${i}`,
-        // 越来越远,确保排序可预测
-        latitude: 39.908 + i * 0.01,
-        longitude: 116.397 + i * 0.01,
+        distance: 1 + i,
         activityLevel: "medium",
       })
     )
 
-    setSelectResultsQueue([users])
+    setQueue(pageRows, 5)
 
     const result = await matchPeople({
       lat: REF_LAT,
@@ -281,22 +262,22 @@ describe("lib/match/people-matcher - matchPeople", () => {
     expect(result.total).toBe(5)
     expect(result.page).toBe(1)
     expect(result.pageSize).toBe(2)
-    // 最近的排在前面
     expect(result.list[0]!.userId).toBe("user-0")
     expect(result.list[1]!.userId).toBe("user-1")
   })
 
   it("returns correct DTO shape with tags as string array", async () => {
-    const user = makeCandidate({
+    const row = makeRow({
       id: "user-dto",
       name: "DTO User",
       avatarUrl: "http://example.com/avatar.jpg",
       practiceYears: 10,
       activityLevel: "high",
       tags: ["太极拳"],
+      distance: 2,
     })
 
-    setSelectResultsQueue([[user]])
+    setQueue([row], 1)
 
     const result = await matchPeople({
       lat: REF_LAT,
@@ -315,6 +296,22 @@ describe("lib/match/people-matcher - matchPeople", () => {
     expect(dto.activityLevel).toBe("high")
     expect(dto.practiceYears).toBe(10)
     expect(dto.tags).toEqual(["太极拳"])
-    expect(typeof dto.distanceKm).toBe("number")
+    expect(dto.distanceKm).toBe(2)
+  })
+
+  it("issues two parallel queries: page data + COUNT", async () => {
+    setQueue([], 0)
+
+    await matchPeople({
+      lat: REF_LAT,
+      lng: REF_LNG,
+      tags: [],
+      rangeKm: 5,
+      currentUserId: "me",
+      page: 1,
+      pageSize: 20,
+    })
+
+    expect(mockDb.select).toHaveBeenCalledTimes(2)
   })
 })

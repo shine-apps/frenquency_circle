@@ -1,0 +1,1 @@
+CREATE INDEX "users_location_idx" ON "users" USING btree ("latitude","longitude");

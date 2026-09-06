@@ -1,5 +1,6 @@
 import { getMyProfile, updateMyTags, updateProfile } from '@/api/auth'
 import { useUserStore } from '@/store/user'
+import type { UserProfile } from '@/types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { restoreGuestProfile, saveGuestLocation, saveGuestTags } from './guest-profile'
 
@@ -20,7 +21,7 @@ const TAGS_KEY = 'guest_tags'
 const LOCATION_KEY = 'guest_location'
 
 /** 构造一份完整资料返回值(默认:未设置兴趣与位置) */
-function makeProfile(patch: Record<string, unknown> = {}) {
+function makeProfile(patch: Record<string, unknown> = {}): UserProfile {
   return {
     id: 'u1',
     email: 'a@b.com',
@@ -29,6 +30,9 @@ function makeProfile(patch: Record<string, unknown> = {}) {
     tags: [],
     location: null,
     address: null,
+    privacySettings: { allowMatch: true, publicContact: true, locationPrecision: 'exact' },
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
     ...patch,
   }
 }

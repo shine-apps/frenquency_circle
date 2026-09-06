@@ -10,9 +10,14 @@ dist/
 h5-dist/
 
 # env
-.env
+# 仅忽略根级与 admin 的 .env(可能含 WECHAT_MP_APP_SECRET / DATABASE_URL 等机密);
+# frontend_uniapp/env/.env 仅含 VITE_ 公开配置,保留可跟踪
+/.env
+admin/.env
 .env.local
 .env.*.local
+# 测试产物
+vitest-out.txt
 
 # keep env examples
 !.env.example

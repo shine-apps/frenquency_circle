@@ -58,8 +58,10 @@ export type UserDTO = {
   role: UserRole
   /** 头像 URL(可空) */
   avatarUrl?: string | null
-  /** 手机号(可空) */
+  /** 手机号(可空,登录实名凭证;仅本人可见,不进入任何对外响应) */
   phone?: string | null
+  /** 微信号(可空)。人-人联系链路中唯一可对外展示的联系方式 */
+  wechat?: string | null
   /** 练习年限(可空,TEACHER 角色常用) */
   practiceYears?: number | null
   /** 活跃度等级(可空,默认 medium) */
@@ -158,7 +160,59 @@ export type MatchCircleDTO = {
 }
 
 /**
- * 公开用户主页 DTO(用于 /api/users/[id]/profile 响应)。
+ * 联系方式可见性判定原因。
+ * - `self`         本人查看自己
+ * - `accepted`     双方已通过打招呼建立联系(唯一解锁途径)
+ * - `need_request` 对方已填联系方式但双方尚未建立联系,需先打招呼
+ * - `not_provided` 对方未填写任何联系方式
+ */
+export type ContactVisibilityReason =
+  | "self"
+  | "accepted"
+  | "need_request"
+  | "not_provided"
+
+/**
+ * 联系方式可见性。
+ * - 解锁规则:仅「本人查看自己」或「双方已互相接受打招呼」时可见,
+ *   对方隐私设置中的 publicContact 不影响本规则;
+ * - 优先返回微信号(`wechat`);微信号缺失时兜底返回手机号(`phone`),
+ *   手机号仅作为"联系不到微信时的备用通道",不会在无权查看时泄露。
+ */
+export type ContactVisibility = {
+  visible: boolean
+  /** 可见的微信号;仅在 visible 为 true 且有微信号时有值 */
+  wechat: string | null
+  /** 微信号缺失时的兜底联系方式(手机号);仅在 visible 为 true 且 wechat 为空时有值 */
+  phone: string | null
+  /** 实际可对外展示的联系方式类型,前端据此展示"微信/手机号"及复制/拨打行为 */
+  contactType: "wechat" | "phone" | null
+  reason: ContactVisibilityReason
+}
+
+/** 当前登录用户与目标用户之间的人-人关系快照。 */
+export type UserRelation = {
+  /** 我是否已关注对方 */
+  followed: boolean
+  /**
+   * - `none`             无往来
+   * - `pending_sent`     我发出的,等待对方处理
+   * - `pending_received` 我收到的,等待我处理
+   * - `accepted`         已建立联系
+   * - `rejected`         最近一次请求被拒绝(可再次发起)
+   */
+  contactStatus:
+    | "none"
+    | "pending_sent"
+    | "pending_received"
+    | "accepted"
+    | "rejected"
+  /** pending_received 时为待处理请求 id,供前端直接调 accept / reject */
+  requestId: string | null
+}
+
+/**
+ * 公开用户主页 DTO(用于 GET /api/users/[id]/profile 响应)。
  * 不含 email / phone / privacySettings 等敏感字段。
  */
 export type PublicUserProfileDTO = {
@@ -170,6 +224,42 @@ export type PublicUserProfileDTO = {
   practiceYears: number | null
   address: string | null
   createdAt: string
+  /** 联系方式可见性:visible 为 true 时,contactType 指示 wechat / phone 哪种有值 */
+  contact: ContactVisibility
+  /** 当前登录用户与该用户的关系 */
+  relation: UserRelation
+}
+
+/**
+ * 联系请求 DTO(用于 /api/contact-requests 响应)。
+ * `message` 仅一次性自我介绍,不承担聊天职责。
+ */
+export type ContactRequestDTO = {
+  id: string
+  /** 发起方 */
+  fromUser: { id: string; name: string; avatarUrl: string | null }
+  /** 接收方 */
+  toUser: { id: string; name: string; avatarUrl: string | null }
+  message: string | null
+  status: "pending" | "accepted" | "rejected"
+  createdAt: string
+  /** 对方处理时间(未处理为 null) */
+  respondedAt: string | null
+}
+
+/**
+ * 我关注的人列表项 DTO(用于 GET /api/users/followed 响应)。
+ */
+export type FollowedUserDTO = {
+  id: string
+  name: string
+  avatarUrl: string | null
+  tags: string[]
+  activityLevel: ActivityLevel
+  practiceYears: number | null
+  address: string | null
+  /** 关注时间 */
+  followedAt: string
 }
 
 /**
@@ -305,12 +395,22 @@ export type NotificationDTO = {
   id: string
   /** 触发者 id(可空);系统通知为 null */
   actorId: string | null
-  /** 关联业务对象类型(可空),本期仅 'circle' */
-  entityType: "circle" | null
-  /** 关联业务对象 id(可空),如 circleId */
+  /** 关联业务对象类型(可空):'circle' 圈子 / 'user' 用户 */
+  entityType: "circle" | "user" | null
+  /** 关联业务对象 id(可空),如 circleId / userId */
   entityId: string | null
-  /** 通知类型:circle_review / circle_review_result / circle_followed */
-  type: "circle_review" | "circle_review_result" | "circle_followed"
+  /**
+   * 通知类型:
+   * - circle_review / circle_review_result / circle_followed 圈子相关
+   * - contact_request 收到打招呼 / contact_accepted 打招呼被接受 / user_followed 被关注
+   */
+  type:
+    | "circle_review"
+    | "circle_review_result"
+    | "circle_followed"
+    | "contact_request"
+    | "contact_accepted"
+    | "user_followed"
   title: string
   content: string
   /** 引导打开的页面链接(小程序页面路径或后台路由) */

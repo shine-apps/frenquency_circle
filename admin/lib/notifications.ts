@@ -1,6 +1,11 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { notifications, users, type NotificationType } from "@/db/schema"
+import {
+  notifications,
+  users,
+  type NotificationEntityType,
+  type NotificationType,
+} from "@/db/schema"
 import { logger, LOG_PREFIX } from "@/lib/logger"
 import type { NotificationDTO, NotificationLinkTarget } from "@/types/api"
 
@@ -21,8 +26,8 @@ export type NewNotificationInput = {
   recipientId: string
   /** 触发者 id(可空) */
   actorId?: string | null
-  /** 关联业务对象类型(可空),本期 'circle' */
-  entityType?: "circle" | null
+  /** 关联业务对象类型(可空):'circle' 圈子 / 'user' 用户 */
+  entityType?: NotificationEntityType | null
   /** 关联业务对象 id(可空) */
   entityId?: string | null
   type: NotificationType

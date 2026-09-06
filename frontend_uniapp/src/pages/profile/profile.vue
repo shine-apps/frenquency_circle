@@ -201,6 +201,9 @@ const displayPhone = computed(() => {
   return phone ?? '未绑定'
 })
 
+/** 微信号展示(未填写时提示) */
+const displayWechat = computed(() => user.value?.wechat || '未填写')
+
 /** 我的兴趣展示(最多 8 个 + "+N") */
 const myTags = computed(() => user.value?.tags || [])
 const tagPreview = computed(() => myTags.value.slice(0, TAG_VISIBLE_LIMIT))
@@ -264,6 +267,30 @@ const namePopupVisible = ref(false)
 const editName = ref('')
 const emailPopupVisible = ref(false)
 const editEmail = ref('')
+// ===== 微信号编辑弹层 =====
+const wechatPopupVisible = ref(false)
+const editWechat = ref('')
+
+/** 打开微信号编辑弹层(预填当前值) */
+function openWechatPopup() {
+  editWechat.value = user.value?.wechat ?? ''
+  wechatPopupVisible.value = true
+}
+
+/** 确认保存微信号:空值视为清除(后端空串归一 null),有变更则立即保存 */
+function handleWechatSave() {
+  const wechat = editWechat.value.trim()
+  if (wechat.length > 50) {
+    toast.show({ msg: '微信号最长 50 字符', iconName: 'error' })
+    return
+  }
+  if (wechat === (user.value?.wechat ?? '')) {
+    wechatPopupVisible.value = false
+    return
+  }
+  saveField('wechat', '微信号', () => updateProfile({ wechat }))
+  wechatPopupVisible.value = false
+}
 
 /** 打开昵称编辑弹层(预填当前值) */
 function openNamePopup() {
@@ -596,6 +623,22 @@ async function handleBindPhone() {
             </view>
             <view class="mx-3 h-px bg-[#f5f5f5]" />
 
+            <!-- 微信号行:点击弹层修改;人-人联系链路中唯一对外展示的联系方式 -->
+            <view class="flex items-center gap-3.5 py-2">
+              <view class="h-10 w-10 flex shrink-0 items-center justify-center rounded-xl bg-[#e8f5f1] text-[18px] text-[#018d71]">
+                <text>微</text>
+              </view>
+              <view class="min-w-0 flex flex-1 flex-col gap-0.5">
+                <text class="text-xs text-[#999]">微信号</text>
+                <text class="break-all text-[15px] text-[#333] font-medium">{{ displayWechat }}</text>
+              </view>
+              <view class="flex shrink-0 cursor-pointer items-center gap-1 text-xs text-[#018d71]" @click="openWechatPopup">
+                <text class="text-sm leading-none">✎</text>
+                <text>编辑</text>
+              </view>
+            </view>
+            <view class="mx-3 h-px bg-[#f5f5f5]" />
+
             <!-- 手机号行:点击弹层经短信验证码绑定 -->
             <view class="flex items-center gap-3.5 py-2">
               <view class="h-10 w-10 flex shrink-0 items-center justify-center rounded-xl bg-[#fff7e6] text-[18px] text-[#e68a00]">
@@ -612,6 +655,7 @@ async function handleBindPhone() {
 
             <view class="pb-1 pt-2 text-xs text-[#999] leading-[1.6]">
               昵称、邮箱点击右侧编辑图标修改,保存后即时生效;地址点击地图选点,保存后同步定位。
+              微信号仅在你公开联系方式或同意联系请求后,才会被他人看到。
             </view>
           </view>
         </view>
@@ -697,6 +741,51 @@ async function handleBindPhone() {
             @click="handleBindPhone"
           >
             确认绑定
+          </wd-button>
+        </view>
+      </view>
+    </wd-popup>
+
+    <!-- 修改微信号弹层 -->
+    <wd-popup
+      v-model="wechatPopupVisible"
+      position="center"
+      round
+      :modal="true"
+      close-on-click-modal
+    >
+      <view class="w-[320px] px-5 pb-6 pt-5 md:w-[380px]">
+        <text class="block text-center text-base text-[#333] font-semibold">修改微信号</text>
+        <text class="mt-1 block text-center text-xs text-[#999]">
+          仅在你公开联系方式或同意联系请求后,才会被他人看到
+        </text>
+
+        <view class="mt-5">
+          <wd-input
+            v-model="editWechat"
+            :maxlength="50"
+            placeholder="请输入微信号,留空则清除"
+            clearable
+          />
+        </view>
+
+        <view class="mt-6 flex gap-3">
+          <wd-button
+            class="flex-1 border border-[#e5e5e5]! bg-white! text-[#666]!"
+            round
+            size="medium"
+            variant="plain"
+            @click="wechatPopupVisible = false"
+          >
+            取消
+          </wd-button>
+          <wd-button
+            class="flex-1 border-0 from-[#018d71] to-[#0aa07f] bg-gradient-to-br shadow-[0_6px_18px_rgba(1,141,113,0.28)] text-white!"
+            round
+            size="medium"
+            @click="handleWechatSave"
+          >
+            保存
           </wd-button>
         </view>
       </view>

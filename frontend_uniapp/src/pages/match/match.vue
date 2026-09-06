@@ -5,7 +5,7 @@ import { useMatchStore } from '@/store/match'
 import { useLocationStore } from '@/store/location'
 import { useUserStore } from '@/store/user'
 import { matchCircles, matchPeople } from '@/api/locations'
-import { activityLevelText, formatDateTime, formatDistance, practiceYearsText } from '@/utils/format'
+import { activityLevelText, formatDistance, practiceYearsText } from '@/utils/format'
 import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue'
 import type { LocationPoint, MatchCircleDTO, MatchPersonDTO } from '@/types'
 
@@ -164,9 +164,9 @@ onPullDownRefresh(() => {
   }
 })
 
-/** 人列表项点击:简化为 Toast */
-function handlePersonClick() {
-  uni.showToast({ title: '同趣的人暂不支持直接联系,请通过圈子互动', icon: 'none', duration: 2000 })
+/** 人列表项点击:进入对方主页(主页内可关注 / 打招呼 / 建立联系) */
+function handlePersonClick(userId: string) {
+  uni.navigateTo({ url: `/pages/user-home/user-home?id=${userId}` })
 }
 
 /** 圈子列表项点击:跳详情页 */
@@ -256,7 +256,7 @@ function handleGoHome() {
           v-for="p in people"
           :key="p.userId"
           class="rounded-2xl bg-white p-4 shadow-sm"
-          @click="handlePersonClick"
+          @click="handlePersonClick(p.userId)"
         >
           <view class="flex items-center gap-3">
             <view class="h-12 w-12 flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#e8f5f1]">

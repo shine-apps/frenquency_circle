@@ -28,6 +28,7 @@ function toUserDTO(row: typeof users.$inferSelect): UserDTO {
     role: row.role as UserRole,
     avatarUrl: row.avatarUrl ?? null,
     phone: row.phone ?? null,
+    wechat: row.wechat ?? null,
     practiceYears: row.practiceYears ?? null,
     activityLevel: row.activityLevel as UserDTO["activityLevel"],
     privacySettings,

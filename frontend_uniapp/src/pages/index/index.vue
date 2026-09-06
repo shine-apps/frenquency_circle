@@ -5,6 +5,7 @@ import { useUserStore } from '@/store/user'
 import { useMatchStore } from '@/store/match'
 import { updateMyTags, updateProfile } from '@/api/auth'
 import { matchCircles, matchPeople } from '@/api/locations'
+import { getUnreadNotificationCount } from '@/api/notifications'
 import { LOGIN_PAGE } from '@/router/config'
 import { useDialog } from '@wot-ui/ui/components/wd-dialog'
 import { getCurrentLocation } from '@/utils/location'
@@ -138,6 +139,8 @@ async function loadAll(lat: number, lng: number, range: number): Promise<void> {
 
 // ====== 进入时尝试定位 ======
 onShow(() => {
+  // 每次回到首页刷新未读消息角标(从通知页返回后也能同步)
+  void fetchUnreadCount()
   // 同步 store 与 user 中已有的位置(可能在 profile 页刚被更新)
   if (!latitude.value || !longitude.value) {
     if (user.value?.location?.latitude && user.value?.location?.longitude) {
@@ -211,6 +214,25 @@ function handleCreateActivity(): void {
 /** 跳通知消息页 */
 function handleGoNotification(): void {
   uni.navigateTo({ url: '/pages/notifications/notifications' })
+}
+
+// ====== 未读消息角标 ======
+/** 未读消息数量(>0 时通知按钮显示角标) */
+const unreadCount = ref(0)
+
+/** 拉取未读消息数(失败静默,不影响其他功能) */
+async function fetchUnreadCount(): Promise<void> {
+  if (!userStore.isLoggedIn) {
+    unreadCount.value = 0
+    return
+  }
+  try {
+    const res = await getUnreadNotificationCount()
+    unreadCount.value = res.count ?? 0
+  }
+  catch {
+    // 静默:角标获取失败不影响首页主流程
+  }
 }
 
 // ====== 右下角浮动按钮 ======
@@ -322,8 +344,15 @@ function handleCircleClick(circleId: string): void {
           </text>
         </view>
         <view class="flex gap-2 items-end">
-          <wd-button v-if="userStore.isLoggedIn" type="info" variant="text" size="large" icon="notification" @click="handleGoNotification"> 
-          </wd-button>
+          <wd-badge
+            v-if="userStore.isLoggedIn"
+            :model-value="unreadCount"
+            :max="99"
+            :hidden="unreadCount <= 0"
+          >
+            <wd-button type="info" variant="text" size="large" icon="notification" @click="handleGoNotification">
+            </wd-button>
+          </wd-badge>
         </view>
       </view>
     </view>

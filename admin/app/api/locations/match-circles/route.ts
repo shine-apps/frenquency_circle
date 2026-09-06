@@ -8,7 +8,7 @@ import { logger, LOG_PREFIX } from "@/lib/logger"
  * GET /api/locations/match-circles
  *
  * 查询参数同 match-people(tags 为逗号分隔的标签名称,可选),返回 Paginated<MatchCircleDTO>。
- * rangeKm 支持任意正数(默认 5,上限 200)。
+ * rangeKm 支持任意正数(默认 5,上限 2000)。
  */
 const matchQuerySchema = z.object({
   latitude: z.coerce.number().min(-90).max(90),
@@ -55,7 +55,8 @@ export async function GET(req: Request) {
 
   const { latitude, longitude, tags, rangeKm } = parsed.data
 
-  // 4. 调用匹配引擎
+  // 4. 调用匹配引擎(打分/排序/分页已下推 SQL 层)
+  const startedAt = Date.now()
   const result = await matchCircles({
     lat: latitude,
     lng: longitude,
@@ -68,6 +69,9 @@ export async function GET(req: Request) {
   logger.info(LOG_PREFIX.MATCH, "Match circles queried", {
     rangeKm,
     total: result.total,
+    page: result.page,
+    pageSize: result.pageSize,
+    durationMs: Date.now() - startedAt,
   })
 
   return withCors(ok(result), req)

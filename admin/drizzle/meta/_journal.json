@@ -22,6 +22,27 @@
       "when": 1788595838621,
       "tag": "0002_blue_stephen_strange",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788662563880,
+      "tag": "0003_add_contact_requests_and_user_follows",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788671473088,
+      "tag": "0004_contact_pair_key_and_quota_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788675121442,
+      "tag": "0005_lean_wither",
+      "breakpoints": true
     }
   ]
 }

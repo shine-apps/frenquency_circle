@@ -49,7 +49,12 @@ export async function POST(req: Request) {
       redirect: false,
     })
   } catch (err) {
-    logger.error(LOG_PREFIX.WECHAT, "signIn threw", { error: errMessage(err) })
+    const msg = errMessage(err)
+    logger.error(LOG_PREFIX.WECHAT, "signIn threw", { error: msg })
+    // 微信侧错误已在 authorize 中标记为 [WECHAT],直接透传给登录页用于排障
+    if (msg.startsWith("[WECHAT]")) {
+      return withCors(fail(400, msg), req)
+    }
     return withCors(fail(500, "登录服务异常"), req)
   }
 

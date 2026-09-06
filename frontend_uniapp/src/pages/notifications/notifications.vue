@@ -15,10 +15,20 @@ definePage({
     navigationBarTitleText: '消息',
     enablePullDownRefresh: true,
   },
-  excludeLoginPath: false
+  excludeLoginPath: false,
 })
 
 const PAGE_SIZE = 20
+
+/** 通知类型 → 图标 / 徽标文案 / 配色(首次按 type 分支渲染) */
+const TYPE_META: Record<NotificationDTO['type'], { icon: string, label: string, cls: string }> = {
+  contact_request: { icon: '👋', label: '新的联系请求', cls: 'bg-[#e8f5f1] text-[#018d71]' },
+  contact_accepted: { icon: '✅', label: '联系已建立', cls: 'bg-[#e8f5f1] text-[#018d71]' },
+  user_followed: { icon: '❤', label: '新增关注', cls: 'bg-[#fdeaea] text-[#f56c6c]' },
+  circle_review: { icon: '📋', label: '圈子待审核', cls: 'bg-[#fdf3e7] text-[#e68a00]' },
+  circle_review_result: { icon: '📋', label: '审核结果', cls: 'bg-[#fdf3e7] text-[#e68a00]' },
+  circle_followed: { icon: '👥', label: '圈子被关注', cls: 'bg-[#fdf3e7] text-[#e68a00]' },
+}
 
 const list = ref<NotificationDTO[]>([])
 const loading = ref(false)
@@ -151,10 +161,24 @@ function handleBack() {
         @click="handleClick(n)"
       >
         <view class="flex items-start justify-between gap-2">
+          <!-- 类型图标 -->
+          <view
+            class="h-10 w-10 flex shrink-0 items-center justify-center rounded-xl text-[18px]"
+            :class="TYPE_META[n.type]?.cls ?? 'bg-[#f5f6f7] text-[#666]'"
+          >
+            <text>{{ TYPE_META[n.type]?.icon ?? '🔔' }}</text>
+          </view>
           <view class="min-w-0 flex-1">
-            <text class="block truncate text-base text-[#333] font-medium">
-              {{ n.title }}
-            </text>
+            <view class="flex items-center gap-2">
+              <text class="block truncate text-base text-[#333] font-medium">
+                {{ n.title }}
+              </text>
+              <view class="shrink-0 rounded-full px-2 py-0.5" :class="TYPE_META[n.type]?.cls ?? 'bg-[#f5f6f7] text-[#666]'">
+                <text class="text-xs">
+                  {{ TYPE_META[n.type]?.label ?? '通知' }}
+                </text>
+              </view>
+            </view>
             <text class="mt-1 block text-sm text-[#666]">
               {{ n.content }}
             </text>

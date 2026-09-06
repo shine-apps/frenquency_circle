@@ -15,11 +15,14 @@ import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import type { NotificationDTO } from "@/types/api"
 
-/** 后台通知类型 → 中文标签 */
+/** 后台通知类型 → 中文标签(用户侧类型 linkTarget=miniprogram,后台铃铛不会展示) */
 const TYPE_LABEL: Record<NotificationDTO["type"], string> = {
   circle_review: "圈子待审核",
   circle_review_result: "审核结果",
   circle_followed: "圈子被关注",
+  contact_request: "新的联系请求",
+  contact_accepted: "联系已建立",
+  user_followed: "新增关注",
 }
 
 export function NotificationBell() {

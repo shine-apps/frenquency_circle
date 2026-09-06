@@ -127,6 +127,8 @@ export interface UserDTO {
   role: BusinessUserRole
   /** 头像 URL(可空) */
   avatarUrl?: string | null
+  /** 微信号(可空)。人-人联系链路中唯一可对外展示的联系方式 */
+  wechat?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -160,6 +162,8 @@ export interface UpdateProfileInput {
   practiceYears?: number
   /** 活跃度等级 */
   activityLevel?: 'low' | 'medium' | 'high'
+  /** 微信号(空串/null 视为清除,后端归一为 null,最长 50 字符) */
+  wechat?: string | null
 }
 
 export type {

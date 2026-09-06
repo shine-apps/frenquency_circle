@@ -11,7 +11,7 @@ import { readUserFromToken } from "@/lib/auth/session-token"
  * 查询参数:
  * - latitude / longitude: 坐标(数值)
  * - tags: 逗号分隔的标签名称字符串(hobby_tags.name),可选;缺省时按距离/活跃度推荐
- * - rangeKm: 任意正数(公里),默认 5,上限 200(与前端自定义距离上限一致)
+ * - rangeKm: 任意正数(公里),默认 5,上限 2000(与前端自定义距离上限一致)
  * - page / pageSize: 分页(默认 1 / 20)
  *
  * 返回 Paginated<MatchPersonDTO>。
@@ -64,7 +64,8 @@ export async function GET(req: Request) {
 
   const { latitude, longitude, tags, rangeKm } = parsed.data
 
-  // 4. 调用匹配引擎
+  // 4. 调用匹配引擎(打分/排序/分页已下推 SQL 层)
+  const startedAt = Date.now()
   const result = await matchPeople({
     lat: latitude,
     lng: longitude,
@@ -79,6 +80,9 @@ export async function GET(req: Request) {
     userId: currentUserId ?? "guest",
     rangeKm,
     total: result.total,
+    page: result.page,
+    pageSize: result.pageSize,
+    durationMs: Date.now() - startedAt,
   })
 
   return withCors(ok(result), req)

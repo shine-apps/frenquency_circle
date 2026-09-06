@@ -44,7 +44,8 @@ export type ActivityLevel = (typeof ACTIVITY_LEVELS)[number]
 /**
  * 隐私设置结构(存储在 users.privacySettings JSONB 字段)。
  * - allowMatch: 是否允许出现在他人的"同趣的人"匹配结果
- * - publicContact: 是否对外公开联系方式
+ * - publicContact: 是否对外公开联系方式(预留字段;当前版本联系方式解锁
+ *   仅与打招呼接受状态相关,该开关不影响解锁)
  * - locationPrecision: 位置精度脱敏等级
  *   - `exact` 精确距离
  *   - `community` 四舍五入到 0.5km
@@ -80,6 +81,14 @@ export const users = pgTable("users", {
   phone: text("phone"),
   /** 微信 openid(暂不持久化,预留字段以便后续扩展) */
   wechatOpenid: text("wechat_openid"),
+  /**
+   * 用户微信号(可空,最长 50 字符,空串归一为 null)。
+   * 人-人联系链路中唯一可对外展示的联系方式:
+   * - 对方 `privacySettings.publicContact` 为 true 时对所有登录用户可见;
+   * - 或双方存在 accepted 的 contact_requests 时互相可见。
+   * 手机号(phone)是登录实名凭证,任何情况下都不写入对外响应。
+   */
+  wechat: text("wechat"),
   /** 用户纬度(double precision,与 longitude 配合表达用户位置;可空) */
   latitude: doublePrecision("latitude"),
   /** 用户经度(double precision,与 latitude 配合表达用户位置;可空) */
@@ -103,6 +112,9 @@ export const users = pgTable("users", {
 }, (table) => [
   // 数组包含查询 "标签 X ∈ users.tags" 走 GIN 索引
   index("users_tags_gin_idx").using("gin", table.tags),
+  // 匹配引擎包围盒粗筛:经纬度组合 B-tree 索引(与 circles_location_idx 惯例一致;
+  // 真实 GiST 索引留待 PostGIS 完整集成)
+  index("users_location_idx").on(table.latitude, table.longitude),
 ])
 
 export type User = typeof users.$inferSelect
@@ -412,6 +424,117 @@ export type CircleFollow = typeof circleFollows.$inferSelect
 export type NewCircleFollow = typeof circleFollows.$inferInsert
 
 /**
+ * 用户关注表。
+ * 用户单向关注同趣的人(人-人关系沉淀),关注后可在"我关注的人"列表快速回看。
+ * 一个用户对同一目标最多一条关注记录(UNIQUE(user_id, target_user_id))。
+ * 与 circle_follows 相互独立:关注圈子不等同于关注人,不共用表。
+ */
+export const userFollows = pgTable(
+  "user_follows",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** 关注者 */
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** 被关注者 */
+    targetUserId: uuid("target_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // 同一用户关注同一目标只有一条(幂等关注依赖此索引)
+    uniqueIndex("user_follows_user_target_idx").on(
+      table.userId,
+      table.targetUserId
+    ),
+    // 按用户反查关注列表
+    index("user_follows_user_idx").on(table.userId),
+    // 按被关注者反查粉丝列表(供未来"关注我的人"与通知聚合)
+    index("user_follows_target_idx").on(table.targetUserId),
+  ]
+)
+
+export type UserFollow = typeof userFollows.$inferSelect
+export type NewUserFollow = typeof userFollows.$inferInsert
+
+/**
+ * 联系请求状态字面量联合:
+ * - `pending`  待对方处理
+ * - `accepted` 已接受(双方互相解锁微信号)
+ * - `rejected` 已拒绝(可冷却后再次发起)
+ */
+export const CONTACT_REQUEST_STATUSES = [
+  "pending",
+  "accepted",
+  "rejected",
+] as const
+export type ContactRequestStatus = (typeof CONTACT_REQUEST_STATUSES)[number]
+
+/**
+ * 人-人联系请求表(打招呼)。
+ *
+ * 用户在他人主页发起"打招呼",对方接受后双方互相解锁微信号。
+ * 设计要点:
+ * - `message` 仅一次性自我介绍(≤100 字符),不承担聊天职责(本项目无 IM);
+ * - `status` 为 pending 时受部分唯一索引保护:同一对(from→to)最多一条待处理,
+ *   被拒绝/撤回后可再次发起,从数据库层面杜绝重复骚扰;
+ * - accepted 的请求本身即"已建立联系"的凭证,联系方式可见性读时计算,不冗余快照。
+ */
+export const contactRequests = pgTable(
+  "contact_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** 发起方 */
+    fromUserId: uuid("from_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** 接收方(只有其本人可 accept / reject) */
+    toUserId: uuid("to_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** 打招呼留言(可空,≤100 字符) */
+    message: text("message"),
+    /** 无序用户对键(LEAST 生成列):配合下方 pending 部分唯一索引,
+     *  防止 A→B 与 B→A 并发各产生一条 pending(有序索引挡不住反向) */
+    pairKey: uuid("pair_key").generatedAlwaysAs(
+      sql`least("from_user_id", "to_user_id")`
+    ),
+    status: text("status")
+      .$type<ContactRequestStatus>()
+      .notNull()
+      .default("pending"),
+    /** 对方处理时间(accept / reject 时写入) */
+    respondedAt: timestamp("responded_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // 防骚扰:同一"无序用户对"最多一条 pending
+    // (基于 least(from,to) 生成列,防止反向并发双 pending)
+    uniqueIndex("contact_requests_pending_pair_idx")
+      .on(table.pairKey)
+      .where(sql`"status" = 'pending'`),
+    // 读路径:"我收到的"按 (to_user_id, status) 过滤
+    index("contact_requests_to_status_idx").on(table.toUserId, table.status),
+    // 读路径:"我发出的"按 (from_user_id, status) 过滤
+    index("contact_requests_from_status_idx").on(table.fromUserId, table.status),
+    // 每日配额:按发起方 + 创建时间范围扫描
+    index("contact_requests_from_created_idx").on(table.fromUserId, table.createdAt),
+  ]
+)
+
+export type ContactRequest = typeof contactRequests.$inferSelect
+export type NewContactRequest = typeof contactRequests.$inferInsert
+
+/**
  * 教师认证申请状态字面量联合:
  * - `pending` 待审核
  * - `approved` 已通过(用户已升级为 TEACHER)
@@ -469,23 +592,37 @@ export type NewTeacherApplication = typeof teacherApplications.$inferInsert
 
 /**
  * 联系方式联系类型字面量联合:
- * - `phone` 电话联系
+ * - `phone` 电话联系(圈子场景的老师电话,或人-人场景微信号缺失时的兜底手机号)
  * - `wechat` 微信联系
+ *
+ * 人-人联系链路原本只写 `wechat`;微信号缺失且有权查看时,
+ * 也会兜底写 `phone`(手机号作为联系不到微信时的备用通道)。
  */
 export const CONTACT_TYPES = ["phone", "wechat"] as const
 export type ContactType = (typeof CONTACT_TYPES)[number]
 
 /**
- * 圈子联系记录表。
- * 用户在圈子详情页点击"联系老师"时插入一条记录,用于统计与防滥用。
+ * 联系记录表(圈子联系 + 人-人联系共用)。
+ *
+ * - 圈子场景:用户在圈子详情页点击"联系老师"时插入,`circleId` 非空、`targetUserId` 为空;
+ * - 人-人场景:用户查看/解锁他人微信号时插入,`targetUserId` 非空、`circleId` 为空。
+ *
+ * 两类记录共用一张表,避免统计口径分裂;CHECK 约束保证二者至少其一非空。
+ * 用途:被联系次数统计与异常滥用追溯。
  */
 export const contactLogs = pgTable(
   "contact_logs",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    circleId: uuid("circle_id")
-      .notNull()
-      .references(() => circles.id, { onDelete: "cascade" }),
+    /** 圈子 id(人-人联系时为空) */
+    circleId: uuid("circle_id").references(() => circles.id, {
+      onDelete: "cascade",
+    }),
+    /** 被联系人 id(圈子联系时为空,此时以 circleId 归属的创建者为准) */
+    targetUserId: uuid("target_user_id").references(() => users.id, {
+      onDelete: "cascade",
+    }),
+    /** 发起联系的用户 */
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -497,6 +634,12 @@ export const contactLogs = pgTable(
   (table) => [
     index("contact_logs_circle_idx").on(table.circleId),
     index("contact_logs_user_idx").on(table.userId),
+    index("contact_logs_target_idx").on(table.targetUserId),
+    // 约束:圈子联系与人-人联系二选一,不允许两条都为空
+    check(
+      "contact_logs_target_check",
+      sql`"circle_id" is not null or "target_user_id" is not null`
+    ),
   ]
 )
 
@@ -508,12 +651,18 @@ export type NewContactLog = typeof contactLogs.$inferInsert
  * - `circle_review`        圈子待审核(→管理员)
  * - `circle_review_result` 圈子审核结果(→创建者)
  * - `circle_followed`      有人关注圈子(→创建者)
+ * - `contact_request`      收到打招呼请求(→接收方)
+ * - `contact_accepted`     打招呼被接受(→发起方)
+ * - `user_followed`        有人关注了你(→被关注者)
  * 预留:teacher_application / teacher_application_result 等。
  */
 export const NOTIFICATION_TYPES = [
   "circle_review",
   "circle_review_result",
   "circle_followed",
+  "contact_request",
+  "contact_accepted",
+  "user_followed",
 ] as const
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number]
 
@@ -527,10 +676,12 @@ export type NotificationLinkTarget =
   (typeof NOTIFICATION_LINK_TARGETS)[number]
 
 /**
- * 通知关联业务对象类型字面量联合(本期仅 `circle`)。
+ * 通知关联业务对象类型字面量联合:
+ * - `circle` 圈子相关(审核、被关注)
+ * - `user`   用户相关(打招呼请求、被关注)
  * 与项目既有惯例一致:用 `text` 列 + TS 联合类型,不用 pgEnum。
  */
-export const NOTIFICATION_ENTITY_TYPES = ["circle"] as const
+export const NOTIFICATION_ENTITY_TYPES = ["circle", "user"] as const
 export type NotificationEntityType =
   (typeof NOTIFICATION_ENTITY_TYPES)[number]
 

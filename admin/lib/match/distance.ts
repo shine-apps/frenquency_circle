@@ -71,6 +71,52 @@ export function haversineKmSql(
   `
 }
 
+/** 包围盒(经纬度矩形范围),用于组合 B-tree 索引粗筛 */
+export type BoundingBox = {
+  latMin: number
+  latMax: number
+  lngMin: number
+  lngMax: number
+}
+
+/** 纬度方向每度近似公里数(1 度 ≈ 111km,取整即可,包围盒本就是粗筛) */
+const KM_PER_DEGREE_LAT = 111
+
+/**
+ * 由中心点 + 半径换算经纬度包围盒(Bounding Box)。
+ *
+ * 用途:WHERE 中先按 `latitude BETWEEN ... AND longitude BETWEEN ...` 粗筛,
+ * 使 (latitude, longitude) 组合 B-tree 索引生效,把 Haversine 精确过滤的
+ * 行数从全表缩到包围盒内。包围盒恒为圆形范围的超集,不改变匹配语义。
+ *
+ * - Δlat = rangeKm / 111
+ * - Δlng = rangeKm / (111 × cos(lat)),纬度接近极点时取 180(全球经度范围)
+ * - 结果裁剪到 [-90, 90] / [-180, 180]
+ *
+ * 注:不处理跨 ±180° 经线的环绕(与 Haversine 精确过滤的圆可能在此有
+ * 理论差异),对本业务场景无实际影响;PostGIS 迁移后可彻底消除。
+ *
+ * @param lat 中心纬度
+ * @param lng 中心经度
+ * @param rangeKm 半径(公里)
+ * @returns 裁剪后的包围盒
+ */
+export function boundingBoxKm(
+  lat: number,
+  lng: number,
+  rangeKm: number
+): BoundingBox {
+  const dLat = rangeKm / KM_PER_DEGREE_LAT
+  const cosLat = Math.cos(toRad(lat))
+  const dLng = cosLat > 1e-9 ? rangeKm / (KM_PER_DEGREE_LAT * cosLat) : 180
+  return {
+    latMin: Math.max(-90, lat - dLat),
+    latMax: Math.min(90, lat + dLat),
+    lngMin: Math.max(-180, lng - dLng),
+    lngMax: Math.min(180, lng + dLng),
+  }
+}
+
 /**
  * 构造范围筛选条件:`haversineKmSql(...) <= rangeKm`。
  *

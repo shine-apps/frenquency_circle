@@ -23,6 +23,8 @@ import type {
  * - latitude / longitude: 定位坐标(成对出现,与 address 一起由地址选择组件回填)
  * - practiceYears: 0-100 整数
  * - activityLevel: 活跃度等级
+ * - wechat: 联系用微信号(可空串/null 清除,最长 50 字符)。这是人-人联系链路中
+ *   唯一可对外展示的联系方式,手机号依旧只能经短信验证流程变更
  *
  * 全部可选,但至少要传 1 个字段(refine)。
  */
@@ -34,6 +36,9 @@ const patchProfileSchema = z
     longitude: z.union([z.number().min(-180).max(180), z.null()]).optional(),
     practiceYears: z.number().int().min(0).max(100).optional(),
     activityLevel: z.enum(["low", "medium", "high"]).optional(),
+    wechat: z
+      .union([z.string().trim().max(50), z.literal(""), z.null()])
+      .optional(),
   })
   .superRefine((d, ctx) => {
     if (Object.keys(d).length === 0) {
@@ -72,6 +77,7 @@ function toUserDTO(row: typeof users.$inferSelect): UserDTO {
     role: row.role as UserRole,
     avatarUrl: row.avatarUrl ?? null,
     phone: row.phone ?? null,
+    wechat: row.wechat ?? null,
     practiceYears: row.practiceYears ?? null,
     activityLevel: row.activityLevel as UserDTO["activityLevel"],
     privacySettings,
@@ -142,6 +148,10 @@ export async function PATCH(req: Request) {
   }
   if (parsed.data.activityLevel !== undefined) {
     updatePayload.activityLevel = parsed.data.activityLevel
+  }
+  // 微信号空串归一为 null(前端"清空"操作)
+  if (parsed.data.wechat !== undefined) {
+    updatePayload.wechat = parsed.data.wechat === "" ? null : parsed.data.wechat
   }
 
   // 4. 更新 users 表

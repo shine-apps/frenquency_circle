@@ -234,14 +234,31 @@ describe("GET /api/locations/match-people", () => {
     expect(matchPeopleMock.mock.calls[0]?.[0].tags).toEqual([])
   })
 
-  it("returns 400 when rangeKm is not one of 1/5/10/30", async () => {
+  it("accepts arbitrary rangeKm within 0.1-2000 (continuous schema, custom distance)", async () => {
     readUserFromTokenMock.mockResolvedValue(FAKE_USER)
+    matchPeopleMock.mockResolvedValue(SAMPLE_PEOPLE_RESULT)
+
     const res = await matchPeopleGET(
       makeGetRequest("/api/locations/match-people", {
         latitude: "39.9042",
         longitude: "116.4074",
         tags: TAG_NAME,
         rangeKm: "7",
+      })
+    )
+    expect(res.status).toBe(200)
+    expect(matchPeopleMock).toHaveBeenCalledTimes(1)
+    expect(matchPeopleMock.mock.calls[0]?.[0].rangeKm).toBe(7)
+  })
+
+  it("returns 400 when rangeKm is out of bounds (0.1-2000)", async () => {
+    readUserFromTokenMock.mockResolvedValue(FAKE_USER)
+    const res = await matchPeopleGET(
+      makeGetRequest("/api/locations/match-people", {
+        latitude: "39.9042",
+        longitude: "116.4074",
+        tags: TAG_NAME,
+        rangeKm: "3000",
       })
     )
     expect(res.status).toBe(400)

@@ -16,6 +16,8 @@ export interface UserInfo {
   role: UserRole
   /** 绑定手机号(从 email 提取或用户填写,可能为 null) */
   phone?: string | null
+  /** 微信号(可空)。人-人联系链路中唯一可对外展示的联系方式 */
+  wechat?: string | null
   /** 头像 URL(可选,用于 Avatar 组件展示) */
   avatar?: string
   /** 头像 URL(后端原字段,profile 页回填用) */

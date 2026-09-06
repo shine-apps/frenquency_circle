@@ -9,6 +9,7 @@ import { LOGIN_PAGE } from '@/router/config'
 import { useDialog } from '@wot-ui/ui/components/wd-dialog'
 import { getCurrentLocation } from '@/utils/location'
 import { reverseGeocode } from '@/utils/geo'
+import { saveGuestLocation, saveGuestTags } from '@/utils/guest-profile'
 import { activityLevelText, formatDateTime, formatDistance } from '@/utils/format'
 import { canCreateCircle } from '@/utils/role'
 import { useShare } from '@/composables/useShare'
@@ -187,8 +188,10 @@ async function handleTagsConfirmed(tags: string[]): Promise<void> {
     }
   }
   else {
-    // 未登录:仅更新本地状态用于本次匹配展示,不发起后端保存
+    // 未登录:仅更新本地状态用于本次匹配展示,不发起后端保存;
+    // 同时暂存到 storage,登录成功后由 restoreGuestProfile 自动回填到账号
     userStore.setTags(tags)
+    saveGuestTags(tags)
   }
   if (latitude.value != null && longitude.value != null) {
     loadAll(latitude.value, longitude.value, rangeKm.value)
@@ -263,11 +266,13 @@ async function handleLocationUpdated(loc: { latitude: number, longitude: number,
     }
   }
   else {
-    // 未登录:仅更新本地状态用于本次匹配展示,不发起后端保存
+    // 未登录:仅更新本地状态用于本次匹配展示,不发起后端保存;
+    // 同时暂存到 storage,登录成功后由 restoreGuestProfile 自动回填到账号
     userStore.setLocation(
       { latitude: loc.latitude, longitude: loc.longitude },
       loc.address,
     )
+    saveGuestLocation(loc)
   }
 
   loadAll(loc.latitude, loc.longitude, rangeKm.value)

@@ -18,6 +18,7 @@ import {
 import { toUserInfo } from '@/api/auth'
 import { isDoubleTokenRes, isSingleTokenRes } from '@/api/types/login'
 import { isDoubleTokenMode } from '@/utils'
+import { restoreGuestProfile } from '@/utils/guest-profile'
 import { useUserStore } from './user'
 import type { UserInfo } from './user'
 
@@ -218,6 +219,9 @@ export const useTokenStore = defineStore(
       // 先写基础用户信息(登录响应),再异步拉取完整资料
       userStore.setUserInfo(toUserInfo(res.user) as UserInfo)
       await userStore.fetchUserInfo()
+      // 未登录时暂存的兴趣/位置,登录成功后尝试回填到账号
+      // (内部无缓存时直接返回,失败静默,不阻断登录流程)
+      await restoreGuestProfile()
       uni.showToast({
         title: '登录成功',
         icon: 'success',

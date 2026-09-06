@@ -38,7 +38,7 @@ const sendingCode = ref(false)
 const email = ref('')
 const password = ref('')
 // 公共状态
-const agreed = ref(true)
+const agreed = ref(false)
 const submitting = ref(false)
 
 let timer: ReturnType<typeof setInterval> | null = null
@@ -227,7 +227,7 @@ async function handleGetPhoneNumber(e: any) {
 
     <!-- 2. 微信快捷登录(仅微信小程序) -->
     <!-- #ifdef MP-WEIXIN -->
-    <view class="mt-10 px-8">
+    <view class="mt-8 px-8">
       <wd-button
         block
         size="large"

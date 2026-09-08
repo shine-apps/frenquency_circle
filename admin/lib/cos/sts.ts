@@ -30,9 +30,30 @@ export interface CosCredentials {
 const USER_ID_RE = /^[A-Za-z0-9_-]+$/;
 
 /**
+ * 客户端直传所需的动作集合。
+ *
+ * 只给 `PutObject` 会导致小程序端 403 `AccessDenied`,原因:
+ * - `cos-wx-sdk-v5` 的 `SimpleUploadMethod` 默认就是 `postObject`,小程序端
+ *   `uploadFile` 对小文件走的是 **POST Object**(`name/cos:PostObject`),不是 PUT;
+ * - 超过 `SliceSize`(默认 1MB)的文件走 `sliceUploadFile`,需要分片上传系列动作。
+ *
+ * 因此这里必须同时授予 PutObject / PostObject 与分片上传动作,否则上传必失败。
+ */
+const UPLOAD_ACTIONS = [
+    "name/cos:PutObject",
+    "name/cos:PostObject",
+    "name/cos:InitiateMultipartUpload",
+    "name/cos:UploadPart",
+    "name/cos:CompleteMultipartUpload",
+    "name/cos:AbortMultipartUpload",
+    "name/cos:ListMultipartUploads",
+    "name/cos:ListParts",
+];
+
+/**
  * 为指定用户签发 scoped STS 临时凭证。
  *
- * - scope:`<keyPrefix>/<userId>/*`,仅允许 PutObject 到该前缀下
+ * - scope:`<keyPrefix>/<userId>/*`,仅允许上传类动作作用于该前缀下
  * - duration:由 `COS_STS_DURATION_SECONDS` 控制(已在 config 夹紧到 [60, 7200])
  * - userId 必须匹配 `[A-Za-z0-9_-]+`,否则抛错(防 `../` 注入扩大 scope)
  *
@@ -50,9 +71,10 @@ export async function issueScopedCredentials(userId: string): Promise<CosCredent
 
     // qcloud-cos-sts 实际 API:callback 形式,不是 Promise/PascalCase keys
     // 参考官方 demo demo/sts-server-scope.js
+    // action 支持字符串数组(CAM 2.0 语法),一条 statement 即可覆盖全部上传动作
     const policy = getPolicy([
         {
-            action: "name/cos:PutObject",
+            action: UPLOAD_ACTIONS,
             bucket: cfg.bucket,
             region: cfg.region,
             prefix: scopePrefix,

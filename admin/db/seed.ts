@@ -10,6 +10,7 @@ import {
   circles,
   circleMembers,
   accounts,
+  systemSettings,
   type UserRole,
   type ActivityLevel,
 } from "@/db/schema"
@@ -699,8 +700,23 @@ async function main() {
       })
   }
 
+  // === 10. 插入系统设置(幂等:key 冲突时跳过) ===
+  console.log("→ 插入系统设置…")
+  const settingSeeds = [
+    { key: "app_name", value: { zh: "趣邻圈", en: "QuLinQuan" } },
+    {
+      key: "app_version",
+      value: { version: "1.0.0", forceUpdate: false },
+    },
+    { key: "isAppDeploying", value: false },
+  ]
+  await db
+    .insert(systemSettings)
+    .values(settingSeeds)
+    .onConflictDoNothing({ target: systemSettings.key })
+
   console.log(
-    `✅ Seeded ${userSeeds.length} users, ${TAG_DEFINITIONS.length} tag definitions, ${circleSeeds.length} circles.`
+    `✅ Seeded ${userSeeds.length} users, ${TAG_DEFINITIONS.length} tag definitions, ${circleSeeds.length} circles, ${settingSeeds.length} settings.`
   )
   process.exit(0)
 }

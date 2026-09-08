@@ -43,6 +43,8 @@ export function fromUserDTO(dto: UserDTO): Partial<UserInfo> {
     role: dto.role,
     phone: extractPhone(dto.email),
     wechat: dto.wechat ?? null,
+    gender: dto.gender ?? null,
+    birthday: dto.birthday ?? null,
     avatar: dto.avatarUrl ?? undefined,
     avatarUrl: dto.avatarUrl ?? undefined,
   }

@@ -22,7 +22,7 @@ vi.mock("qcloud-cos-sts", () => ({
     // 参考 admin/node_modules/qcloud-cos-sts/sdk/sts.js 中 getPolicy 的实现
     getPolicy: (scope: unknown) => {
         const items = scope as Array<{
-            action: string;
+            action: string | string[];
             bucket: string;
             region: string;
             prefix: string;
@@ -80,8 +80,16 @@ describe("lib/cos/sts", () => {
         expect(getCredentialMock).toHaveBeenCalledTimes(1);
         const opts = getCredentialMock.mock.calls[0]?.[0];
         // qcloud-cos-sts getPolicy 返回的 policy 对象需含 Statement 含 scope
-        const policy = opts.policy as { statement: Array<{ action: string; resource: string }> };
-        expect(policy.statement[0].action).toBe("name/cos:PutObject");
+        const policy = opts.policy as {
+            statement: Array<{ action: string | string[]; resource: string }>;
+        };
+        // 小程序端 uploadFile 默认走 POST Object,必须一并授权,否则 403 AccessDenied
+        expect(policy.statement[0].action).toContain("name/cos:PutObject");
+        expect(policy.statement[0].action).toContain("name/cos:PostObject");
+        // 超过 SliceSize 走分片上传
+        expect(policy.statement[0].action).toContain("name/cos:InitiateMultipartUpload");
+        expect(policy.statement[0].action).toContain("name/cos:UploadPart");
+        expect(policy.statement[0].action).toContain("name/cos:CompleteMultipartUpload");
         // resource 应含 userId scope(形如 qcs::cos:ap-shanghai:uid/...bucket/uploads/u-abc/*)
         expect(policy.statement[0].resource).toMatch(/uploads\/u-abc\/\*/);
         expect(opts.durationSeconds).toBe(1800);

@@ -1,8 +1,5 @@
-import { useTokenStore } from '@/store/token'
-import { getEnvBaseUrl } from '@/utils'
-
 // ============================================================================
-// 直传腾讯云 COS(新增;现有 uploadFile 走后端,保留为回退)
+// 直传腾讯云 COS(唯一上传通道;后端中转/本地文件上传已删除)
 // ============================================================================
 
 import { fetchCosCredentials } from '@/api/cos-credentials'
@@ -22,145 +19,18 @@ export interface UploadResult {
 export interface UploadInput {
   /**
    * 文件来源:
-   * - 小程序端: `uni.chooseMedia` 返回的 `tempFilePath` 字符串
-   * - H5: `originalFileObj` (即原生 `File` 对象)
+   * - 小程序端: `uni.chooseMedia` / `chooseAvatar` 返回的 `tempFilePath` 字符串
+   * - H5: 原生 `File` 对象,或 `blob:` / `data:` 临时 URL
    */
   file: string | File
   /** 文件名(H5 可选,默认从 File.name 取) */
   name?: string
-  /** 业务场景:avatar / generic */
+  /**
+   * 业务场景:avatar / generic。
+   * 注:直传 COS 的 key 由后端 STS 凭证 scope(`uploads/<userId>/*`)决定,
+   * 该字段当前不参与 COS key 生成,保留仅为 API 兼容。
+   */
   purpose?: 'avatar' | 'generic'
-}
-
-/** IResponse 信封(本文件内只用到 data 字段) */
-interface IResponse<T> {
-  code: number
-  data: T
-  message: string
-}
-
-/** 把后端 IResponse 错误转为 Error 抛出 */
-async function parseEnvelope<T>(res: { statusCode: number, data: unknown }): Promise<T> {
-  if (res.statusCode >= 200 && res.statusCode < 300) {
-    const envelope = res.data as IResponse<T>
-    if (envelope && typeof envelope === 'object' && 'code' in envelope) {
-      if (envelope.code !== 200) {
-        throw new Error(envelope.message || `Upload failed: ${envelope.code}`)
-      }
-      return envelope.data
-    }
-    // 兜底:如果后端没包 IResponse(理论上不会)
-    return res.data as T
-  }
-  // HTTP 错误码:尝试解析 message
-  const data = res.data as { message?: string } | string | undefined
-  const msg = (data && typeof data === 'object' && data.message) || `HTTP ${res.statusCode}`
-  throw new Error(msg)
-}
-
-/**
- * 小程序端上传:走 `uni.uploadFile`,`file` 必须是 tempFilePath 字符串。
- */
-// #ifndef H5
-async function uploadWx(input: UploadInput): Promise<UploadResult> {
-  const baseUrl = getEnvBaseUrl()
-  const tokenStore = useTokenStore()
-  const token = tokenStore.updateNowTime().validToken
-  const authHeader: Record<string, string> = token
-    ? { Authorization: `Bearer ${token}` }
-    : {}
-
-  if (typeof input.file !== 'string') {
-    throw new TypeError('小程序端 file 必须是 tempFilePath 字符串')
-  }
-  const wxRes = (await uni.uploadFile({
-    url: `${baseUrl}/api/upload`,
-    filePath: input.file,
-    name: 'file',
-    // formData 中 additional fields 会作为额外 multipart 字段发送
-    formData: { purpose: input.purpose ?? 'generic' },
-    header: authHeader,
-    timeout: 30000, // 上传超时比普通请求长
-  })) as unknown as { statusCode: number, data: string }
-
-  // 小程序端 data 是 string(JSON),手动 parse
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(wxRes.data)
-  }
-  catch {
-    throw new Error(`服务器返回非 JSON: ${wxRes.data.slice(0, 100)}`)
-  }
-  return parseEnvelope<UploadResult>({
-    statusCode: wxRes.statusCode,
-    data: parsed,
-  })
-}
-// #endif
-
-/**
- * H5 端上传:fetch + FormData,直接用原生 File 对象。
- */
-// #ifdef H5
-async function uploadH5(input: UploadInput): Promise<UploadResult> {
-  const baseUrl = getEnvBaseUrl()
-  const tokenStore = useTokenStore()
-  const token = tokenStore.updateNowTime().validToken
-  const authHeader: Record<string, string> = token
-    ? { Authorization: `Bearer ${token}` }
-    : {}
-
-  const h5Fd = new FormData()
-  if (typeof input.file === 'string') {
-    // 也支持 string(当 blob URL 之类):用 fetch 拉回来再包
-    const blob = await fetch(input.file).then(r => r.blob())
-    h5Fd.append('file', blob, input.name ?? 'upload.bin')
-  }
-  else {
-    h5Fd.append('file', input.file, input.name ?? input.file.name ?? 'upload.bin')
-  }
-  h5Fd.append('purpose', input.purpose ?? 'generic')
-
-  let h5Res: Response
-  try {
-    h5Res = await fetch(`${baseUrl}/api/upload`, {
-      method: 'POST',
-      body: h5Fd,
-      headers: authHeader,
-    })
-  }
-  catch (e) {
-    throw new Error(`网络异常: ${e instanceof Error ? e.message : String(e)}`)
-  }
-
-  let h5Body: unknown
-  try {
-    h5Body = await h5Res.json()
-  }
-  catch {
-    throw new Error(`服务器返回非 JSON: ${h5Res.status}`)
-  }
-
-  return parseEnvelope<UploadResult>({
-    statusCode: h5Res.status,
-    data: h5Body,
-  })
-}
-// #endif
-
-/**
- * 通用文件上传(跨平台自动路由)。
- *
- * - **小程序端**:走 `uni.uploadFile`,`file` 必须是 tempFilePath
- * - **H5**:`fetch` + `FormData`(直接用原生 File 对象)
- */
-export async function uploadFile(input: UploadInput): Promise<UploadResult> {
-  // #ifndef H5
-  return uploadWx(input)
-  // #endif
-  // #ifdef H5
-  return uploadH5(input)
-  // #endif
 }
 
 /** 凭证提前刷新阈值:到期前 5 分钟视为失效 */
@@ -208,7 +78,7 @@ export function __resetUploadCredsForTest(): void {
   _cachedCreds = null
 }
 
-/** 微信小程序端:用 uni.getFileInfo 拿真实文件大小(H5 直接用 File.size) */
+/** 小程序端:用 uni.getFileInfo 拿真实文件大小(H5 直接用 File.size / Blob.size) */
 function getWxFileSize(filePath: string): Promise<number> {
   return new Promise((resolve) => {
     uni.getFileInfo({
@@ -220,31 +90,46 @@ function getWxFileSize(filePath: string): Promise<number> {
   })
 }
 
-/** 类型守卫:判断是否为 H5 端原生 File(微信小程序端传 string) */
-function isH5File(file: string | File): file is File {
-  return typeof file !== 'string'
-}
-
 /**
  * 判断字符串是否为浏览器端"可 fetch 的临时 URL":
  * - `blob:`:URL.createObjectURL / canvasToTempFilePath(H5) 产生
  * - `data:`:data URL(base64 内嵌)
- * 小程序本地临时路径(wxfile://、/var/mobile/...、http://tmp/...) 不在此列,会走 uploadFile 让 SDK 读本地。
+ * 小程序本地临时路径(wxfile://、http://tmp/...) 不在此列,走 FilePath 由 SDK 读本地文件。
  */
 function isFetchableUrl(p: string): boolean {
   return p.startsWith('blob:') || p.startsWith('data:')
 }
 
+/** 从文件名粗略推断 MIME(微信小程序 tempFilePath 没有内置 MIME) */
+function guessMimeFromName(name: string): string {
+  const lower = name.toLowerCase()
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg'))
+    return 'image/jpeg'
+  if (lower.endsWith('.png'))
+    return 'image/png'
+  if (lower.endsWith('.webp'))
+    return 'image/webp'
+  if (lower.endsWith('.gif'))
+    return 'image/gif'
+  if (lower.endsWith('.pdf'))
+    return 'application/pdf'
+  if (lower.endsWith('.mp4'))
+    return 'video/mp4'
+  if (lower.endsWith('.mp3'))
+    return 'audio/mpeg'
+  return 'application/octet-stream'
+}
+
 /**
- * 直传腾讯云 COS(跨平台自动路由)。
+ * 直传腾讯云 COS(跨平台,统一 SDK 抽象,见 `@/utils/cos-client`)。
  *
- * - **H5**:统一走 `cos.putObject`,Body 必须是 `File | Blob`;
+ * - **H5**(`cos-js-sdk-v5`):走 `putObject`,Body 为 `File | Blob`;
  *   若传入 `blob:` / `data:` 开头的临时 URL(如 wd-img-cropper 的 canvasToTempFilePath 产物),
  *   先 `fetch()` 下载成 Blob 再上传,避免 SDK 把字符串当文本内容写入导致图片损坏。
- * - **微信小程序**:走 `cos.uploadFile`(分片/简单上传由 SDK 自动选择),
- *   Body 传 `tempFilePath` 字符串,SDK 在小程序环境会读取本地文件内容。
+ * - **小程序 / App**(`cos-wx-sdk-v5`):走 `uploadFile`,`FilePath` 传 tempFilePath,
+ *   SDK 内部经 `wx.getFileSystemManager` 读取本地文件;大文件自动切换分片上传。
  *
- * 返回的 `UploadResult` 与 `uploadFile` 形状一致,调用方可平滑切换。
+ * 返回的 `UploadResult.url` 为 COS 公网地址,前后端语义一致。
  *
  * 凭证由后端 `GET /api/upload/cos-credentials` 签发(scope=`uploads/<userId>/*`),
  * 客户端做内存级缓存,到期前 5 分钟自动刷新。
@@ -318,12 +203,12 @@ export async function uploadFileToCos(input: UploadInput): Promise<UploadResult>
       size = body.size
     }
     else {
-      // 微信小程序:tempFilePath 字符串,走 uploadFile,SDK 内部读本地文件
+      // 小程序/App:tempFilePath 字符串 → FilePath,SDK 内部读本地文件
       await client.uploadFile({
         Bucket: creds.bucket,
         Region: creds.region,
         Key: key,
-        Body: input.file,
+        FilePath: input.file,
         ContentType: mimeType,
         CacheControl: COS_CACHE_CONTROL_PERMANENT,
       })
@@ -342,24 +227,4 @@ export async function uploadFileToCos(input: UploadInput): Promise<UploadResult>
     mimeType,
     originalName,
   }
-}
-
-/** 从文件名粗略推断 MIME(微信小程序 tempFilePath 没有内置 MIME) */
-function guessMimeFromName(name: string): string {
-  const lower = name.toLowerCase()
-  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg'))
-    return 'image/jpeg'
-  if (lower.endsWith('.png'))
-    return 'image/png'
-  if (lower.endsWith('.webp'))
-    return 'image/webp'
-  if (lower.endsWith('.gif'))
-    return 'image/gif'
-  if (lower.endsWith('.pdf'))
-    return 'application/pdf'
-  if (lower.endsWith('.mp4'))
-    return 'video/mp4'
-  if (lower.endsWith('.mp3'))
-    return 'audio/mpeg'
-  return 'application/octet-stream'
 }

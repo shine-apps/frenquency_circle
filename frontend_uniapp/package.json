@@ -139,6 +139,7 @@
     "abortcontroller-polyfill": "^1.7.8",
     "alova": "^3.3.3",
     "cos-js-sdk-v5": "^1.10.1",
+    "cos-wx-sdk-v5": "^1.8.0",
     "dayjs": "1.11.10",
     "pinia": "2.0.36",
     "pinia-plugin-persistedstate": "3.2.1",

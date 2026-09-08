@@ -27,6 +27,11 @@ export type UserRole = "ADMIN" | "USER" | "TEACHER"
 export type ActivityLevel = "low" | "medium" | "high"
 
 /**
+ * 用户性别:`male` 男 / `female` 女 / `other` 其他(可空,未填写)。
+ */
+export type UserGender = "male" | "female" | "other"
+
+/**
  * 位置精度脱敏等级:
  * - `exact` 精确距离
  * - `community` 四舍五入到 0.5km
@@ -62,6 +67,10 @@ export type UserDTO = {
   phone?: string | null
   /** 微信号(可空)。人-人联系链路中唯一可对外展示的联系方式 */
   wechat?: string | null
+  /** 性别(可空,资料补全前为 null) */
+  gender?: UserGender | null
+  /** 生日(YYYY-MM-DD,可空) */
+  birthday?: string | null
   /** 练习年限(可空,TEACHER 角色常用) */
   practiceYears?: number | null
   /** 活跃度等级(可空,默认 medium) */
@@ -432,4 +441,13 @@ export type NotificationLinkTarget = "miniprogram" | "admin"
 export type HotInterestDTO = TagDTO & {
   /** 时间窗口内该标签的得分总和 */
   heat: number
+}
+
+/**
+ * 系统设置项 DTO(用于 GET /api/settings 响应)。
+ * `value` 为任意 JSON 值(对象 / 数组 / 原始值),由后端原样透传。
+ */
+export type SystemSettingDTO = {
+  key: string
+  value: unknown
 }

@@ -18,5 +18,6 @@ export default store
 export * from './location'
 export * from './match'
 // 模块统一导出
+export * from './settings'
 export * from './token'
 export * from './user'

@@ -1,4 +1,4 @@
-import type { ActivityLevel, LocationPoint, PrivacySettings, UserRole } from '@/types'
+import type { ActivityLevel, LocationPoint, PrivacySettings, UserGender, UserRole } from '@/types'
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { fetchCurrentUser, fromUserDTO } from '@/api/auth'
@@ -18,6 +18,10 @@ export interface UserInfo {
   phone?: string | null
   /** 微信号(可空)。人-人联系链路中唯一可对外展示的联系方式 */
   wechat?: string | null
+  /** 性别(可空,资料补全前为 null) */
+  gender?: UserGender | null
+  /** 生日(YYYY-MM-DD,可空) */
+  birthday?: string | null
   /** 头像 URL(可选,用于 Avatar 组件展示) */
   avatar?: string
   /** 头像 URL(后端原字段,profile 页回填用) */

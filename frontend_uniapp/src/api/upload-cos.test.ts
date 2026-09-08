@@ -125,7 +125,7 @@ describe('api/upload.uploadFileToCos', () => {
     }
   })
 
-  it('wx path: uses cos.uploadFile with Body=tempFilePath for non-fetchable string', async () => {
+  it('wx path: uses cos.uploadFile with FilePath=tempFilePath for non-fetchable string', async () => {
     // 模拟微信小程序:传 tempFilePath 字符串(不以 blob:/data: 开头)
     const tempPath = 'wx://tmp/abc.png'
     const result = await uploadFileToCos({
@@ -137,10 +137,10 @@ describe('api/upload.uploadFileToCos', () => {
     expect(putObjectMock).not.toHaveBeenCalled()
     const params = uploadFileMock.mock.calls[0]?.[0]
     expect(params.Bucket).toBe('b-1')
-    expect(params.Body).toBe(tempPath)
+    // cos-wx-sdk-v5 用 FilePath(而非 cos-js-sdk-v5 的 Body)传本地临时路径
+    expect(params.FilePath).toBe(tempPath)
     expect(params.ContentType).toBe('image/png')
     expect(params.CacheControl).toBe('public, max-age=31536000, immutable')
-    expect(params.Headers).toBeUndefined()
     expect(result.url).toBe(`https://cdn.example.com/${params.Key}`)
   })
 

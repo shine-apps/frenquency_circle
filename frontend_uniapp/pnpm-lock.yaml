@@ -81,6 +81,9 @@ importers:
       cos-js-sdk-v5:
         specifier: ^1.10.1
         version: 1.10.1
+      cos-wx-sdk-v5:
+        specifier: ^1.8.0
+        version: 1.8.0
       dayjs:
         specifier: 1.11.10
         version: 1.11.10
@@ -4768,6 +4771,9 @@ packages:
     resolution: {integrity: sha512-b5PIJ0fqzIPCC1tq0GOBlJU0wlo4F0HQgTAqvdk73jYlxrNiMd1RTU9GsLwwX2fGOA2J+TOlcy76FebjlO0Smg==}
     engines: {node: '>= 6'}
 
+  cos-wx-sdk-v5@1.8.0:
+    resolution: {integrity: sha512-CP4TKANIX5KvN6fjkPrFhdEfXjyBSExwBemRr2Ofa7ObN+Z8S62/eo6/d0WVKxSbneoPaXJzkf4AwZz7HOQXXg==}
+
   cosmiconfig-typescript-loader@6.1.0:
     resolution: {integrity: sha512-tJ1w35ZRUiM5FeTzT7DtYWAFFv37ZLqSRkGi2oeCK1gPhvaWjkAtfXvLmvE1pRfxxp9aQo6ba/Pvg1dKj05D4g==}
     engines: {node: '>=v18'}
@@ -7218,6 +7224,11 @@ packages:
   mime@1.6.0:
     resolution: {integrity: sha512-x0Vn8spI+wuJ1O6S7gnbaQg8Pxh4NNHb7KSINmEWKiPE4RKOplvijn+NkmYmmRgP68mc70j2EbeTFRsrswaQeg==}
     engines: {node: '>=4'}
+    hasBin: true
+
+  mime@2.6.0:
+    resolution: {integrity: sha512-USPkMeET31rOMiarsBNIHZKLGgvKc/LrjofAnBlOttf5ajRvqiRA8QsenbcooctK6d6Ts6aqZXBA+XbkKthiQg==}
+    engines: {node: '>=4.0.0'}
     hasBin: true
 
   mime@3.0.0:
@@ -16504,6 +16515,11 @@ snapshots:
       mime-types: 2.1.35
       request: 2.88.2
 
+  cos-wx-sdk-v5@1.8.0:
+    dependencies:
+      fast-xml-parser: 4.5.0
+      mime: 2.6.0
+
   cosmiconfig-typescript-loader@6.1.0(@types/node@20.19.11)(cosmiconfig@9.0.0(typescript@5.8.3))(typescript@5.8.3):
     dependencies:
       '@types/node': 20.19.11
@@ -19512,6 +19528,8 @@ snapshots:
       mime-db: 1.52.0
 
   mime@1.6.0: {}
+
+  mime@2.6.0: {}
 
   mime@3.0.0: {}
 

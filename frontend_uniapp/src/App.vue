@@ -6,6 +6,7 @@ import { tabbarStore } from '@/tabbar/store'
 import { permission } from '@/router/permission'
 import { useTokenStore } from '@/store/token'
 import { useUserStore } from '@/store/user'
+import { useSettingsStore } from '@/store/settings'
 
 const { proxy } = (getCurrentInstance() || {}) as any
 const router = proxy?.$router
@@ -17,7 +18,12 @@ onLaunch((options) => {
   // 恢复登录态:有 token 时异步刷新用户信息
   const tokenStore = useTokenStore()
   const userStore = useUserStore()
+  const settingsStore = useSettingsStore()
   userStore.hydrate()
+  // 启动时拉取一次系统设置(10 分钟缓存,失败静默不阻塞启动)
+  settingsStore.getSettings().catch((e) => {
+    console.error('App 启动拉取系统设置失败:', e)
+  })
   if (tokenStore.updateNowTime().hasLogin) {
     userStore.fetchUserInfo().catch((e) => {
       console.error('App 启动刷新用户信息失败:', e)

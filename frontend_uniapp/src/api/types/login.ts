@@ -1,4 +1,4 @@
-import type { ActivityLevel, UserRole as BusinessUserRole, PrivacySettings, TagDTO, UserProfile } from '@/types'
+import type { ActivityLevel, UserGender, UserRole as BusinessUserRole, PrivacySettings, TagDTO, UserProfile } from '@/types'
 
 // 认证模式类型
 export type AuthMode = 'single' | 'double'
@@ -129,6 +129,10 @@ export interface UserDTO {
   avatarUrl?: string | null
   /** 微信号(可空)。人-人联系链路中唯一可对外展示的联系方式 */
   wechat?: string | null
+  /** 性别(可空,资料补全前为 null) */
+  gender?: UserGender | null
+  /** 生日(YYYY-MM-DD,可空) */
+  birthday?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -141,6 +145,10 @@ export interface UpdateMyProfileInput {
   name?: string
   email?: string
   avatarUrl?: string
+  /** 性别(传 null 表示清除) */
+  gender?: UserGender | null
+  /** 生日 YYYY-MM-DD(传 null 表示清除) */
+  birthday?: string | null
 }
 
 /**
@@ -170,5 +178,6 @@ export type {
   ActivityLevel,
   PrivacySettings,
   TagDTO,
+  UserGender,
   UserProfile,
 }

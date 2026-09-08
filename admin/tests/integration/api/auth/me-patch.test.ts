@@ -205,6 +205,34 @@ describe("PATCH /api/auth/me", () => {
     expect(setArg.avatarUrl).toBeNull()
   })
 
+  it("returns 200 on valid gender and birthday update", async () => {
+    readUserFromTokenMock.mockResolvedValue(FAKE_AUTH)
+    const updatedRow = fakeRow({ gender: "female", birthday: "1990-05-20" })
+    chainUpdate.returning.mockResolvedValue([updatedRow])
+    const res = await PATCH(
+      makeRequest({ gender: "female", birthday: "1990-05-20" })
+    )
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as IResponse<{
+      gender: string | null
+      birthday: string | null
+    }>
+    expect(body.data.gender).toBe("female")
+    expect(body.data.birthday).toBe("1990-05-20")
+    const setArg = chainUpdate.set.mock.calls[0]?.[0] as unknown as Record<string, unknown>
+    expect(setArg.gender).toBe("female")
+    expect(setArg.birthday).toBe("1990-05-20")
+  })
+
+  it("returns 400 on invalid gender value or birthday format", async () => {
+    readUserFromTokenMock.mockResolvedValue(FAKE_AUTH)
+    const badGender = await PATCH(makeRequest({ gender: "unknown" }))
+    expect(badGender.status).toBe(400)
+    const badBirthday = await PATCH(makeRequest({ birthday: "1990/05/20" }))
+    expect(badBirthday.status).toBe(400)
+    expect(mockDb.update).not.toHaveBeenCalled()
+  })
+
   it("returns 404 when update affects 0 rows", async () => {
     readUserFromTokenMock.mockResolvedValue(FAKE_AUTH)
     chainUpdate.returning.mockResolvedValue([]) // 用户已删除

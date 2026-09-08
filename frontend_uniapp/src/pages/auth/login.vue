@@ -1,11 +1,8 @@
 <script lang="ts" setup>
 import { ref } from 'vue'
 import { useTokenStore } from '@/store/token'
-import { useUserStore } from '@/store/user'
 import { HOME_PAGE_PATH } from '@/router/config'
 import { currRoute } from '@/utils'
-import { updateMyProfile, fromUserDTO } from '@/api/auth'
-import { useDialog } from '@wot-ui/ui/components/wd-dialog'
 
 definePage({
   layout: 'default',
@@ -25,8 +22,6 @@ const CODE_LEN = 6
 const COUNTDOWN = 60
 
 const tokenStore = useTokenStore()
-const userStore = useUserStore()
-const dialog = useDialog()
 
 // 短信登录表单
 const activeTab = ref<'phone' | 'password'>('phone')
@@ -94,46 +89,10 @@ async function handleSendCode() {
   }
 }
 
-/** 纯数字(可能是手机号)用户名 */
-const isNumericName = (v: string) => /^\d+$/.test(v)
-
 /** 跳转来源页(若携带 redirect),否则回首页 */
 function goAfterLogin() {
   const redirect = currRoute().query.redirect
   uni.reLaunch({ url: redirect || HOME_PAGE_PATH })
-}
-
-/** 登录成功后的收尾:若用户名是纯数字(可能是手机号),弹窗要求补充用户名 */
-async function handleLoginSuccess() {
-  const name = userStore.userInfo?.name ?? ''
-  if (!isNumericName(name)) {
-    goAfterLogin()
-    return
-  }
-  try {
-    const { value } = await dialog.prompt({
-      title: '设置用户昵称',
-      msg: '检测到您的昵称为纯数字,请设置一个易识别的昵称',
-      inputProps: {
-        type: 'nickname',
-        modelValue: '',
-        placeholder: '请输入用户名',
-        maxlength: 20,
-      },
-      confirmButtonText: '保存',
-    })
-    const username = String(value ?? '').trim()
-    if (username) {
-      const res = await updateMyProfile({ name: username })
-      userStore.updateUser(fromUserDTO(res))
-    }
-  }
-  catch {
-    // 用户取消或不填写,不阻塞跳转
-  }
-  finally {
-    goAfterLogin()
-  }
 }
 
 /** 手机号 + 验证码登录 */
@@ -153,7 +112,7 @@ async function handlePhoneLogin() {
   submitting.value = true
   try {
     await tokenStore.loginByPhone(phone.value, smsCode.value)
-    handleLoginSuccess()
+    goAfterLogin()
   }
   catch (e) {
     tip((e as Error).message || '登录失败')
@@ -176,7 +135,7 @@ async function handlePasswordLogin() {
   submitting.value = true
   try {
     await tokenStore.loginByCredentials(email.value, password.value)
-    handleLoginSuccess()
+    goAfterLogin()
   }
   catch (e) {
     tip((e as Error).message || '登录失败')
@@ -200,7 +159,7 @@ async function handleGetPhoneNumber(e: any) {
   submitting.value = true
   try {
     await tokenStore.loginByWechat(e.detail.code)
-    handleLoginSuccess()
+    goAfterLogin()
   }
   catch (err) {
     tip((err as Error).message || '微信登录失败')

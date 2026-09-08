@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { onShareAppMessage, onShareTimeline, onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
 import { useMatchStore } from '@/store/match'
@@ -15,6 +15,7 @@ import { activityLevelText, formatDateTime, formatDistance } from '@/utils/forma
 import { canCreateCircle } from '@/utils/role'
 import { useShare } from '@/composables/useShare'
 import MatchFilterBar from '@/components/MatchFilterBar/MatchFilterBar.vue'
+import ProfileSetupPopup from '@/components/ProfileSetupPopup/ProfileSetupPopup.vue'
 import type { MatchCircleDTO, MatchPersonDTO } from '@/types'
 
 definePage({
@@ -57,6 +58,46 @@ onShareTimeline(shareTimeline)
 
 const user = computed(() => userStore.userInfo)
 const userTags = computed(() => user.value?.tags || [])
+
+// ====== 资料补全引导 ======
+/**
+ * 已登录且昵称为纯数字(手机号登录的默认昵称)时,在页面底部弹出补全弹窗。
+ * 弹窗是独立浮层:不读写首页匹配数据、不触发跳转,仅更新用户资料;
+ * 保存成功或用户主动关闭后,本页生命周期内不再自动弹出,避免反复打扰。
+ */
+const needProfileSetup = computed(
+  () => userStore.isLoggedIn && /^\d+$/.test(userStore.userInfo?.name ?? ''),
+)
+
+const profileSetupVisible = ref(false)
+/** 本页生命周期内是否已处理(保存成功 / 主动关闭) */
+let profileSetupSettled = false
+
+/** 满足条件时打开补全弹窗(幂等) */
+function maybeOpenProfileSetup(): void {
+  if (profileSetupSettled || profileSetupVisible.value || !needProfileSetup.value)
+    return
+  profileSetupVisible.value = true
+}
+
+/** 保存成功:关闭弹窗(用户信息已由组件同步 store) */
+function handleProfileSetupSuccess(): void {
+  profileSetupSettled = true
+  profileSetupVisible.value = false
+  uni.showToast({ title: '资料已完善', icon: 'success' })
+}
+
+/** 主动关闭:本次不再弹出 */
+function handleProfileSetupCancel(): void {
+  profileSetupSettled = true
+  profileSetupVisible.value = false
+}
+
+// 用户资料可能晚于页面挂载才从本地存储恢复,变化后补弹一次
+watch(needProfileSetup, (need) => {
+  if (need)
+    maybeOpenProfileSetup()
+})
 
 /** 当前坐标与地址(优先 store/match → user → 默认空) */
 const latitude = ref<number | null>(matchStore.location?.latitude ?? user.value?.location?.latitude ?? null)
@@ -141,6 +182,8 @@ async function loadAll(lat: number, lng: number, range: number): Promise<void> {
 onShow(() => {
   // 每次回到首页刷新未读消息角标(从通知页返回后也能同步)
   void fetchUnreadCount()
+  // 昵称为纯数字时引导完善资料(不影响下方定位/匹配流程)
+  maybeOpenProfileSetup()
   // 同步 store 与 user 中已有的位置(可能在 profile 页刚被更新)
   if (!latitude.value || !longitude.value) {
     if (user.value?.location?.latitude && user.value?.location?.longitude) {
@@ -488,6 +531,13 @@ function handleCircleClick(circleId: string): void {
         <text class="fab-item__label">创建圈子</text>
       </view>
     </wd-fab>
+
+    <!-- 资料补全引导弹窗(底部;完成或主动关闭前保持可见) -->
+    <ProfileSetupPopup
+      v-model="profileSetupVisible"
+      @success="handleProfileSetupSuccess"
+      @cancel="handleProfileSetupCancel"
+    />
   </view>
 </template>
 

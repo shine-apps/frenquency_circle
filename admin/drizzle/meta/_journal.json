@@ -43,6 +43,20 @@
       "when": 1788675121442,
       "tag": "0005_lean_wither",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788791847753,
+      "tag": "0006_grey_frightful_four",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788864570810,
+      "tag": "0007_add_user_gender_birthday",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useUserStore } from '@/store/user'
 import { getMyProfile, updateMyProfile, updateProfile, verifyPhoneBind } from '@/api/auth'
 import { sendSmsCode } from '@/api/login'
@@ -7,13 +7,7 @@ import { uploadFileToCos } from '@/api/upload'
 import { chooseImages } from '@/utils/chooseImage'
 import { LOGIN_PAGE } from '@/router/config'
 import { useToast } from '@wot-ui/ui/components/wd-toast'
-import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue'
-// #ifdef H5
-import H5LocationPicker from '@/components/H5LocationPicker/H5LocationPicker.vue'
-// #endif
-
-/** 标签展示最大数量(所有端通用,不应被包在 H5 条件编译内) */
-const TAG_VISIBLE_LIMIT = 8
+import type { UserGender } from '@/types'
 
 definePage({
   layout: 'default',
@@ -42,20 +36,11 @@ const uploading = ref(false)
 /** 当前正在保存的字段名(同一字段防重复提交;不同字段允许并发) */
 const savingField = ref<string | null>(null)
 
-// ===== 表单状态(地址选择用;昵称/邮箱走独立弹层即时保存) =====
-const form = reactive({
-  address: '',
-  latitude: null as number | null,
-  longitude: null as number | null,
-})
 const avatarUrl = ref('')
 
 // ===== 头像裁剪状态 =====
 const cropVisible = ref(false)
 const cropSrc = ref('')
-
-// ===== 地址选择状态(H5 弹层 / 小程序原生) =====
-const pickerVisible = ref(false)
 
 // ===== 手机号修改弹层状态 =====
 const phonePopupVisible = ref(false)
@@ -71,9 +56,6 @@ function fillFromUser() {
   const u = user.value
   if (!u)
     return
-  form.address = u.address ?? ''
-  form.latitude = u.location?.latitude ?? null
-  form.longitude = u.location?.longitude ?? null
   avatarUrl.value = u.avatarUrl ?? u.avatar ?? ''
 }
 
@@ -114,19 +96,35 @@ function deriveFilenameFromPath(p: string): string {
   return seg.includes('.') ? seg : `${seg}.jpg`
 }
 
-/** 执行头像上传(裁剪后路径 → 后端 → 回填预览 → 立即保存) */
+/**
+ * 执行头像上传:上传 COS → 先持久化后端 → 成功后才更新本地预览。
+ *
+ * 注意不用 saveField:saveField 会吞掉 task 异常(内部 catch 不 rethrow),
+ * 导致"上传成功但保存失败"时无法感知、预览与后端不一致。这里原子处理并回滚预览。
+ */
 async function doUpload(file: string | File, filename: string) {
+  if (uploading.value || savingField.value === 'avatar')
+    return
   uploading.value = true
+  savingField.value = 'avatar'
+  const prevUrl = avatarUrl.value
   try {
     const { url } = await uploadFileToCos({ file, name: filename, purpose: 'avatar' })
+    // 先落库,成功后再更新预览;避免先改预览、落库失败时展示一张后端不存在的头像
+    await updateMyProfile({ avatarUrl: url })
     avatarUrl.value = url
-    await saveField('avatar', '头像', () => updateMyProfile({ avatarUrl: url }))
+    const fresh = await getMyProfile()
+    userStore.setProfile(fresh)
+    toast.show({ msg: '头像已保存', iconName: 'success' })
   }
   catch (e) {
-    toast.show({ msg: (e as Error).message || '头像上传失败', iconName: 'error' })
+    avatarUrl.value = prevUrl
+    console.error("上传头像失败", e)
+    toast.show({ msg: '头像上传失败', iconName: 'error' })
   }
   finally {
     uploading.value = false
+    savingField.value = null
   }
 }
 
@@ -162,12 +160,36 @@ function handleCropConfirm(result: { tempFilePath: string, width: number, height
   doUpload(tempPath, filename)
 }
 
-/** 清除头像(空串由后端归一为 null,立即保存) */
-function handleClearAvatar() {
-  if (savingField.value === 'avatar')
+// #ifdef MP-WEIXIN
+/** 微信端:chooseAvatar 直接返回已裁剪的临时路径 → 上传 → 回填预览 → 保存 */
+function handleChooseAvatar(e: { detail: { avatarUrl?: string } }) {
+  if (uploading.value)
     return
+  const path = e.detail.avatarUrl
+  if (!path)
+    return
+  doUpload(path, deriveFilenameFromPath(path))
+}
+// #endif
+
+/** 清除头像(空串由后端归一为 null);失败回滚预览,保持与后端一致 */
+function handleClearAvatar() {
+  // 上传/保存进行中禁止清除,避免与 doUpload 的保存链路竞态(否则已传文件成孤儿、toast 混乱)
+  if (uploading.value || savingField.value === 'avatar')
+    return
+  const prevUrl = avatarUrl.value
   avatarUrl.value = ''
-  saveField('avatar', '头像', () => updateMyProfile({ avatarUrl: '' }))
+  savingField.value = 'avatar'
+  updateMyProfile({ avatarUrl: '' })
+    .then(() => getMyProfile().then(p => userStore.setProfile(p)))
+    .then(() => toast.show({ msg: '头像已移除', iconName: 'success' }))
+    .catch((e) => {
+      avatarUrl.value = prevUrl
+      toast.show({ msg: (e as Error).message || '移除失败,请重试', iconName: 'error' })
+    })
+    .finally(() => {
+      savingField.value = null
+    })
 }
 
 // ===== 查看模式展示 =====
@@ -204,17 +226,32 @@ const displayPhone = computed(() => {
 /** 微信号展示(未填写时提示) */
 const displayWechat = computed(() => user.value?.wechat || '未填写')
 
-/** 我的兴趣展示(最多 8 个 + "+N") */
-const myTags = computed(() => user.value?.tags || [])
-const tagPreview = computed(() => myTags.value.slice(0, TAG_VISIBLE_LIMIT))
-const tagRest = computed(() => Math.max(0, myTags.value.length - TAG_VISIBLE_LIMIT))
+// ===== 性别 / 生日 =====
+/** 性别可选项(与后端枚举 male / female / other 对齐) */
+const GENDER_OPTIONS: { label: string, value: UserGender }[] = [
+  { label: '男', value: 'male' },
+  { label: '女', value: 'female' },
+  { label: '其他', value: 'other' },
+]
 
-/** 兴趣标签选择弹窗显隐 */
-const tagPopupVisible = ref(false)
+/** 性别展示(未填写时提示) */
+const displayGender = computed(
+  () => GENDER_OPTIONS.find(o => o.value === user.value?.gender)?.label ?? '未填写',
+)
 
-/** 打开兴趣标签选择弹窗 */
-function handleGoTags() {
-  tagPopupVisible.value = true
+/** 生日展示(未填写时提示) */
+const displayBirthday = computed(() => user.value?.birthday || '未填写')
+
+/** 生日可选范围:1900-01-01 ~ 今天 */
+const BIRTHDAY_MIN_DATE = new Date(1900, 0, 1).getTime()
+const now = new Date()
+const BIRTHDAY_MAX_DATE = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+
+/** 时间戳 → YYYY-MM-DD(本地时区) */
+function tsToDateString(ts: number): string {
+  const d = new Date(ts)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
 // ===== 逐项即时保存 =====
@@ -248,16 +285,9 @@ function syncFieldFrom(
     email?: string
     avatarUrl?: string | null
     avatar?: string | null
-    address?: string | null
-    location?: { latitude: number, longitude: number } | null
   },
 ) {
-  if (field === 'address') {
-    form.address = fresh.address ?? ''
-    form.latitude = fresh.location?.latitude ?? null
-    form.longitude = fresh.location?.longitude ?? null
-  }
-  else if (field === 'avatar') {
+  if (field === 'avatar') {
     avatarUrl.value = fresh.avatarUrl ?? fresh.avatar ?? ''
   }
 }
@@ -290,6 +320,78 @@ function handleWechatSave() {
   }
   saveField('wechat', '微信号', () => updateProfile({ wechat }))
   wechatPopupVisible.value = false
+}
+
+// ===== 性别编辑弹层 =====
+const genderPopupVisible = ref(false)
+const editGender = ref<UserGender | null>(null)
+
+/** 打开性别编辑弹层(预填当前值) */
+function openGenderPopup() {
+  editGender.value = user.value?.gender ?? null
+  genderPopupVisible.value = true
+}
+
+/** 选择性别:再次点击同一项视为取消选择(保存时清除) */
+function handleGenderSelect(value: UserGender) {
+  editGender.value = editGender.value === value ? null : value
+}
+
+/** 确认保存性别:未变更直接关闭;选中"清除"时传 null(后端归一为 null) */
+function handleGenderSave() {
+  const gender = editGender.value
+  if (gender === (user.value?.gender ?? null)) {
+    genderPopupVisible.value = false
+    return
+  }
+  if (savingField.value === 'gender') {
+    toast.show({ msg: '性别保存中,请稍候', iconName: 'info' })
+    return
+  }
+  genderPopupVisible.value = false
+  saveField('gender', '性别', () => updateMyProfile({ gender }))
+}
+
+// ===== 生日选择(选中即保存) =====
+const birthdayPickerVisible = ref(false)
+
+/** 生日选择器绑定的时间戳(已选则回填,否则定位到 30 岁) */
+const birthdayTs = computed(() => {
+  if (user.value?.birthday) {
+    const ts = new Date(`${user.value.birthday}T00:00:00`).getTime()
+    return Number.isNaN(ts) ? BIRTHDAY_MAX_DATE - 86400000 * 365 * 30 : ts
+  }
+  return BIRTHDAY_MAX_DATE - 86400000 * 365 * 30
+})
+
+/** 打开生日选择器 */
+function openBirthdayPicker() {
+  if (savingField.value === 'birthday') {
+    toast.show({ msg: '生日保存中,请稍候', iconName: 'info' })
+    return
+  }
+  birthdayPickerVisible.value = true
+}
+
+/** 生日确认:写回 YYYY-MM-DD 并立即保存(未变更则不请求) */
+function handleBirthdayConfirm({ value }: { value: number | string }) {
+  birthdayPickerVisible.value = false
+  const ts = typeof value === 'number' ? value : Number(value)
+  const birthday = tsToDateString(ts)
+  if (birthday === (user.value?.birthday ?? ''))
+    return
+  saveField('birthday', '生日', () => updateMyProfile({ birthday }))
+}
+
+/** 清除生日(传 null,后端归一为 null) */
+function handleClearBirthday() {
+  if (!user.value?.birthday)
+    return
+  if (savingField.value === 'birthday') {
+    toast.show({ msg: '生日保存中,请稍候', iconName: 'info' })
+    return
+  }
+  saveField('birthday', '生日', () => updateMyProfile({ birthday: null }))
 }
 
 /** 打开昵称编辑弹层(预填当前值) */
@@ -344,57 +446,6 @@ function handleEmailSave() {
   }
   emailPopupVisible.value = false
   saveField('email', '邮箱', () => updateMyProfile({ email }))
-}
-
-/** 地址保存(选点确认 / 清除后调用,地址+经纬度一起提交) */
-function saveAddress() {
-  saveField('address', '地址', () =>
-    updateProfile({
-      address: form.address,
-      latitude: form.latitude,
-      longitude: form.longitude,
-    }))
-}
-
-// ===== 地址选择(H5 用地图选点弹层,小程序用原生 chooseLocation) =====
-/** 打开地址选择器 */
-async function handleChooseLocation() {
-  // #ifdef H5
-  pickerVisible.value = true
-  // #endif
-  // #ifndef H5
-  try {
-    const res = await uni.chooseLocation({})
-    form.address = res.address || res.name || '已选择位置'
-    form.latitude = res.latitude
-    form.longitude = res.longitude
-    saveAddress()
-  }
-  catch (e) {
-    const err = e as Error & { errMsg?: string }
-    // 用户取消选点静默
-    if (err?.errMsg && /cancel/i.test(err.errMsg))
-      return
-    toast.show({ msg: err?.message || '选择位置失败,请检查授权', iconName: 'error' })
-  }
-  // #endif
-}
-
-/** H5 地图选点弹层确认回调 */
-function handlePickerConfirm(loc: { latitude: number, longitude: number, address: string }) {
-  form.address = loc.address
-  form.latitude = loc.latitude
-  form.longitude = loc.longitude
-  pickerVisible.value = false
-  saveAddress()
-}
-
-/** 清除地址(连同经纬度,立即保存) */
-function handleClearAddress() {
-  form.address = ''
-  form.latitude = null
-  form.longitude = null
-  saveAddress()
 }
 
 // ===== 手机号修改弹层 =====
@@ -489,14 +540,35 @@ async function handleBindPhone() {
     />
 
     <template v-else>
-      <!-- ===== 沉浸式 Header(青绿渐变 + 装饰圆 + 大头像) ===== -->
-      <view class="relative flex flex-col items-center overflow-hidden rounded-b-[32px] from-[#018d71] via-[#0aa07f] to-[#34c19a] bg-gradient-to-br px-6 pb-[72px] pt-14 shadow-[0_8px_24px_rgba(1,141,113,0.18)]">
-        <!-- 装饰圆 -->
-        <view class="pointer-events-none absolute size-[220px] rounded-full bg-white/10 -right-[60px] -top-20" />
-        <view class="pointer-events-none absolute size-[160px] rounded-full bg-white/[0.06] -bottom-[50px] -left-10" />
+      <!-- ===== 头像区(点击选择/更换;微信端用原生 chooseAvatar,其他端选图后 1:1 裁剪) ===== -->
+      <view class="flex flex-col items-center px-6 pb-6 pt-8">
+        <!-- 微信小程序:原生 button + open-type="chooseAvatar"(返回已裁剪的临时路径) -->
+        <!-- #ifdef MP-WEIXIN -->
+        <button
+          class="profile-avatar-btn relative m-0 h-24 w-24 flex items-center justify-center overflow-hidden rounded-full border-4 border-white bg-[#e8f5f1] p-0 leading-none shadow-[0_8px_24px_rgba(0,0,0,0.12)] transition-transform duration-200 active:scale-[0.96]"
+          :disabled="uploading"
+          open-type="chooseAvatar"
+          @chooseavatar="handleChooseAvatar"
+        >
+          <image v-if="avatarUrl" :src="avatarUrl" class="h-full w-full" mode="aspectFill" />
+          <text v-else class="text-[40px] text-[#018d71] font-semibold leading-none">
+            {{ avatarFallback }}
+          </text>
+          <view v-if="uploading" class="absolute inset-0 flex items-center justify-center rounded-full bg-black/30">
+            <wd-loading color="#ffffff" size="20" />
+          </view>
+          <view class="absolute h-7 w-7 flex items-center justify-center rounded-full bg-white text-sm shadow-[0_2px_8px_rgba(0,0,0,0.15)] -bottom-[2px] -right-[2px]">
+            <text>📷</text>
+          </view>
+        </button>
+        <!-- #endif -->
 
-        <!-- 头像 -->
-        <view class="relative mb-4 h-24 w-24 flex items-center justify-center overflow-hidden border-4 border-white rounded-full bg-white shadow-[0_8px_24px_rgba(0,0,0,0.12)] transition-transform duration-200 active:scale-[0.96]" @click="handlePickAvatar">
+        <!-- 其他端:点击选图后 1:1 裁剪 -->
+        <!-- #ifndef MP-WEIXIN -->
+        <view
+          class="relative h-24 w-24 flex items-center justify-center overflow-hidden rounded-full border-4 border-white bg-[#e8f5f1] shadow-[0_8px_24px_rgba(0,0,0,0.12)] transition-transform duration-200 active:scale-[0.96]"
+          @click="handlePickAvatar"
+        >
           <image v-if="avatarUrl" :src="avatarUrl" class="h-full w-full" mode="aspectFill" />
           <text v-else class="text-[40px] text-[#018d71] font-semibold leading-none">
             {{ avatarFallback }}
@@ -508,65 +580,26 @@ async function handleBindPhone() {
             <text>📷</text>
           </view>
         </view>
+        <!-- #endif -->
 
-        <!-- 姓名 + 角色徽标 -->
-        <view class="mb-1.5 flex items-center gap-2">
-          <text class="text-[22px] text-white font-semibold leading-tight">
-            {{ user?.name }}
-          </text>
-          <text class="rounded-full bg-white/90 px-2 py-[3px] text-[11px] font-medium" :class="roleChipClass">
-            {{ roleInfo.text }}
-          </text>
-        </view>
-
-        <text class="mt-0.5 text-[13px] text-white/85">
-          {{ user?.email }}
+        <text class="mt-2 text-[12px] text-[#999]">
+          点击头像{{ avatarUrl ? '更换照片' : '设置照片' }}
+          <text v-if="avatarUrl" class="text-[#018d71] underline" @click.stop="handleClearAvatar">移除头像</text>
         </text>
 
-        <!-- 提示语 -->
-        <view class="mt-3 flex items-center gap-3 text-[12px] text-white/70">
-          <text>点击头像更换照片</text>
-          <text
-            v-if="avatarUrl"
-            class="cursor-pointer underline"
-            @click="handleClearAvatar"
-          >
-            移除头像
+        <!-- 姓名 + 角色徽标 -->
+        <view class="mt-3 flex items-center gap-2">
+          <text class="text-[20px] text-[#333] font-semibold leading-tight">
+            {{ user?.name }}
           </text>
-        </view>
-      </view>
-
-      <!-- ===== 我的兴趣卡片(浮在 Header 底部) ===== -->
-      <view class="mx-4 mt-4 md:mx-6">
-        <view class="rounded-[20px] bg-white p-5 shadow-[0_6px_24px_rgba(0,0,0,0.06)]">
-          <view class="flex items-center justify-between">
-            <text class="text-[13px] text-[#999] font-semibold tracking-[0.5px]">
-              我的兴趣
-            </text>
-            <text class="cursor-pointer text-xs text-[#018d71]" @click="handleGoTags">
-              {{ myTags.length > 0 ? '去编辑 ›' : '去选择 ›' }}
-            </text>
-          </view>
-          <view v-if="myTags.length > 0" class="mt-3 flex flex-wrap gap-2">
-            <text
-              v-for="name in tagPreview"
-              :key="name"
-              class="rounded-full bg-[#e8f5f1] px-3 py-1 text-xs text-[#018d71]"
-            >
-              {{ name }}
-            </text>
-            <text v-if="tagRest > 0" class="rounded-full bg-[#f5f6f7] px-3 py-1 text-xs text-[#999]">
-              +{{ tagRest }}
-            </text>
-          </view>
-          <text v-else class="mt-3 block text-sm text-[#999] leading-6">
-            未选择兴趣标签,完善后可自动匹配同趣
+          <text class="rounded-full bg-[#e8f5f1] px-2 py-[3px] text-[11px] font-medium" :class="roleChipClass">
+            {{ roleInfo.text }}
           </text>
         </view>
       </view>
 
       <!-- ===== 信息卡片:常驻行内编辑,失焦/确认即保存 ===== -->
-      <view class="mx-4 mt-3 md:mx-6">
+      <view class="mx-4 mt-4 md:mx-6">
         <view class="rounded-[20px] bg-white shadow-[0_6px_24px_rgba(0,0,0,0.06)]">
           <view class="px-5 pb-3 pt-5">
             <text class="mb-3 text-[13px] text-[#999] font-semibold tracking-[0.5px]">基本信息</text>
@@ -603,26 +636,6 @@ async function handleBindPhone() {
             </view>
             <view class="mx-3 h-px bg-[#f5f5f5]" />
 
-            <!-- 地址行:点击调起地图选点,确认即保存 -->
-            <view class="flex items-center gap-3.5 py-2" @click="handleChooseLocation">
-              <view class="h-10 w-10 flex shrink-0 items-center justify-center rounded-xl bg-[#e6f0ff] text-[18px] text-[#1677ff]">
-                <text>◉</text>
-              </view>
-              <view class="min-w-0 flex flex-1 flex-col gap-0.5">
-                <text class="text-xs text-[#999]">地址</text>
-                <text class="line-clamp-2 break-all text-sm text-[#333] font-medium">
-                  {{ form.address || '点击选择地址' }}
-                </text>
-              </view>
-              <view class="flex shrink-0 items-center gap-2">
-                <text v-if="form.address" class="cursor-pointer text-xs text-[#ff4d4f]" @click.stop="handleClearAddress">
-                  清除
-                </text>
-                <text class="cursor-pointer text-xs text-[#018d71]">选择 ›</text>
-              </view>
-            </view>
-            <view class="mx-3 h-px bg-[#f5f5f5]" />
-
             <!-- 微信号行:点击弹层修改;人-人联系链路中唯一对外展示的联系方式 -->
             <view class="flex items-center gap-3.5 py-2">
               <view class="h-10 w-10 flex shrink-0 items-center justify-center rounded-xl bg-[#e8f5f1] text-[18px] text-[#018d71]">
@@ -635,6 +648,41 @@ async function handleBindPhone() {
               <view class="flex shrink-0 cursor-pointer items-center gap-1 text-xs text-[#018d71]" @click="openWechatPopup">
                 <text class="text-sm leading-none">✎</text>
                 <text>编辑</text>
+              </view>
+            </view>
+            <view class="mx-3 h-px bg-[#f5f5f5]" />
+
+            <!-- 性别行:点击弹层选择(男/女/其他,可清除) -->
+            <view class="flex items-center gap-3.5 py-2">
+              <view class="h-10 w-10 flex shrink-0 items-center justify-center rounded-xl bg-[#e8f5f1] text-[18px] text-[#018d71]">
+                <text>性</text>
+              </view>
+              <view class="min-w-0 flex flex-1 flex-col gap-0.5">
+                <text class="text-xs text-[#999]">性别</text>
+                <text class="break-all text-[15px] text-[#333] font-medium">{{ displayGender }}</text>
+              </view>
+              <view class="flex shrink-0 cursor-pointer items-center gap-1 text-xs text-[#018d71]" @click="openGenderPopup">
+                <text class="text-sm leading-none">✎</text>
+                <text>编辑</text>
+              </view>
+            </view>
+            <view class="mx-3 h-px bg-[#f5f5f5]" />
+
+            <!-- 生日行:点击用日期选择器,选中即保存 -->
+            <view class="flex items-center gap-3.5 py-2">
+              <view class="h-10 w-10 flex shrink-0 items-center justify-center rounded-xl bg-[#e8f5f1] text-[18px] text-[#018d71]">
+                <text>生</text>
+              </view>
+              <view class="min-w-0 flex flex-1 flex-col gap-0.5">
+                <text class="text-xs text-[#999]">生日</text>
+                <text class="break-all text-[15px] text-[#333] font-medium">{{ displayBirthday }}</text>
+              </view>
+              <view class="flex shrink-0 cursor-pointer items-center gap-2 text-xs text-[#018d71]">
+                <text v-if="user?.birthday" @click.stop="handleClearBirthday">清除</text>
+                <view class="flex items-center gap-1" @click="openBirthdayPicker">
+                  <text class="text-sm leading-none">✎</text>
+                  <text>编辑</text>
+                </view>
               </view>
             </view>
             <view class="mx-3 h-px bg-[#f5f5f5]" />
@@ -654,7 +702,7 @@ async function handleBindPhone() {
             </view>
 
             <view class="pb-1 pt-2 text-xs text-[#999] leading-[1.6]">
-              昵称、邮箱点击右侧编辑图标修改,保存后即时生效;地址点击地图选点,保存后同步定位。
+              昵称、邮箱、性别、生日点击右侧编辑图标修改,保存后即时生效。
               微信号仅在你公开联系方式或同意联系请求后,才会被他人看到。
             </view>
           </view>
@@ -810,6 +858,7 @@ async function handleBindPhone() {
             v-model="editName"
             :maxlength="20"
             placeholder="请输入昵称"
+            type="nickname"
             clearable
           />
         </view>
@@ -835,6 +884,66 @@ async function handleBindPhone() {
         </view>
       </view>
     </wd-popup>
+
+    <!-- 修改性别弹层 -->
+    <wd-popup
+      v-model="genderPopupVisible"
+      position="center"
+      round
+      :modal="true"
+      close-on-click-modal
+    >
+      <view class="w-[320px] px-5 pb-6 pt-5 md:w-[380px]">
+        <text class="block text-center text-base text-[#333] font-semibold">选择性别</text>
+        <text class="mt-1 block text-center text-xs text-[#999]">
+          用于资料展示,可随时修改或清除
+        </text>
+
+        <view class="mt-5 flex gap-3">
+          <view
+            v-for="opt in GENDER_OPTIONS"
+            :key="opt.value"
+            class="h-10 flex flex-1 items-center justify-center rounded-lg border text-sm"
+            :class="editGender === opt.value ? 'border-[#018d71] bg-[#e8f5f1] text-[#018d71]' : 'border-[#e8e8e8] bg-[#fafafa] text-[#666]'"
+            @click="handleGenderSelect(opt.value)"
+          >
+            {{ opt.label }}
+          </view>
+        </view>
+
+        <view class="mt-6 flex gap-3">
+          <wd-button
+            class="flex-1 border border-[#e5e5e5]! bg-white! text-[#666]!"
+            round
+            size="medium"
+            variant="plain"
+            @click="genderPopupVisible = false"
+          >
+            取消
+          </wd-button>
+          <wd-button
+            class="flex-1 border-0 from-[#018d71] to-[#0aa07f] bg-gradient-to-br shadow-[0_6px_18px_rgba(1,141,113,0.28)] text-white!"
+            round
+            size="medium"
+            @click="handleGenderSave"
+          >
+            保存
+          </wd-button>
+        </view>
+      </view>
+    </wd-popup>
+
+    <!-- 生日选择器(type=date,1900-01-01 ~ 今天,确认后即时保存) -->
+    <wd-datetime-picker
+      :visible="birthdayPickerVisible"
+      :model-value="birthdayTs"
+      type="date"
+      title="选择生日"
+      :min-date="BIRTHDAY_MIN_DATE"
+      :max-date="BIRTHDAY_MAX_DATE"
+      @confirm="handleBirthdayConfirm"
+      @update:visible="birthdayPickerVisible = $event"
+    />
 
     <!-- 修改邮箱弹层 -->
     <wd-popup
@@ -881,18 +990,14 @@ async function handleBindPhone() {
       </view>
     </wd-popup>
 
-    <!-- H5 端地图选点弹层 -->
-    <!-- #ifdef H5 -->
-    <H5LocationPicker
-      :visible="pickerVisible"
-      :initial-lat="form.latitude"
-      :initial-lng="form.longitude"
-      @confirm="handlePickerConfirm"
-      @close="pickerVisible = false"
-    />
-    <!-- #endif -->
-
-    <!-- 兴趣标签选择弹窗(打开时预填当前用户的兴趣,完成时由组件内部自动提交到后台并同步 store) -->
-    <TagSelectorPopup v-model="tagPopupVisible" :initial-tags="myTags" />
+    <!-- 兴趣标签在"我的"页编辑;本页不再展示兴趣编辑 -->
   </view>
 </template>
+
+<style>
+/* 微信小程序原生 button(open-type="chooseAvatar")默认样式重置:
+   去掉按钮自带边框,避免与圆角头像边框重叠 */
+.profile-avatar-btn::after {
+  border: none;
+}
+</style>

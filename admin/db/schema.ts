@@ -42,6 +42,13 @@ export const ACTIVITY_LEVELS = ["low", "medium", "high"] as const
 export type ActivityLevel = (typeof ACTIVITY_LEVELS)[number]
 
 /**
+ * 用户性别字面量联合(均为可空,未填写时为 null):
+ * - `male` 男 / `female` 女 / `other` 其他(不便透露)
+ */
+export const GENDERS = ["male", "female", "other"] as const
+export type UserGender = (typeof GENDERS)[number]
+
+/**
  * 隐私设置结构(存储在 users.privacySettings JSONB 字段)。
  * - allowMatch: 是否允许出现在他人的"同趣的人"匹配结果
  * - publicContact: 是否对外公开联系方式(预留字段;当前版本联系方式解锁
@@ -89,6 +96,10 @@ export const users = pgTable("users", {
    * 手机号(phone)是登录实名凭证,任何情况下都不写入对外响应。
    */
   wechat: text("wechat"),
+  /** 性别(`male` | `female` | `other`,可空:资料补全前为 null) */
+  gender: text("gender"),
+  /** 生日(YYYY-MM-DD,可空;用 date 而非 timestamp,避免时区偏移) */
+  birthday: date("birthday"),
   /** 用户纬度(double precision,与 longitude 配合表达用户位置;可空) */
   latitude: doublePrecision("latitude"),
   /** 用户经度(double precision,与 latitude 配合表达用户位置;可空) */
@@ -863,3 +874,30 @@ export const interestEvents = pgTable(
 
 export type InterestEvent = typeof interestEvents.$inferSelect
 export type NewInterestEvent = typeof interestEvents.$inferInsert
+
+/**
+ * 系统设置表(key/value 结构)。
+ *
+ * 用于承载全局系统配置(如 app 名称、版本、功能开关等),与用户级
+ * `users.privacySettings` 相互独立。公开接口 GET /api/settings 直接按 key 升序
+ * 返回整表,无需登录。
+ *
+ * 设计要点:
+ * - `key`  文本主键(自然键):key/value 场景下 key 天然唯一,按 key 直接定位,
+ *   避免引入冗余的 uuid id;
+ * - `value` JSONB(非空):value 为任意 JSON 值(对象 / 数组 / 原始值),
+ *   便于承载结构化配置;与项目现有 JSON 字段(privacySettings / files)保持一致。
+ */
+export const systemSettings = pgTable("system_settings", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+})
+
+export type SystemSetting = typeof systemSettings.$inferSelect
+export type NewSystemSetting = typeof systemSettings.$inferInsert

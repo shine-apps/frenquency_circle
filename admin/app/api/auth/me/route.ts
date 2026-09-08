@@ -11,6 +11,7 @@ import type {
   UserDTO,
   UserProfileDTO,
   UserRole,
+  UserGender,
   PrivacySettings,
 } from "@/types/api"
 
@@ -29,6 +30,9 @@ function toUserDTO(row: typeof users.$inferSelect): UserDTO {
     avatarUrl: row.avatarUrl ?? null,
     phone: row.phone ?? null,
     wechat: row.wechat ?? null,
+    gender: (row.gender as UserGender | null) ?? null,
+    // Drizzle pg date 默认 mode='date' 读出为 JS Date,需规范化为 'YYYY-MM-DD' 字符串
+    birthday: formatDateOnly(row.birthday),
     practiceYears: row.practiceYears ?? null,
     activityLevel: row.activityLevel as UserDTO["activityLevel"],
     privacySettings,
@@ -43,10 +47,24 @@ function toUserDTO(row: typeof users.$inferSelect): UserDTO {
 }
 
 /**
+ * 将 Drizzle 读出的 date 字段(JS Date | string | null)规范化为 'YYYY-MM-DD'。
+ * - null → null
+ * - Date  → 取 UTC 日期部分(Drizzle 默认按 UTC 0:00 写入,toISOString 安全)
+ * - string → 取前 10 字符
+ */
+function formatDateOnly(v: Date | string | null | undefined): string | null {
+  if (v == null) return null
+  if (v instanceof Date) return v.toISOString().slice(0, 10)
+  return String(v).slice(0, 10)
+}
+
+/**
  * PATCH /api/auth/me 请求体校验。
  * - name: 1-100 字符
  * - email: 合法邮箱,且不能与他人重复
  * - avatarUrl: 合法 http(s) URL 或空串(空串视为清除,落库存 null)
+ * - gender: male / female / other(传 null 视为清除)
+ * - birthday: YYYY-MM-DD 日期串(传 null 视为清除)
  * 全部可选,但至少要传 1 个字段(refine)。
  */
 const patchMeSchema = z
@@ -54,6 +72,12 @@ const patchMeSchema = z
     name: z.string().trim().min(1).max(100).optional(),
     email: z.string().email().optional(),
     avatarUrl: z.union([z.string().url(), z.literal("")]).optional(),
+    gender: z.enum(["male", "female", "other"]).nullable().optional(),
+    birthday: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "birthday 需为 YYYY-MM-DD")
+      .nullable()
+      .optional(),
   })
   .refine((d) => Object.keys(d).length > 0, { message: "至少提供一个字段" })
 
@@ -115,7 +139,7 @@ export async function PATCH(req: Request) {
     )
   }
 
-  const { name, email, avatarUrl } = parsed.data
+  const { name, email, avatarUrl, gender, birthday } = parsed.data
 
   // 邮箱被他人占用 → 409
   if (email !== undefined) {
@@ -136,6 +160,8 @@ export async function PATCH(req: Request) {
   if (avatarUrl !== undefined) {
     updatePayload.avatarUrl = avatarUrl === "" ? null : avatarUrl
   }
+  if (gender !== undefined) updatePayload.gender = gender
+  if (birthday !== undefined) updatePayload.birthday = birthday
 
   const [updated] = await db
     .update(users)

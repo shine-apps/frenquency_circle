@@ -1,12 +1,15 @@
 <script lang="ts" setup>
-import { computed, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useUserStore } from '@/store/user'
 import { useTokenStore } from '@/store/token'
-import { getMyProfile, updateMyTags } from '@/api/auth'
+import { getMyProfile, updateMyTags, updateProfile } from '@/api/auth'
 import { getUnreadNotificationCount } from '@/api/notifications'
 import { canCreateCircle } from '@/utils/role'
 import { LOGIN_PAGE } from '@/router/config'
 import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue'
+// #ifdef H5
+import H5LocationPicker from '@/components/H5LocationPicker/H5LocationPicker.vue'
+// #endif
 import type { UserRole } from '@/types'
 
 definePage({
@@ -30,9 +33,11 @@ onShow(() => {
   getMyProfile()
     .then((profile) => {
       userStore.setProfile(profile)
+      fillAddressFromUser()
     })
     .catch(() => {
       // 静默:token 失效由拦截器跳登录
+      fillAddressFromUser()
     })
   // 同步未读消息数(失败静默,不影响其他功能)
   void fetchUnreadCount()
@@ -72,6 +77,88 @@ const tagPopupVisible = ref(false)
 /** 打开兴趣标签选择弹窗 */
 function handleTags() {
   tagPopupVisible.value = true
+}
+
+// ===== 地址编辑(H5 用地图选点弹层,小程序用原生 chooseLocation) =====
+const addressForm = reactive({
+  address: '',
+  latitude: null as number | null,
+  longitude: null as number | null,
+})
+const addressPickerVisible = ref(false)
+
+/** 从 store 回填地址表单初值 */
+function fillAddressFromUser() {
+  const u = user.value
+  addressForm.address = u?.address ?? ''
+  addressForm.latitude = u?.location?.latitude ?? null
+  addressForm.longitude = u?.location?.longitude ?? null
+}
+
+/** 地址保存(选点确认 / 清除后调用,地址+经纬度一起提交) */
+async function saveAddress() {
+  try {
+    await updateProfile({
+      address: addressForm.address,
+      latitude: addressForm.latitude,
+      longitude: addressForm.longitude,
+    })
+    const fresh = await getMyProfile()
+    userStore.setProfile(fresh)
+    fillAddressFromUser()
+    uni.showToast({ title: '地址已保存', icon: 'success' })
+  }
+  catch (e) {
+    console.error('[me] saveAddress failed:', e)
+    uni.showToast({ title: '地址保存失败,请重试', icon: 'none' })
+    // 失败静默刷新 store 并回填,避免本地与后端不一致
+    getMyProfile()
+      .then((p) => {
+        userStore.setProfile(p)
+        fillAddressFromUser()
+      })
+      .catch(() => {})
+  }
+}
+
+/** 打开地址选择器 */
+async function handleChooseLocation() {
+  // #ifdef H5
+  addressPickerVisible.value = true
+  // #endif
+  // #ifndef H5
+  try {
+    const res = await uni.chooseLocation({})
+    addressForm.address = res.address || res.name || '已选择位置'
+    addressForm.latitude = res.latitude
+    addressForm.longitude = res.longitude
+    await saveAddress()
+  }
+  catch (e) {
+    const err = e as Error & { errMsg?: string }
+    // 用户取消选点静默
+    if (err?.errMsg && /cancel/i.test(err.errMsg))
+      return
+    uni.showToast({ title: err?.message || '选择位置失败,请检查授权', icon: 'none' })
+  }
+  // #endif
+}
+
+/** H5 地图选点弹层确认回调 */
+function handleAddressPickerConfirm(loc: { latitude: number, longitude: number, address: string }) {
+  addressForm.address = loc.address
+  addressForm.latitude = loc.latitude
+  addressForm.longitude = loc.longitude
+  addressPickerVisible.value = false
+  void saveAddress()
+}
+
+/** 清除地址(连同经纬度,立即保存) */
+function handleClearAddress() {
+  addressForm.address = ''
+  addressForm.latitude = null
+  addressForm.longitude = null
+  void saveAddress()
 }
 
 /** 编辑兴趣确认:已登录时保存到"我的兴趣标签集合"(后端),并同步本地 store */
@@ -191,7 +278,6 @@ const roleInfo = computed<{ text: string, type: 'warning' | 'primary' | 'danger'
 
 /** 兴趣标签数量 */
 const tagsCount = computed(() => user.value?.tags?.length ?? 0)
-const tagsText = computed(() => (tagsCount.value > 0 ? `${tagsCount.value} 个` : '尚未选择'))
 
 /** 身份标签颜色映射 */
 const roleChipClass = computed(() => {
@@ -257,18 +343,48 @@ const roleChipClass = computed(() => {
         </view>
       </view>
 
-      <view class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4" @click="handleTags">
-        <text class="text-sm text-[#333] font-medium">
-          我的兴趣
-        </text>
-        <view class="flex items-center gap-2">
-          <text class="text-xs text-[#999]">
-            {{ tagsText }}
+      <view class="flex flex-col border-[#f5f5f5] border-b-inset px-4 py-4" @click="handleTags">
+        <view class="flex items-center justify-between">
+          <text class="text-sm text-[#333] font-medium">
+            我的兴趣
           </text>
           <text class="text-sm text-[#ccc]">
             ›
           </text>
         </view>
+        <view v-if="tagsCount > 0" class="mt-2 flex flex-wrap gap-2">
+          <text
+            v-for="tag in user?.tags"
+            :key="tag"
+            class="rounded-full bg-[#f5f5f5] px-2.5 py-1 text-xs text-[#666]"
+          >
+            {{ tag }}
+          </text>
+        </view>
+        <text v-else class="mt-1 text-xs text-[#999]">
+          尚未选择
+        </text>
+      </view>
+
+      <view class="flex flex-col border-[#f5f5f5] border-b-inset px-4 py-4" @click="handleChooseLocation">
+        <view class="flex items-center justify-between">
+          <text class="text-sm text-[#333] font-medium">
+            地址
+          </text>
+          <text class="text-sm text-[#ccc]">
+            ›
+          </text>
+        </view>
+        <text class="mt-1 line-clamp-2 break-all text-xs text-[#999]">
+          {{ addressForm.address || '点击选择地址' }}
+        </text>
+        <text
+          v-if="addressForm.address"
+          class="mt-1 self-start text-xs text-[#ff4d4f]"
+          @click.stop="handleClearAddress"
+        >
+          清除地址
+        </text>
       </view>
 
       <view class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4" @click="handleMyCircles">
@@ -408,6 +524,17 @@ const roleChipClass = computed(() => {
 
     <!-- 兴趣标签选择弹窗(打开时预填当前用户兴趣,完成时由本页统一保存到后端) -->
     <TagSelectorPopup v-model="tagPopupVisible" :initial-tags="user?.tags ?? []" @confirm="handleTagsConfirmed" />
+
+    <!-- H5 端地图选点弹层 -->
+    <!-- #ifdef H5 -->
+    <H5LocationPicker
+      :visible="addressPickerVisible"
+      :initial-lat="addressForm.latitude"
+      :initial-lng="addressForm.longitude"
+      @confirm="handleAddressPickerConfirm"
+      @close="addressPickerVisible = false"
+    />
+    <!-- #endif -->
   </view>
 </template>
 

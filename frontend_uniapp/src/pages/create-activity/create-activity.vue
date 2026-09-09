@@ -18,9 +18,10 @@ import {
 import { uploadFileToCos } from '@/api/upload'
 import { chooseImages } from '@/utils/chooseImage'
 import { stripHtmlTags } from '@/utils/format'
+import { toLoginWithRedirect } from '@/utils/toLoginPage'
 import { useDialog } from '@wot-ui/ui/components/wd-dialog'
 import { useUserStore } from '@/store/user'
-import { LOGIN_PAGE } from '@/router/config'
+import { shouldBlockForAppDeploying } from '@/composables/useAppDeployingGuard'
 import type { ActivityDTO } from '@/types'
 
 /** 轮播图片最大数量 */
@@ -108,9 +109,14 @@ async function loadDetail() {
   }
 }
 
-onLoad((options) => {
+onLoad(async (options) => {
   if (!userStore.isLoggedIn) {
-    uni.reLaunch({ url: LOGIN_PAGE })
+    // 未登录:reLaunch 清空页面栈并携带 redirect,登录后回到本页
+    toLoginWithRedirect()
+    return
+  }
+  // 应用发布维护中(isAppDeploying 为 true)不允许进入,跳转首页
+  if (await shouldBlockForAppDeploying()) {
     return
   }
   activityId.value = (options as any)?.activityId || null
@@ -261,7 +267,7 @@ async function handleCancel() {
           活动标题
         </text>
         <input
-          v-model="title" class="h-10 text-base" maxlength="100"
+          v-model="title" class="h-10 text-base" :maxlength="100"
           placeholder="请输入活动标题" placeholder-class="text-[#bbb]"
         >
       </view>
@@ -349,7 +355,7 @@ async function handleCancel() {
           联系人电话(选填)
         </text>
         <input
-          v-model="contactPhone" class="h-10 text-base" maxlength="20" type="number"
+          v-model="contactPhone" class="h-10 text-base" :maxlength="20" type="number"
           placeholder="如 13800138000" placeholder-class="text-[#bbb]"
         >
       </view>

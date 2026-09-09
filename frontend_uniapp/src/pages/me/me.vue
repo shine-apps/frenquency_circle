@@ -6,6 +6,7 @@ import { getMyProfile, updateMyTags, updateProfile } from '@/api/auth'
 import { getUnreadNotificationCount } from '@/api/notifications'
 import { canCreateCircle } from '@/utils/role'
 import { LOGIN_PAGE } from '@/router/config'
+import { toLoginWithRedirect } from '@/utils/toLoginPage'
 import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue'
 // #ifdef H5
 import H5LocationPicker from '@/components/H5LocationPicker/H5LocationPicker.vue'
@@ -62,10 +63,10 @@ function handleNotifications() {
   uni.navigateTo({ url: '/pages/notifications/notifications' })
 }
 
-/** 未登录点击用户卡片 → 跳登录页 */
+/** 未登录点击用户卡片 → 跳登录页(navigateTo 保留页面栈,登录后回到本页) */
 function handleProfileClick() {
   if (!isLoggedIn.value) {
-    uni.navigateTo({ url: LOGIN_PAGE })
+    toLoginWithRedirect('navigateTo')
     return
   }
   uni.navigateTo({ url: '/pages/profile/profile' })
@@ -210,7 +211,7 @@ function handleMyPublished() {
 /** 跳我的活动页:TEACHER / ADMIN 直达,其他角色弹框引导教师认证 */
 function handleMyActivities() {
   if (!isLoggedIn.value) {
-    uni.navigateTo({ url: LOGIN_PAGE })
+    toLoginWithRedirect('navigateTo')
     return
   }
   if (canCreateCircle(user.value?.role)) {

@@ -1,6 +1,6 @@
 import type { SystemSetting } from '@/types'
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { fetchSettings } from '@/api/settings'
 
 /** 设置缓存有效期:10 分钟 */
@@ -42,10 +42,16 @@ export const useSettingsStore = defineStore('settings', () => {
     return settings.value.find(s => s.key === key)?.value as T | undefined
   }
 
+  /** 应用是否处于发布维护中(isAppDeploying 为 true 时隐藏创建入口并拦截发布类页面) */
+  const isAppDeploying = computed(
+    () => settings.value.find(s => s.key === 'isAppDeploying')?.value === true,
+  )
+
   return {
     settings,
     fetchedAt,
     getSettings,
     getSetting,
+    isAppDeploying,
   }
 })

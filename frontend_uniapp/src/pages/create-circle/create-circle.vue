@@ -1,10 +1,11 @@
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
 import { useUserStore } from '@/store/user'
+import { shouldBlockForAppDeploying } from '@/composables/useAppDeployingGuard'
 import { createCircle, getCircle, updateCircle } from '@/api/circles'
 import { uploadFileToCos } from '@/api/upload'
 import { chooseImages } from '@/utils/chooseImage'
-import { LOGIN_PAGE } from '@/router/config'
+import { toLoginWithRedirect } from '@/utils/toLoginPage'
 import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue'
 import type { CircleDetailDTO, UpdateCircleInput } from '@/types'
 
@@ -147,9 +148,14 @@ async function fetchForEdit(id: string) {
   }
 }
 
-onLoad((options) => {
+onLoad(async (options) => {
   if (!userStore.isLoggedIn) {
-    uni.reLaunch({ url: LOGIN_PAGE })
+    // 未登录:reLaunch 清空页面栈并携带 redirect,登录后回到本页
+    toLoginWithRedirect()
+    return
+  }
+  // 应用发布维护中(isAppDeploying 为 true)不允许进入,跳转首页
+  if (await shouldBlockForAppDeploying()) {
     return
   }
   editId.value = (options as any)?.id || ''

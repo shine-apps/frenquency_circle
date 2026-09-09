@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { onShareAppMessage, onShareTimeline, onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
 import { useMatchStore } from '@/store/match'
+import { useSettingsStore } from '@/store/settings'
 import { updateMyTags, updateProfile } from '@/api/auth'
 import { matchCircles, matchPeople } from '@/api/locations'
 import { getUnreadNotificationCount } from '@/api/notifications'
@@ -42,6 +43,7 @@ interface MixedItem {
 
 const userStore = useUserStore()
 const matchStore = useMatchStore()
+const settingsStore = useSettingsStore()
 const dialog = useDialog()
 
 // 首页分享(右上角菜单:好友/朋友圈)
@@ -180,6 +182,8 @@ async function loadAll(lat: number, lng: number, range: number): Promise<void> {
 
 // ====== 进入时尝试定位 ======
 onShow(() => {
+  // 每次回到首页同步一次系统设置(命中 10 分钟缓存时无网络开销),避免冷启动竞态与 TTL 内不更新
+  void settingsStore.getSettings().catch(() => { /* 拉取失败沿用旧值 */ })
   // 每次回到首页刷新未读消息角标(从通知页返回后也能同步)
   void fetchUnreadCount()
   // 昵称为纯数字时引导完善资料(不影响下方定位/匹配流程)
@@ -279,6 +283,8 @@ async function fetchUnreadCount(): Promise<void> {
 }
 
 // ====== 右下角浮动按钮 ======
+/** 系统设置 isAppDeploying 为 true 时(应用发布维护中)隐藏浮动按钮,直接读取 store 计算属性 */
+const isAppDeploying = computed(() => settingsStore.isAppDeploying)
 /** fab 展开状态 */
 const fabActive = ref(false)
 /** fab 距底部偏移:避开 tabbar(50px) + 安全区 + 呼吸间距 */
@@ -516,6 +522,7 @@ function handleCircleClick(circleId: string): void {
 
     <!-- ====== 右下角浮动创建入口 ====== -->
     <wd-fab
+      v-if="!isAppDeploying"
       v-model:active="fabActive"
       position="right-bottom"
       direction="top"

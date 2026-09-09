@@ -5,7 +5,7 @@ import { getMyProfile, updateMyProfile, updateProfile, verifyPhoneBind } from '@
 import { sendSmsCode } from '@/api/login'
 import { uploadFileToCos } from '@/api/upload'
 import { chooseImages } from '@/utils/chooseImage'
-import { LOGIN_PAGE } from '@/router/config'
+import { toLoginWithRedirect } from '@/utils/toLoginPage'
 import { useToast } from '@wot-ui/ui/components/wd-toast'
 import type { UserGender } from '@/types'
 
@@ -70,7 +70,8 @@ onUnload(() => {
 /** 未登录守卫 + 进入时刷新完整资料(含 phone / address) */
 onShow(() => {
   if (!userStore.isLoggedIn) {
-    uni.reLaunch({ url: LOGIN_PAGE })
+    // 未登录:reLaunch 清空页面栈并携带 redirect,登录后回到本页
+    toLoginWithRedirect()
     return
   }
   getMyProfile()

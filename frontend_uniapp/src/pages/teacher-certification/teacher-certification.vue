@@ -1,12 +1,13 @@
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
 import { useUserStore } from '@/store/user'
+import { shouldBlockForAppDeploying } from '@/composables/useAppDeployingGuard'
 import { uploadFileToCos } from '@/api/upload'
 import { chooseImages } from '@/utils/chooseImage'
 import { getMyApplication, submitTeacherApplication } from '@/api/teacher-applications'
 import { canCreateCircle } from '@/utils/role'
+import { toLoginWithRedirect } from '@/utils/toLoginPage'
 import type { CertificationFile, TeacherApplicationDTO } from '@/api/teacher-applications'
-import { LOGIN_PAGE } from '@/router/config'
 
 definePage({
   layout: 'default',
@@ -68,9 +69,14 @@ async function loadApplication() {
   }
 }
 
-onShow(() => {
+onShow(async () => {
   if (!userStore.isLoggedIn) {
-    uni.reLaunch({ url: LOGIN_PAGE })
+    // 未登录:reLaunch 清空页面栈并携带 redirect,登录后回到本页
+    toLoginWithRedirect()
+    return
+  }
+  // 应用发布维护中(isAppDeploying 为 true)不允许进入,跳转首页
+  if (await shouldBlockForAppDeploying()) {
     return
   }
   void loadApplication()

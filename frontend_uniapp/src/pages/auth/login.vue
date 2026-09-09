@@ -91,7 +91,9 @@ async function handleSendCode() {
 /** 跳转来源页(若携带 redirect),否则回首页 */
 function goAfterLogin() {
   const redirect = currRoute().query.redirect
-  uni.reLaunch({ url: redirect || HOME_PAGE_PATH })
+  // 仅允许应用内绝对路径(排除 //host 协议相对地址),避免开放重定向
+  const target = typeof redirect === 'string' && /^\/(?!\/)/.test(redirect) ? redirect : HOME_PAGE_PATH
+  uni.reLaunch({ url: target })
 }
 
 /** 手机号 + 验证码登录 */

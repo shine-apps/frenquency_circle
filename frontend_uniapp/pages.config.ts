@@ -3,7 +3,8 @@ import { tabBar } from './src/tabbar/config'
 
 export default defineUniPages({
   globalStyle: {
-    navigationStyle: 'default',
+    // 小程序端使用原生导航栏（default），H5 端由页面自行实现导航栏（custom）
+    navigationStyle: process.env.UNI_PLATFORM === 'h5' ? 'custom' : 'default',
     navigationBarTitleText: '趣邻圈',
     navigationBarBackgroundColor: '#018d71',
     navigationBarTextStyle: 'white',

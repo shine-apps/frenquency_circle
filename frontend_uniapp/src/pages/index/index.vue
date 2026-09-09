@@ -374,7 +374,7 @@ function handleCircleClick(circleId: string): void {
   <view class="flex flex-col">
     <!-- ====== 顶部品牌区(青绿渐变) ====== -->
     <view class="sticky top-0 z-10 from-[#018d71] to-[#0aa07f] bg-gradient-to-b p-6 px-5">
-      <view class="flex items-center justify-between pt-8">
+      <view class="flex items-center justify-between">
         <view class="flex flex-col  justify-betweeen">
           <view class="flex items-center gap-1">
             <image src="/static/images/logo_256_circle.png" class="h-[40px] w-[40px]" />

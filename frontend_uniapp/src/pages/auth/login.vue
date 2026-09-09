@@ -9,7 +9,6 @@ definePage({
   // 登录页无需登录
   excludeLoginPath: true,
   style: {
-    navigationStyle: 'custom',
     navigationBarTitleText: '登录',
   },
 })

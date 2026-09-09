@@ -139,9 +139,19 @@ export default defineConfig(({ command, mode }) => {
       UNI_PLATFORM === 'h5' && {
         name: 'html-transform',
         transformIndexHtml(html) {
+          // H5 默认分享兜底图(og:image)。生产同源部署时 VITE_SERVER_BASEURL 即页面域名,
+          // 拼成绝对地址便于微信抓取;开发/未配置时退化为站点根相对路径(微信按当前页 origin 解析)。
+          const ogImageBaseUrl = /^https?:\/\//i.test(VITE_SERVER_BASEURL ?? '')
+            ? VITE_SERVER_BASEURL
+            : ''
+          const h5PublicBase = (VITE_APP_PUBLIC_BASE || '/').endsWith('/')
+            ? VITE_APP_PUBLIC_BASE
+            : `${VITE_APP_PUBLIC_BASE}/`
+          const ogImageUrl = `${ogImageBaseUrl}${h5PublicBase}static/app/icons/1024x1024.png`
           return html
             .replace('%BUILD_TIME%', dayjs().format('YYYY-MM-DD HH:mm:ss'))
             .replace('%VITE_APP_TITLE%', VITE_APP_TITLE)
+            .replace('%VITE_APP_OG_IMAGE%', ogImageUrl)
         },
       },
       // 打包分析插件，h5 + 生产环境才启用

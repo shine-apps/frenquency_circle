@@ -50,6 +50,7 @@ const dialog = useDialog()
 const { shareAppMessage, shareTimeline } = useShare({
   title: '趣邻圈',
   path: '/pages/index/index',
+  desc: ' 选择兴趣,遇见附近同趣的人与圈子'
 })
 
 // 分享钩子必须在页面顶层直接注册, 编译器才能生成微信小程序 Page 配置

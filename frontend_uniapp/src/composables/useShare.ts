@@ -50,7 +50,7 @@ export interface UseShareOptions {
  * H5 端 JSSDK 的 imgUrl 必须是绝对 http(s) URL,由运行时按
  * `window.location.origin + 部署根路径(BASE_URL)` 拼接。
  */
-const DEFAULT_SHARE_IMAGE_PATH = '/static/app/icon/120x120.png'
+const DEFAULT_SHARE_IMAGE_PATH = '/static/app/icons/120x120.png'
 
 /** H5 微信 JSSDK 最小类型声明(jweixin 为动态加载, 无 npm 包类型) */
 interface WxJsSdk {

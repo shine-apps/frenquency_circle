@@ -384,7 +384,7 @@ function handleCircleClick(circleId: string): void {
       <view class="flex items-center justify-between">
         <view class="flex flex-col  justify-betweeen">
           <view class="flex items-center gap-1">
-            <image src="/static/app/icon/40x40.png" class="h-[40px] w-[40px]" />
+            <image src="/static/app/icons/40x40.png" class="h-[40px] w-[40px]" />
             <text class="text-xl text-white font-semibold">
               趣邻圈
             </text>

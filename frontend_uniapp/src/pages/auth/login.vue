@@ -176,7 +176,7 @@ async function handleGetPhoneNumber(e: any) {
   <view class="flex flex-col">
     <!-- 1. Logo 区 -->
     <view class="flex flex-col items-center py-12">
-      <image src="/static/app/icon/152x152.png" class="h-[152px] w-[152px]" />
+      <image src="/static/app/icons/152x152.png" class="h-[152px] w-[152px]" />
       <view class="mt-4 text-2xl text-[#1a1a1a] font-semibold">
         趣邻圈
       </view>

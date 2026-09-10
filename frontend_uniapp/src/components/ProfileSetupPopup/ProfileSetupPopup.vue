@@ -12,7 +12,8 @@ import { chooseImages } from '@/utils/chooseImage'
 /**
  * 资料补全弹窗(昵称 + 头像 + 性别 + 生日)。
  *
- * - 点击保存后直接提交:上传头像(可选) → `updateMyProfile` → 同步 `userStore`,
+ * - 打开时先用 `userStore` 中的默认资料(昵称 / 头像 / 性别 / 生日)预填充表单;
+ * - 点击保存后直接提交:上传头像(仅当头像被改动) → `updateMyProfile` → 同步 `userStore`,
  *   完成后通过 `success` 通知父组件;
  * - 头像为可选项,裁剪产物先暂存本地,点击保存时才上传(避免取消产生 COS 孤儿文件);
  * - 性别 / 生日为可选项,未选择时不写入后端(不覆盖已有值);
@@ -55,6 +56,8 @@ const birthday = ref('')
  * - 微信端:chooseAvatar 事件直接返回的临时路径(已带裁剪效果)
  */
 const localAvatarPath = ref('')
+/** 打开时的原始头像 URL(用于判断头像是否被改动,避免将已有远程头像重复上传) */
+const originalAvatarUrl = ref('')
 /** 提交中(含头像上传);成功后保持,防止重复提交,待父组件关闭弹窗 */
 const saving = ref(false)
 /** 生日选择器显隐 */
@@ -66,16 +69,19 @@ const cropVisible = ref(false)
 const cropSrc = ref('')
 // #endif
 
-// 打开时重置状态(性别/生日回填当前用户已有值)
+// 打开时用当前用户默认资料预填充表单(昵称 / 头像 / 性别 / 生日)
 watch(
   () => props.modelValue,
   (visible) => {
     if (visible) {
-      name.value = ''
-      localAvatarPath.value = ''
+      const info = userStore.userInfo
+      name.value = info?.name ?? ''
+      // 头像优先取后端原值 avatarUrl,兜底展示字段 avatar
+      originalAvatarUrl.value = info?.avatarUrl ?? info?.avatar ?? ''
+      localAvatarPath.value = originalAvatarUrl.value
       saving.value = false
-      gender.value = userStore.userInfo?.gender ?? null
-      birthday.value = userStore.userInfo?.birthday ?? ''
+      gender.value = info?.gender ?? null
+      birthday.value = info?.birthday ?? ''
       birthdayPickerVisible.value = false
     }
   },
@@ -204,8 +210,10 @@ async function handleConfirm() {
     return
   saving.value = true
   try {
+    // 头像是否被改动(与打开时的回填值比较),未改动则直接沿用原值,不重复上传
+    const avatarChanged = localAvatarPath.value !== originalAvatarUrl.value
     let finalAvatarUrl: string | undefined
-    if (localAvatarPath.value) {
+    if (avatarChanged && localAvatarPath.value) {
       const { url } = await uploadFileToCos({
         file: localAvatarPath.value,
         name: deriveFilenameFromPath(localAvatarPath.value),
@@ -219,8 +227,9 @@ async function handleConfirm() {
       gender?: UserGender
       birthday?: string
     } = { name: trimmed }
-    if (finalAvatarUrl) {
-      patch.avatarUrl = finalAvatarUrl
+    if (avatarChanged) {
+      // 选了新头像 → 写入新 URL;清空了原头像 → 传空串删除
+      patch.avatarUrl = finalAvatarUrl ?? ''
     }
     // 性别/生日仅在用户选择后提交,未选择时不覆盖后端已有值
     if (gender.value) {

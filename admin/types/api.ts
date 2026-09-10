@@ -81,6 +81,8 @@ export type UserDTO = {
   location?: LocationPoint | null
   /** 逆地理编码地址(可空) */
   address?: string | null
+  /** 兴趣标签名称数组(存 hobby_tags.name,可空;仅列表类查询携带) */
+  tags?: string[]
   createdAt: string
   updatedAt: string
 }

@@ -7,6 +7,8 @@ import { db } from "@/lib/db"
 import { users, DEFAULT_PRIVACY_SETTINGS } from "@/db/schema"
 import { fail, ok, parsePagination } from "@/lib/api"
 import { requireAdmin } from "@/lib/auth-utils"
+import { buildUserListWhere, parseUserSearchKeyword } from "@/lib/user-search"
+import { parseUserRoleFilter } from "@/lib/user-role"
 import type { UserDTO, UserRole, Paginated, PrivacySettings } from "@/types/api"
 
 const createUserSchema = z.object({
@@ -33,6 +35,7 @@ function toUserDTO(row: typeof users.$inferSelect): UserDTO {
         ? { latitude: row.latitude, longitude: row.longitude }
         : null,
     address: row.address ?? null,
+    tags: row.tags ?? [],
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }
@@ -47,14 +50,25 @@ export async function GET(req: NextRequest) {
   const { page, pageSize } = pagination
   const offset = (page - 1) * pageSize
 
+  // 可选关键词：必须为完整邮箱或手机号，命中则精确匹配
+  const q = (req.nextUrl.searchParams.get("q") ?? "").trim()
+  const matcher = parseUserSearchKeyword(q)
+  if (q && matcher === null) {
+    return fail(400, "搜索关键词需为完整的手机号或邮箱")
+  }
+  // 可选角色过滤：与关键词为 AND 关系
+  const role = parseUserRoleFilter(req.nextUrl.searchParams.get("role"))
+  const where = buildUserListWhere({ keyword: matcher, role })
+
   const [rows, [{ count }]] = await Promise.all([
     db
       .select()
       .from(users)
+      .where(where)
       .orderBy(desc(users.createdAt))
       .limit(pageSize)
       .offset(offset),
-    db.select({ count: sql<number>`count(*)::int` }).from(users),
+    db.select({ count: sql<number>`count(*)::int` }).from(users).where(where),
   ])
 
   const payload: Paginated<UserDTO> = {

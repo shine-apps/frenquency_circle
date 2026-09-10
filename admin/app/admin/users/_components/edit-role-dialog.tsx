@@ -11,13 +11,8 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
+import { USER_ROLE_OPTIONS } from "@/lib/user-role"
 import type { UserDTO, UserRole } from "@/types/api"
-
-const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
-  { value: "USER", label: "普通用户" },
-  { value: "TEACHER", label: "老师" },
-  { value: "ADMIN", label: "管理员" },
-]
 
 export function EditRoleDialog({
   user,
@@ -72,7 +67,7 @@ export function EditRoleDialog({
             value={role}
             onChange={(e) => setRole(e.target.value as UserRole)}
           >
-            {ROLE_OPTIONS.map((o) => (
+            {USER_ROLE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>

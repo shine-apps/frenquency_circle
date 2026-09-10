@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onShareAppMessage, onShareTimeline, onShow } from '@dcloudio/uni-app'
 import { getUserProfile } from '@/api/search'
 import {
   acceptContactRequest,
@@ -13,6 +13,7 @@ import {
 import { toLoginPage } from '@/utils/toLoginPage'
 import { activityLevelShortText, formatDate, practiceYearsText } from '@/utils/format'
 import { useUserStore } from '@/store/user'
+import { useShare } from '@/composables/useShare'
 import type { HttpError } from '@/http/types'
 import type { PublicUserProfileDTO } from '@/types'
 
@@ -39,6 +40,27 @@ const notFound = ref(false)
 
 /** 是否查看自己的主页(自己主页不展示联系/关注操作条) */
 const isSelf = computed(() => !!profile.value && profile.value.id === userStore.userInfo.id)
+
+// ====== 分享(小程序好友/朋友圈 + H5 微信 JSSDK;内容实时读取,兼容异步加载) ======
+const { share, shareAppMessage, shareTimeline } = useShare({
+  title: () => (profile.value ? `${profile.value.name}的主页｜趣邻圈` : '趣邻圈'),
+  path: '/pages/user-home/user-home',
+  query: () => (profile.value ? { id: profile.value.id } : {}),
+  imageUrl: () => profile.value?.avatarUrl ?? '',
+  desc: () => {
+    const p = profile.value
+    if (!p)
+      return ''
+    const tagText = p.tags.slice(0, 4).join('、')
+    return tagText ? `在趣邻圈,TA 的兴趣是:${tagText}` : `在趣邻圈认识 ${p.name}`
+  },
+})
+
+// 分享钩子必须在页面顶层直接注册, 编译器才能生成微信小程序 Page 配置
+// #ifdef MP-WEIXIN
+onShareAppMessage(shareAppMessage)
+onShareTimeline(shareTimeline)
+// #endif
 
 /** 拉取用户公开资料 */
 async function fetchProfile(id: string) {
@@ -279,7 +301,16 @@ function renderTags(tags: string[]): { visible: string[], rest: number } {
     <!-- 资料卡片 -->
     <template v-else>
       <!-- 头像与名称 -->
-      <view class="bg-white px-5 pb-6 pt-10">
+      <view class="relative bg-white px-5 pb-6 pt-10">
+        <!-- 分享入口:小程序原生转发按钮 / H5 引导右上角分享 -->
+        <view class="absolute right-4 top-9 z-10">
+          <!-- #ifdef MP-WEIXIN -->
+          <wd-button plain round size="small" open-type="share">分享</wd-button>
+          <!-- #endif -->
+          <!-- #ifdef H5 -->
+          <wd-button plain round size="small" @click="share">分享</wd-button>
+          <!-- #endif -->
+        </view>
         <view class="flex flex-col items-center">
           <view class="h-20 w-20 flex items-center justify-center overflow-hidden rounded-full bg-[#e8f5f1] shadow-sm">
             <image

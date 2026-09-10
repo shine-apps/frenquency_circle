@@ -1,7 +1,9 @@
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
 import { useUserStore } from '@/store/user'
+import { useLocationStore } from '@/store/location'
 import { shouldBlockForAppDeploying } from '@/composables/useAppDeployingGuard'
+import { getMyProfile } from '@/api/auth'
 import { createCircle, getCircle, updateCircle } from '@/api/circles'
 import { uploadFileToCos } from '@/api/upload'
 import { chooseImages } from '@/utils/chooseImage'
@@ -27,13 +29,21 @@ const TAGS_MAX = 5
 const PHONE_RE = /^1\d{10}$/
 /** 轮播图片最大数量 */
 const COVER_IMAGES_MAX = 9
+/** 新建模式引导最后一步(表单)的索引 */
+const WIZARD_FORM_STEP = 4
 
 const userStore = useUserStore()
+const locationStore = useLocationStore()
 
 // 路由参数
 const editId = ref<string>('')
 const isEdit = computed(() => !!editId.value)
 const loading = ref(false)
+
+// 新建模式引导步骤(0-3 为逐步询问,4 为最终输入表单)
+const wizardStep = ref(0)
+/** 是否处于「逐步询问」阶段(仅新建模式且未到最后表单步) */
+const isWizard = computed(() => !isEdit.value && wizardStep.value < WIZARD_FORM_STEP)
 
 // 表单状态
 const title = ref('')
@@ -61,6 +71,63 @@ function handleOpenTagSelector() {
 /** 弹窗确认:更新圈子标签 */
 function handleTagConfirm(newTags: string[]) {
   tags.value = newTags
+}
+
+/**
+ * 新建模式:用当前用户资料预填默认值。
+ * - 兴趣标签默认取用户已绑定的兴趣标签;
+ * - 活动地点默认取用户地址(经纬度优先用户位置,兜底本地缓存定位);
+ * - 联系电话默认取用户手机号。
+ */
+function applyUserDefaults() {
+  const info = userStore.userInfo
+  if (tags.value.length === 0 && info.tags?.length)
+    tags.value = [...info.tags].slice(0, TAGS_MAX)
+  if (!address.value) {
+    address.value = info.address || locationStore.address || ''
+    latitude.value = info.location?.latitude ?? locationStore.latitude ?? null
+    longitude.value = info.location?.longitude ?? locationStore.longitude ?? null
+  }
+  if (!contactPhone.value && info.phone)
+    contactPhone.value = info.phone
+}
+
+/** 校验某个询问步骤,通过返回 true,否则提示并返回 false */
+function validateWizardStep(step: number): boolean {
+  if (step === 0 && tags.value.length === 0) {
+    uni.showToast({ title: '请先选择兴趣标签', icon: 'none' })
+    return false
+  }
+  if (step === 1 && (!address.value || latitude.value === null || longitude.value === null)) {
+    uni.showToast({ title: '请选择活动地点', icon: 'none' })
+    return false
+  }
+  if (step === 3) {
+    const phone = contactPhone.value.trim()
+    if (!phone) {
+      uni.showToast({ title: '请输入联系电话', icon: 'none' })
+      return false
+    }
+    if (!PHONE_RE.test(phone)) {
+      uni.showToast({ title: '手机号格式不正确(11 位)', icon: 'none' })
+      return false
+    }
+  }
+  return true
+}
+
+/** 下一步:校验当前步骤后前进,最后一步进入表单 */
+function handleWizardNext() {
+  if (!validateWizardStep(wizardStep.value))
+    return
+  if (wizardStep.value < WIZARD_FORM_STEP)
+    wizardStep.value += 1
+}
+
+/** 上一步:回退到上一个询问步骤 */
+function handleWizardPrev() {
+  if (wizardStep.value > 0)
+    wizardStep.value -= 1
 }
 
 /**
@@ -167,6 +234,23 @@ onLoad(async (options) => {
   }
   if (isEdit.value) {
     void fetchForEdit(editId.value)
+  }
+  else {
+    // 新建模式:按步骤引导,先用用户资料预填默认值
+    applyUserDefaults()
+    // 用户资料可能尚未拉全,再用完整资料(含标签/地址)刷新一次
+    try {
+      const profile = await getMyProfile()
+      userStore.updateUser({
+        tags: profile.tags ?? userStore.userInfo.tags,
+        address: profile.address ?? userStore.userInfo.address ?? null,
+        location: profile.location ?? userStore.userInfo.location ?? null,
+      })
+      applyUserDefaults()
+    }
+    catch {
+      // 拉取失败不阻塞,沿用已有本地资料
+    }
   }
 })
 
@@ -324,169 +408,288 @@ const tagsCountText = computed(() => `${tags.value.length}/${TAGS_MAX}`)
 
     <template v-else>
       <scroll-view scroll-y class="flex-1">
-        <!-- 1. 标题 -->
-        <view class="mx-4 mt-4 rounded-2xl bg-white p-4">
-          <view class="flex items-center justify-between">
-            <text class="text-sm text-[#333] font-medium">
-              标题 <text class="text-[#f53f3f]">*</text>
-            </text>
-            <text class="text-xs text-[#999]">{{ titleCount }}</text>
-          </view>
-          <input
-            v-model="title"
-            class="mt-2 h-10 w-full rounded-lg bg-[#f5f6f7] px-3 text-sm"
-            :maxlength="TITLE_MAX"
-            placeholder="1-50 字符,如:陈氏太极拳晨练班"
-            placeholder-class="text-[#bbb]"
-          >
+        <!-- 步骤条(仅新建模式) -->
+        <view v-if="!isEdit" class="mx-4 mt-4 rounded-2xl bg-white px-2 py-5">
+          <wd-steps :active="wizardStep" align-center>
+            <wd-step title="兴趣" />
+            <wd-step title="地点" />
+            <wd-step title="时间" />
+            <wd-step title="联系" />
+            <wd-step title="完善" />
+          </wd-steps>
         </view>
 
-        <!-- 2. 兴趣标签 -->
-        <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
-          <view class="flex items-center justify-between">
-            <text class="text-sm text-[#333] font-medium">
-              兴趣标签 <text class="text-[#f53f3f]">*</text>
+        <!-- 新建模式:逐步询问用户创建圈子的信息 -->
+        <template v-if="isWizard">
+          <!-- 步骤 1:兴趣标签 -->
+          <view v-if="wizardStep === 0" class="mx-4 mt-3 rounded-2xl bg-white p-4">
+            <text class="text-base text-[#333] font-medium">
+              1. 你想创建什么样的兴趣圈子?
             </text>
-            <text class="text-xs text-[#999]">{{ tagsCountText }}</text>
-          </view>
-          <view
-            class="mt-2 min-h-11 flex items-center justify-between rounded-lg bg-[#f5f6f7] p-3"
-            @click="handleOpenTagSelector"
-          >
-            <text v-if="tags.length === 0" class="text-sm text-[#bbb]">
-              点击选择兴趣标签
+            <text class="mt-1 block text-xs text-[#999]">
+              默认使用你的兴趣标签,可点击调整(1-5 个)
             </text>
-            <view v-else class="flex flex-1 flex-wrap gap-1.5">
+            <view class="mt-3 flex flex-wrap gap-2">
+              <text v-if="tags.length === 0" class="text-sm text-[#bbb]">
+                尚未选择兴趣标签
+              </text>
               <text
                 v-for="(tag, idx) in tags"
-                :key="`${tag}-${idx}`"
-                class="rounded bg-[#e6f6f1] px-2 py-0.5 text-xs text-[#018d71]"
+                :key="`w-tag-${tag}-${idx}`"
+                class="rounded-full bg-[#e6f6f1] px-3 py-1 text-sm text-[#018d71]"
               >
                 {{ tag }}
               </text>
             </view>
-            <text class="ml-2 shrink-0 text-sm text-[#018d71]">编辑 ›</text>
-          </view>
-        </view>
-
-        <!-- 3. 描述 -->
-        <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
-          <view class="flex items-center justify-between">
-            <text class="text-sm text-[#333] font-medium">
-              圈子介绍 <text class="text-[#f53f3f]">*</text>
-            </text>
-            <view class="flex items-center gap-2">
-              <text
-                class="text-xs text-[#018d71]"
-                @click="handleGenerateDescription"
-              >
-                {{ generatingDesc ? '生成中…' : '生成模板' }}
-              </text>
-              <text class="text-xs text-[#999]">{{ descCount }}</text>
+            <view class="mt-4">
+              <wd-button type="primary" variant="plain" round size="small" @click="handleOpenTagSelector">
+                选择兴趣标签
+              </wd-button>
             </view>
           </view>
-          <textarea
-            v-model="description"
-            class="mt-2 h-32 rounded-lg bg-[#f5f6f7] p-3 text-sm leading-6"
-            :maxlength="DESCRIPTION_MAX"
-            placeholder="1-500 字符,介绍圈子内容、目标人群等"
-            placeholder-class="text-[#bbb]"
-          />
-        </view>
 
-        <!-- 3.5 轮播图片 -->
-        <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
-          <view class="flex items-center justify-between">
-            <text class="text-sm text-[#333] font-medium">轮播图片</text>
-            <text class="text-xs text-[#999]">{{ coverImages.length }}/{{ COVER_IMAGES_MAX }}</text>
-          </view>
-          <text class="mt-1 block text-xs text-[#999]">
-            可上传 0-9 张图片,首张为默认封面
-          </text>
-          <view class="mt-3 flex flex-wrap gap-2">
+          <!-- 步骤 2:活动地点 -->
+          <view v-else-if="wizardStep === 1" class="mx-4 mt-3 rounded-2xl bg-white p-4">
+            <text class="text-base text-[#333] font-medium">
+              2. 圈子在哪里活动?
+            </text>
+            <text class="mt-1 block text-xs text-[#999]">
+              默认使用你的地址,如需调整点击选择
+            </text>
             <view
-              v-for="(url, idx) in coverImages"
-              :key="`${url}-${idx}`"
-              class="relative h-20 w-20 overflow-hidden rounded-lg"
+              class="mt-3 flex items-center justify-between rounded-lg bg-[#f5f6f7] p-3"
+              @click="handleChooseLocation"
             >
-              <image :src="url" class="h-full w-full" mode="aspectFill" />
-              <view v-if="idx === 0" class="absolute left-0 top-0 rounded-br-lg bg-[#018d71] px-1.5 py-0.5">
-                <text class="text-[10px] text-white">封面</text>
+              <text :class="address ? 'text-sm text-[#333]' : 'text-sm text-[#bbb]'">
+                {{ address || '点击选择活动地点' }}
+              </text>
+              <text class="text-sm text-[#018d71]">选择 ›</text>
+            </view>
+          </view>
+
+          <!-- 步骤 3:活动时间 -->
+          <view v-else-if="wizardStep === 2" class="mx-4 mt-3 rounded-2xl bg-white p-4">
+            <text class="text-base text-[#333] font-medium">
+              3. 圈子什么时间活动?
+            </text>
+            <text class="mt-1 block text-xs text-[#999]">
+              纯文本描述即可,如:每天上午 8:00~12:00
+            </text>
+            <input
+              v-model="activityTime"
+              class="mt-3 h-10 w-full rounded-lg bg-[#f5f6f7] px-3 text-sm"
+              placeholder="如:每天上午 8:00~12:00"
+              placeholder-class="text-[#bbb]"
+            >
+          </view>
+
+          <!-- 步骤 4:联系电话 -->
+          <view v-else-if="wizardStep === 3" class="mx-4 mt-3 rounded-2xl bg-white p-4">
+            <text class="text-base text-[#333] font-medium">
+              4. 留下联系电话
+            </text>
+            <text class="mt-1 block text-xs text-[#999]">
+              默认使用你的手机号,可修改
+            </text>
+            <input
+              v-model="contactPhone"
+              class="mt-3 h-10 w-full rounded-lg bg-[#f5f6f7] px-3 text-sm"
+              type="number"
+              :maxlength="11"
+              placeholder="11 位手机号"
+              placeholder-class="text-[#bbb]"
+            >
+          </view>
+        </template>
+
+        <!-- 表单:编辑模式 / 新建模式最后一步 -->
+        <template v-else>
+          <!-- 新建模式最后一步:提示填写标题 / 介绍 / 图片并滑到底部提交 -->
+          <view v-if="!isEdit" class="mx-4 mt-3 rounded-2xl bg-[#e8f5f1] p-4">
+            <text class="text-sm text-[#018d71] font-medium">
+              最后一步:完善圈子信息
+            </text>
+            <text class="mt-1 block text-xs text-[#018d71]">
+              请填写标题、圈子介绍,并上传圈子图片;填写完成后滑到最下面点击「创建圈子」提交保存。
+            </text>
+          </view>
+
+          <!-- 1. 标题 -->
+          <view class="mx-4 mt-4 rounded-2xl bg-white p-4">
+            <view class="flex items-center justify-between">
+              <text class="text-sm text-[#333] font-medium">
+                标题 <text class="text-[#f53f3f]">*</text>
+              </text>
+              <text class="text-xs text-[#999]">{{ titleCount }}</text>
+            </view>
+            <input
+              v-model="title"
+              class="mt-2 h-10 w-full rounded-lg bg-[#f5f6f7] px-3 text-sm"
+              :maxlength="TITLE_MAX"
+              placeholder="1-50 字符,如:陈氏太极拳晨练班"
+              placeholder-class="text-[#bbb]"
+            >
+          </view>
+
+          <!-- 2. 兴趣标签 -->
+          <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
+            <view class="flex items-center justify-between">
+              <text class="text-sm text-[#333] font-medium">
+                兴趣标签 <text class="text-[#f53f3f]">*</text>
+              </text>
+              <text class="text-xs text-[#999]">{{ tagsCountText }}</text>
+            </view>
+            <view
+              class="mt-2 min-h-11 flex items-center justify-between rounded-lg bg-[#f5f6f7] p-3"
+              @click="handleOpenTagSelector"
+            >
+              <text v-if="tags.length === 0" class="text-sm text-[#bbb]">
+                点击选择兴趣标签
+              </text>
+              <view v-else class="flex flex-1 flex-wrap gap-1.5">
+                <text
+                  v-for="(tag, idx) in tags"
+                  :key="`${tag}-${idx}`"
+                  class="rounded bg-[#e6f6f1] px-2 py-0.5 text-xs text-[#018d71]"
+                >
+                  {{ tag }}
+                </text>
+              </view>
+              <text class="ml-2 shrink-0 text-sm text-[#018d71]">编辑 ›</text>
+            </view>
+          </view>
+
+          <!-- 3. 描述 -->
+          <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
+            <view class="flex items-center justify-between">
+              <text class="text-sm text-[#333] font-medium">
+                圈子介绍 <text class="text-[#f53f3f]">*</text>
+              </text>
+              <view class="flex items-center gap-2">
+                <text
+                  class="text-xs text-[#018d71]"
+                  @click="handleGenerateDescription"
+                >
+                  {{ generatingDesc ? '生成中…' : '生成模板' }}
+                </text>
+                <text class="text-xs text-[#999]">{{ descCount }}</text>
+              </view>
+            </view>
+            <textarea
+              v-model="description"
+              class="mt-2 h-32 rounded-lg bg-[#f5f6f7] p-3 text-sm leading-6"
+              :maxlength="DESCRIPTION_MAX"
+              placeholder="1-500 字符,介绍圈子内容、目标人群等"
+              placeholder-class="text-[#bbb]"
+            />
+          </view>
+
+          <!-- 3.5 轮播图片 -->
+          <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
+            <view class="flex items-center justify-between">
+              <text class="text-sm text-[#333] font-medium">轮播图片</text>
+              <text class="text-xs text-[#999]">{{ coverImages.length }}/{{ COVER_IMAGES_MAX }}</text>
+            </view>
+            <text class="mt-1 block text-xs text-[#999]">
+              可上传 0-9 张图片,首张为默认封面
+            </text>
+            <view class="mt-3 flex flex-wrap gap-2">
+              <view
+                v-for="(url, idx) in coverImages"
+                :key="`${url}-${idx}`"
+                class="relative h-20 w-20 overflow-hidden rounded-lg"
+              >
+                <image :src="url" class="h-full w-full" mode="aspectFill" />
+                <view v-if="idx === 0" class="absolute left-0 top-0 rounded-br-lg bg-[#018d71] px-1.5 py-0.5">
+                  <text class="text-[10px] text-white">封面</text>
+                </view>
+                <view
+                  class="absolute right-0 top-0 h-5 w-5 flex items-center justify-center rounded-bl-lg bg-black/50"
+                  @click="handleRemoveCover(idx)"
+                >
+                  <text class="text-xs text-white">×</text>
+                </view>
               </view>
               <view
-                class="absolute right-0 top-0 h-5 w-5 flex items-center justify-center rounded-bl-lg bg-black/50"
-                @click="handleRemoveCover(idx)"
+                v-if="coverImages.length < COVER_IMAGES_MAX"
+                class="h-20 w-20 flex flex-col items-center justify-center border border-[#e0e0e0] rounded-lg border-dashed bg-[#fafafa]"
+                @click="handlePickCover"
               >
-                <text class="text-xs text-white">×</text>
+                <text class="text-2xl text-[#ccc]">+</text>
+                <text class="mt-0.5 text-xs text-[#999]">{{ uploadingCover ? '上传中' : '添加' }}</text>
               </view>
             </view>
-            <view
-              v-if="coverImages.length < COVER_IMAGES_MAX"
-              class="h-20 w-20 flex flex-col items-center justify-center border border-[#e0e0e0] rounded-lg border-dashed bg-[#fafafa]"
-              @click="handlePickCover"
-            >
-              <text class="text-2xl text-[#ccc]">+</text>
-              <text class="mt-0.5 text-xs text-[#999]">{{ uploadingCover ? '上传中' : '添加' }}</text>
+          </view>
+
+          <!-- 4. 活动地点 -->
+          <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
+            <text class="text-sm text-[#333] font-medium">
+              活动地点 <text class="text-[#f53f3f]">*</text>
+            </text>
+            <view class="mt-2 flex items-center justify-between rounded-lg bg-[#f5f6f7] p-3" @click="handleChooseLocation">
+              <text :class="address ? 'text-sm text-[#333]' : 'text-sm text-[#bbb]'">
+                {{ address || '点击选择活动地点' }}
+              </text>
+              <text class="text-sm text-[#018d71]">选择 ›</text>
             </view>
           </view>
-        </view>
 
-        <!-- 4. 活动地点 -->
-        <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
-          <text class="text-sm text-[#333] font-medium">
-            活动地点 <text class="text-[#f53f3f]">*</text>
-          </text>
-          <view class="mt-2 flex items-center justify-between rounded-lg bg-[#f5f6f7] p-3" @click="handleChooseLocation">
-            <text :class="address ? 'text-sm text-[#333]' : 'text-sm text-[#bbb]'">
-              {{ address || '点击选择活动地点' }}
-            </text>
-            <text class="text-sm text-[#018d71]">选择 ›</text>
+          <!-- 5. 联系电话 -->
+          <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
+            <text class="text-sm text-[#333] font-medium">联系电话</text>
+            <input
+              v-model="contactPhone"
+              class="mt-2 h-10 rounded-lg bg-[#f5f6f7] px-3 text-sm"
+              type="number"
+              :maxlength="11"
+              placeholder="11 位手机号(与微信号至少填一个)"
+              placeholder-class="text-[#bbb]"
+            >
           </view>
-        </view>
 
-        <!-- 5. 联系电话 -->
-        <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
-          <text class="text-sm text-[#333] font-medium">联系电话</text>
-          <input
-            v-model="contactPhone"
-            class="mt-2 h-10 rounded-lg bg-[#f5f6f7] px-3 text-sm"
-            type="number"
-            :maxlength="11"
-            placeholder="11 位手机号(与微信号至少填一个)"
-            placeholder-class="text-[#bbb]"
-          >
-        </view>
+          <!-- 6. 微信号 -->
+          <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
+            <text class="text-sm text-[#333] font-medium">微信号</text>
+            <input
+              v-model="wechat"
+              class="mt-2 h-10 rounded-lg bg-[#f5f6f7] px-3 text-sm"
+              placeholder="微信号(与联系电话至少填一个)"
+              placeholder-class="text-[#bbb]"
+            >
+          </view>
 
-        <!-- 6. 微信号 -->
-        <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
-          <text class="text-sm text-[#333] font-medium">微信号</text>
-          <input
-            v-model="wechat"
-            class="mt-2 h-10 rounded-lg bg-[#f5f6f7] px-3 text-sm"
-            placeholder="微信号(与联系电话至少填一个)"
-            placeholder-class="text-[#bbb]"
-          >
-        </view>
+          <!-- 7. 活动时间 -->
+          <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
+            <text class="text-sm text-[#333] font-medium">活动时间</text>
+            <input
+              v-model="activityTime"
+              class="mt-2 h-10 rounded-lg bg-[#f5f6f7] px-3 text-sm"
+              placeholder="如:每周六上午 9:00-11:00"
+              placeholder-class="text-[#bbb]"
+            >
+          </view>
 
-        <!-- 7. 活动时间 -->
-        <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
-          <text class="text-sm text-[#333] font-medium">活动时间</text>
-          <input
-            v-model="activityTime"
-            class="mt-2 h-10 rounded-lg bg-[#f5f6f7] px-3 text-sm"
-            placeholder="如:每周六上午 9:00-11:00"
-            placeholder-class="text-[#bbb]"
-          >
-        </view>
-
-        <!-- 审核提示 -->
-        <text v-if="!isEdit" class="mx-4 mt-3 block text-xs text-[#999]">
-          提交后需管理员审核通过,圈子才能上线
-        </text>
+          <!-- 审核提示 -->
+          <text v-if="!isEdit" class="mx-4 mt-3 block text-xs text-[#999]">
+            提交后需管理员审核通过,圈子才能上线
+          </text>
+        </template>
       </scroll-view>
 
+      <!-- 向导按钮(新建模式问答步骤) -->
+      <view v-if="isWizard" class="flex gap-3 border-t border-[#f0f0f0] bg-white px-4 py-3 pb-safe">
+        <wd-button v-if="wizardStep > 0" variant="plain" @click="handleWizardPrev">
+          上一步
+        </wd-button>
+        <view class="flex-1">
+          <wd-button block @click="handleWizardNext">
+            {{ wizardStep === WIZARD_FORM_STEP - 1 ? '去填写圈子信息' : '下一步' }}
+          </wd-button>
+        </view>
+      </view>
+
       <!-- 底部提交按钮 -->
-      <view class="border-t border-[#f0f0f0] bg-white px-4 py-3 pb-safe">
+      <view v-else class="border-t border-[#f0f0f0] bg-white px-4 py-3 pb-safe">
         <wd-button
           block
           :loading="submitting"

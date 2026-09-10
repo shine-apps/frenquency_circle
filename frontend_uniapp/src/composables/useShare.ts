@@ -50,7 +50,7 @@ export interface UseShareOptions {
  * H5 端 JSSDK 的 imgUrl 必须是绝对 http(s) URL,由运行时按
  * `window.location.origin + 部署根路径(BASE_URL)` 拼接。
  */
-const DEFAULT_SHARE_IMAGE_PATH = '/static/images/logo_256_circle.png'
+const DEFAULT_SHARE_IMAGE_PATH = '/static/app/icon/120x120.png'
 
 /** H5 微信 JSSDK 最小类型声明(jweixin 为动态加载, 无 npm 包类型) */
 interface WxJsSdk {
@@ -262,7 +262,7 @@ export function useShare(opts: UseShareOptions): UseShareResult {
     const desc = toValue(opts.desc)
     // 未传图时用默认 logo 兜底;JSSDK 的 imgUrl 必须是绝对 http(s) URL,
     // 且要带上部署根路径(import.meta.env.BASE_URL),否则子路径部署时取图 404
-    const h5PublicBase = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '')
+    const h5PublicBase = (import.meta.env.VITE_APP_PUBLIC_BASE || '/').replace(/\/+$/, '')
     const imageUrl = toValue(opts.imageUrl) || `${window.location.origin}${h5PublicBase}${DEFAULT_SHARE_IMAGE_PATH}`
     h5Wx.updateAppMessageShareData({
       title,

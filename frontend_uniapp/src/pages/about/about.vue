@@ -26,8 +26,8 @@ const FEATURES = [
     <!-- ====== Logo 与版本 ====== -->
     <view class="mt-10 flex flex-col items-center">
       <image
-        src="/static/images/logo_256_circle.png"
-        class="h-24 w-24 rounded-full shadow"
+        src="/static/app/icon/192x192.png"
+        class="h-[192px] w-[192px] rounded-full shadow"
         mode="aspectFit"
       />
       <text class="mt-4 text-xl text-[#333] font-semibold">

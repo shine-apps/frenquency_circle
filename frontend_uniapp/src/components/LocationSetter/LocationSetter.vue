@@ -3,17 +3,22 @@
  * 位置设置组件(供首页与个人资料页复用)。
  *
  * 设计要点:
- * - compact:卡片式嵌入,展示当前地址 + "切换位置/选择位置"按钮
+ * - compact:卡片式嵌入,展示当前地址 + "定位当前位置 / 切换位置 / 选择位置"按钮
  * - full:作为页面主体展示(目前等同 compact;预留扩展)
+ * - 定位当前位置:调用 getCurrentLocation 取坐标 + reverseGeocode 解析地址,
+ *   与选点共用 update:location 事件出口
  * - H5:选点交互走 H5LocationPicker 弹层(高德地图)
  * - 小程序端:选点走 uni.chooseLocation
- * - 组件仅提供选点能力,通过 update:location 把选中位置 emit 给父级;
+ * - 组件仅提供定位/选点能力,通过 update:location 把位置 emit 给父级;
  *   是否保存到用户资料由父级决定
  *
  * 注意:
- * - 组件本身不控制定位授权,定位失败时由调用方降级引导手动选择
+ * - 组件不主动申请定位授权,定位失败时提示用户并保持原位置不变,
+ *   由调用方(或用户)降级引导手动选择
  */
 import { computed, ref } from 'vue'
+import { getCurrentLocation } from '@/utils/location'
+import { reverseGeocode } from '@/utils/geo'
 
 // #ifdef H5
 import H5LocationPicker from '@/components/H5LocationPicker/H5LocationPicker.vue'
@@ -47,6 +52,8 @@ const emit = defineEmits<{
 const h5PickerVisible = ref(false)
 /** 小程序端是否在选点中(避免重复调用) */
 const choosing = ref(false)
+/** 是否正在定位当前位置(避免重复调用) */
+const locating = ref(false)
 
 /** 是否已定位 */
 const hasLocation = computed(() => props.latitude != null && props.longitude != null)
@@ -54,12 +61,37 @@ const hasLocation = computed(() => props.latitude != null && props.longitude != 
 /** 主按钮文案 */
 const actionLabel = computed(() => (hasLocation.value ? '切换位置' : '选择位置'))
 
+/** 选点/定位互斥:任一进行中时禁用另一入口 */
+const busy = computed(() => locating.value || choosing.value)
+
+/**
+ * 定位当前位置:获取设备坐标并逆地理编码为地址,复用 update:location 事件输出。
+ * 定位或逆地理失败时提示且不 emit,保持原地址不变。
+ */
+async function handleLocate(): Promise<void> {
+  if (busy.value)
+    return
+  locating.value = true
+  try {
+    const { latitude, longitude } = await getCurrentLocation()
+    const addr = await reverseGeocode(latitude, longitude)
+    emitLocation({ latitude, longitude, address: addr || '已定位' })
+  }
+  catch (err) {
+    console.warn('[LocationSetter] 定位当前位置失败:', err)
+    uni.showToast({ title: '定位失败，请检查定位权限', icon: 'none' })
+  }
+  finally {
+    locating.value = false
+  }
+}
+
 /**
  * 小程序端选点(uni.chooseLocation 返回 { latitude, longitude, address })。
  * 失败(用户取消 / 系统错误)静默处理,不弹 toast。
  */
 async function chooseByMiniProgram(): Promise<void> {
-  if (choosing.value)
+  if (busy.value)
     return
   choosing.value = true
   try {
@@ -91,6 +123,8 @@ function emitLocation(loc: { latitude: number, longitude: number, address: strin
 
 /** 统一处理选点入口(根据平台分发) */
 function handleChoose(): void {
+  if (busy.value)
+    return
   // #ifdef H5
   h5PickerVisible.value = true
   // #endif
@@ -116,8 +150,8 @@ function handleH5Close(): void {
     class="rounded-2xl bg-white p-4 shadow-sm"
     :class="mode === 'full' ? 'min-h-[60vh]' : ''"
   >
-    <!-- 头部:标题 + 操作按钮 -->
-    <view class="flex items-center justify-between">
+    <!-- 头部:标题 + 操作按钮(窄屏下按钮组整体换行,避免与标题挤压) -->
+    <view class="flex flex-wrap items-center justify-between gap-y-2">
       <view class="flex items-center gap-2">
         <view class="i-carbon:location-filled text-[18px] text-[#018d71]" />
         <text class="text-sm text-[#333] font-medium">
@@ -129,9 +163,21 @@ function handleH5Close(): void {
           </text>
         </view>
       </view>
-      <wd-button type="primary" variant="text" size="small" @click="handleChoose">
-        {{ actionLabel }} ›
-      </wd-button>
+      <view class="flex shrink-0 items-center gap-1">
+        <wd-button
+          type="primary"
+          variant="text"
+          size="small"
+          :loading="locating"
+          :disabled="busy"
+          @click="handleLocate"
+        >
+          {{ locating ? '定位中' : '定位当前位置' }}
+        </wd-button>
+        <wd-button type="primary" variant="text" size="small" :disabled="busy" @click="handleChoose">
+          {{ actionLabel }} ›
+        </wd-button>
+      </view>
     </view>
 
     <!-- 当前地址 -->

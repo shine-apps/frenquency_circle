@@ -147,7 +147,7 @@ export default defineConfig(({ command, mode }) => {
           const h5PublicBase = (VITE_APP_PUBLIC_BASE || '/').endsWith('/')
             ? VITE_APP_PUBLIC_BASE
             : `${VITE_APP_PUBLIC_BASE}/`
-          const ogImageUrl = `${ogImageBaseUrl}${h5PublicBase}static/app/icons/1024x1024.png`
+          const ogImageUrl = `${ogImageBaseUrl}${h5PublicBase}static/app/icons/192x192.png`
           return html
             .replace('%BUILD_TIME%', dayjs().format('YYYY-MM-DD HH:mm:ss'))
             .replace('%VITE_APP_TITLE%', VITE_APP_TITLE)

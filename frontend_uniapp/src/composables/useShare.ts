@@ -6,15 +6,15 @@ import { http } from '@/http/http'
 /**
  * useShare - 统一分享 Composable
  *
- * - 小程序(MP-WEIXIN):返回 shareAppMessage(好友)/shareTimeline(朋友圈)分享数据,
- *   内容在用户点击转发时才读取最新值,支持异步加载的数据。
- *   注意:微信小程序编译器只收集页面 <script setup> 顶层直接调用的分享钩子,
- *   因此页面必须自行在顶层调用 onShareAppMessage / onShareTimeline 完成注册。
- * - H5(微信浏览器):整个 SPA 生命周期内只 wx.config 一次(全局单例),config
- *   成功后由「当前置顶页」调用 updateAppMessageShareData / updateTimelineShareData
- *   写入分享卡片;分享出去的 link 是当前页完整 URL(含 hash 路由与 query),
- *   后端 JSSDK 签名仍使用去除 # 之后的 URL。非微信浏览器或未配置公众号时静默
- *   降级,不影响页面。
+ * 小程序(MP-WEIXIN)
+ *   返回 shareAppMessage(好友)/shareTimeline(朋友圈)所需的分享数据,内容在用户点击
+ *   转发时实时读取,天然兼容异步加载。注意:微信编译器只收集页面 <script setup> 顶层
+ *   直接注册的分享钩子,页面必须自行调用 onShareAppMessage / onShareTimeline。
+ *
+ * H5(微信内置浏览器)
+ *   整个 SPA 只 wx.config 一次(全局单例);config 成功后由「当前置顶页」把本页数据
+ *   写入分享卡片。分享链接取当前页完整 URL(含 hash 路由与 query),后端签名则使用
+ *   去掉 # 之后的 URL。非微信浏览器或未配置公众号时静默降级,不影响页面。
  *
  * 用法:
  *   const { share, shareAppMessage, shareTimeline } = useShare({
@@ -44,13 +44,44 @@ export interface UseShareOptions {
   desc?: MaybeRefOrGetter<string>
 }
 
-/**
- * 分享默认兜底图:调用方未传 imageUrl(或为空)时使用。
- * MP-WEIXIN 端使用 uni-app 本地代码包路径(/static 开头);
- * H5 端 JSSDK 的 imgUrl 必须是绝对 http(s) URL,由运行时按
- * `window.location.origin + 部署根路径(BASE_URL)` 拼接。
- */
+export interface UseShareResult {
+  /** H5 分享按钮点击(引导右上角分享); 小程序端为空操作 */
+  share: () => void
+  /** 好友/群分享数据, 传给 onShareAppMessage(必须在页面顶层注册) */
+  shareAppMessage: () => { title: string, path: string, imageUrl?: string }
+  /** 朋友圈分享数据, 传给 onShareTimeline(必须在页面顶层注册) */
+  shareTimeline: () => { title: string, query?: string, imageUrl?: string }
+}
+
+/** 调用方未传 imageUrl(或为空)时的兜底分享图 */
 const DEFAULT_SHARE_IMAGE_PATH = '/static/images/logo.png'
+
+/** 过滤掉 undefined / null 的分享 query */
+function validQueryEntries(query?: Record<string, string>): [string, string][] {
+  if (!query)
+    return []
+  return Object.entries(query).filter(([, v]) => v !== undefined && v !== null)
+}
+
+// ========================= 小程序分享数据 =========================
+
+/** 小程序好友分享完整 path(含 query) */
+function buildMpSharePath(opts: UseShareOptions): string {
+  const path = toValue(opts.path) || '/pages/index/index'
+  const qs = validQueryEntries(toValue(opts.query))
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+    .join('&')
+  return qs ? `${path}?${qs}` : path
+}
+
+/** 小程序朋友圈分享 query(不带 `?`, 由微信拼接到分享卡片) */
+function buildMpTimelineQuery(opts: UseShareOptions): string {
+  return validQueryEntries(toValue(opts.query))
+    .map(([k, v]) => `${k}=${v}`)
+    .join('&')
+}
+
+// ========================= H5 微信 JSSDK =========================
 
 /** H5 微信 JSSDK 最小类型声明(jweixin 为动态加载, 无 npm 包类型) */
 interface WxJsSdk {
@@ -65,252 +96,276 @@ interface WxJsSdk {
   ready: (callback: () => void) => void
   error: (callback: (res: { errMsg: string }) => void) => void
   checkJsApi: (options: { jsApiList: string[] }) => void
-  updateAppMessageShareData: (options: { title: string, desc?: string, link: string, imgUrl?: string }) => void
-  updateTimelineShareData: (options: { title: string, link: string, imgUrl?: string }) => void
+  /** 新分享接口(需公众号已微信认证) */
+  updateAppMessageShareData: (options: ShareDataOptions & { desc?: string }) => void
+  updateTimelineShareData: (options: ShareDataOptions) => void
+  /** 旧分享接口(未认证账号仍可用,用于权限不足时降级) */
+  onMenuShareAppMessage?: (options: ShareDataOptions & { desc?: string }) => void
+  onMenuShareTimeline?: (options: ShareDataOptions) => void
+}
+
+interface ShareDataOptions {
+  title: string
+  link: string
+  imgUrl?: string
+  fail?: (res: { errMsg?: string }) => void
+}
+
+/** 写入分享卡片的完整数据 */
+interface SharePayload {
+  title: string
+  desc?: string
+  link: string
+  imgUrl?: string
 }
 
 declare global {
   interface Window { wx?: WxJsSdk }
 }
 
-/** 是否微信内置浏览器 */
+/** 是否微信内置浏览器(非浏览器环境下安全返回 false) */
 const isWeChatBrowser = typeof window !== 'undefined' && /micromessenger/i.test(navigator.userAgent)
 
+/**
+ * H5 微信分享全局状态: 整个 SPA 共享一份。
+ * 同一 WebView 内重复 wx.config 结果不稳定,故只 config 一次,由「当前置顶页」
+ * 负责把本页数据写入分享卡片,避免跨页/返回时残留上一页或站点首页的数据。
+ */
+const h5 = {
+  /** 已 config 成功的 JSSDK 实例; 非空即代表 config 已完成 */
+  wx: null as WxJsSdk | null,
+  /** 进行中的 config Promise, 避免并发重复 config */
+  configPromise: null as Promise<boolean> | null,
+  /** 最近一次 config 的失败原因, 用于排障提示 */
+  configError: null as string | null,
+  /** 公众号未认证时新接口会 offline verifying, 全局降级到旧 onMenuShare* 接口 */
+  legacyShareApi: false,
+  /** 当前置顶页写入分享卡片的回调(每页一个, 仅置顶页生效) */
+  applyCurrentPage: null as (() => void) | null,
+}
+
 const WX_JSSDK_URL = 'https://res.wx.qq.com/open/js/jweixin-1.6.0.js'
-let wxSdkPromise: Promise<WxJsSdk | null> | null = null
+
+/**
+ * 取出真正的 JSSDK 对象。部分宿主会先挂一个同名但不完整的 window.wx
+ * (如只有 miniProgram 命名空间,没有 config),此时必须继续加载 jweixin 覆盖它,
+ * 否则会出现 `wx.config is not a function`。
+ */
+function getWxJsSdk(): WxJsSdk | null {
+  const wx = window.wx
+  if (wx && typeof wx.config === 'function')
+    return wx
+  if (wx)
+    console.warn('[useShare] window.wx 存在但不是 JSSDK:', Object.keys(wx))
+  return null
+}
+
+let sdkLoadingPromise: Promise<WxJsSdk | null> | null = null
 
 /** 按需加载 jweixin 并缓存 Promise, 避免重复插入 script */
 function loadWxJsSdk(): Promise<WxJsSdk | null> {
-  if (typeof window === 'undefined' || !isWeChatBrowser)
+  if (!isWeChatBrowser)
     return Promise.resolve(null)
-  if (window.wx)
-    return Promise.resolve(window.wx)
-  if (wxSdkPromise)
-    return wxSdkPromise
-  wxSdkPromise = new Promise<WxJsSdk>((resolve, reject) => {
-    const script = document.createElement('script')
-    script.src = WX_JSSDK_URL
-    script.onload = () => {
-      if (window.wx)
-        resolve(window.wx)
-      else
-        reject(new Error('jweixin loaded but window.wx is undefined'))
-    }
-    script.onerror = () => reject(new Error('jweixin script load failed'))
-    document.head.appendChild(script)
-  })
-  return wxSdkPromise
+  const existing = getWxJsSdk()
+  if (existing)
+    return Promise.resolve(existing)
+  if (!sdkLoadingPromise) {
+    sdkLoadingPromise = new Promise<WxJsSdk>((resolve, reject) => {
+      const script = document.createElement('script')
+      script.src = WX_JSSDK_URL
+      script.onload = () => {
+        const loaded = getWxJsSdk()
+        if (loaded)
+          resolve(loaded)
+        else
+          reject(new Error('jweixin 已加载但 window.wx.config 不可用'))
+      }
+      script.onerror = () => reject(new Error('jweixin 脚本加载失败'))
+      document.head.appendChild(script)
+    })
+  }
+  return sdkLoadingPromise
 }
 
-// ===== H5 微信 JSSDK 全局单例(各平台都可安全编译,运行时仅 H5 生效) =====
-// 同一 WebView 内重复 wx.config 结果不稳定,故整个 SPA 只 config 一次;各页面
-// 在成为“置顶页”时把自己注册为分享数据应用回调,config 就绪后统一触发,避免
-// 跨页/返回时分享卡片残留上一页(或站点首页)的数据。
-let h5Wx: WxJsSdk | null = null
-let h5Configed = false
-let h5ConfigPromise: Promise<boolean> | null = null
-/** 当前(最近置顶)页面把本页数据写入微信分享卡片的回调 */
-let h5CurrentShareApplier: (() => void) | null = null
-
-function setCurrentH5ShareApplier(fn: (() => void) | null): void {
-  h5CurrentShareApplier = fn
+/** 执行一次 wx.config(签名 URL 需去掉 # 及之后内容) */
+async function configWx(): Promise<boolean> {
+  try {
+    const wx = await loadWxJsSdk()
+    if (!wx)
+      return false
+    const config = await http.get<{ appId: string, timestamp: number, noncestr: string, signature: string }>(
+      '/api/wechat/jssdk-config',
+      { url: window.location.href.split('#')[0] },
+      undefined,
+      { hideErrorToast: true },
+    )
+    return await new Promise<boolean>((resolve) => {
+      wx.config({
+        // 开发环境自动开启 JSSDK 调试弹窗(直观看到 config / API 的 errMsg),生产恒关闭
+        debug: import.meta.env.DEV,
+        appId: config.appId,
+        timestamp: config.timestamp,
+        nonceStr: config.noncestr,
+        signature: config.signature,
+        // 同时申请旧分享接口权限:未认证账号的新接口会 offline verifying,届时可降级
+        jsApiList: [
+          'updateAppMessageShareData',
+          'updateTimelineShareData',
+          'onMenuShareAppMessage',
+          'onMenuShareTimeline',
+        ],
+      })
+      wx.ready(() => {
+        h5.wx = wx
+        h5.configError = null
+        resolve(true)
+      })
+      wx.error((res) => {
+        h5.configError = res?.errMsg ? String(res.errMsg) : 'wx.config error'
+        console.warn('[useShare] wx.config 失败:', h5.configError)
+        resolve(false)
+      })
+    })
+  }
+  catch (e) {
+    // 非微信环境 / 未配置公众号 / 签名失败均静默降级,不阻塞页面
+    h5.configError = e instanceof Error ? e.message : String(e)
+    console.warn('[useShare] H5 分享初始化跳过:', e)
+    return false
+  }
 }
 
 /**
- * 确保 JSSDK 已完成 wx.config(整个页面生命周期仅一次)。
+ * 确保 JSSDK 完成一次 wx.config。
  * @returns 是否配置成功;失败时清空缓存,允许下次(如用户再点分享)重试。
  */
 function ensureH5Config(): Promise<boolean> {
-  if (h5Configed)
+  if (h5.wx)
     return Promise.resolve(true)
   if (!isWeChatBrowser)
     return Promise.resolve(false)
-  if (h5ConfigPromise)
-    return h5ConfigPromise
-  h5ConfigPromise = new Promise<boolean>((resolve) => {
-    let settled = false
-    void (async () => {
-      try {
-        const wx = await loadWxJsSdk()
-        if (!wx) {
-          settled = true
-          resolve(false)
-          return
-        }
-        // 签名 URL 需去掉 # 及之后的内容(hash 路由的路径/query 都在 # 内,不影响签名)
-        const url = window.location.href.split('#')[0]
-        const config = await http.get<{ appId: string, timestamp: number, noncestr: string, signature: string }>(
-          '/api/wechat/jssdk-config',
-          { url },
-          undefined,
-          { hideErrorToast: true },
-        )
-        wx.config({
-          debug: false,
-          appId: config.appId,
-          timestamp: config.timestamp,
-          nonceStr: config.noncestr,
-          signature: config.signature,
-          jsApiList: ['updateAppMessageShareData', 'updateTimelineShareData'],
-        })
-        wx.ready(() => {
-          h5Wx = wx
-          h5Configed = true
-          if (!settled) {
-            settled = true
-            resolve(true)
-          }
-          // config 就绪时,把当前置顶页的分享数据写入(可能是 config 等待期间切换到的页面)
-          h5CurrentShareApplier?.()
-        })
-        wx.error((res) => {
-          console.warn('[useShare] wx.config failed:', res?.errMsg)
-          if (!settled) {
-            settled = true
-            resolve(false)
-          }
-        })
-      }
-      catch (e) {
-        // 非微信环境 / 未配置公众号 / 签名失败均静默降级,不阻塞页面
-        console.warn('[useShare] H5 share init skipped:', e)
-        if (!settled) {
-          settled = true
-          resolve(false)
-        }
-      }
-    })()
-  }).finally(() => {
-    // 配置失败时清空缓存,允许下次重试
-    if (!h5Configed)
-      h5ConfigPromise = null
+  if (h5.configPromise)
+    return h5.configPromise
+
+  h5.configPromise = configWx().then((ok) => {
+    if (ok)
+      h5.applyCurrentPage?.() // config 期间可能已切页, 补写当前置顶页卡片
+    else
+      h5.configPromise = null // 失败清空缓存, 允许下次重试
+    return ok
   })
-  return h5ConfigPromise
+  return h5.configPromise
 }
 
-/** 小程序分享完整 path(含 query) */
-function buildMpSharePath(opts: UseShareOptions): string {
-  const path = toValue(opts.path) || '/pages/index/index'
-  const query = toValue(opts.query)
-  if (!query)
+/** 用旧接口(onMenuShare*)写入分享卡片 */
+function applyLegacyShare(data: SharePayload): void {
+  h5.wx?.onMenuShareAppMessage?.({ ...data })
+  h5.wx?.onMenuShareTimeline?.({ title: data.title, link: data.link, imgUrl: data.imgUrl })
+}
+
+/**
+ * 写入分享数据。新接口(1.4+)要求公众号已微信认证,未认证会返回
+ * `the permission value is offline verifying`,此时全局降级到旧接口重发一次。
+ */
+function writeShareData(data: SharePayload): void {
+  if (!h5.wx)
+    return
+  if (h5.legacyShareApi) {
+    applyLegacyShare(data)
+    return
+  }
+  const onFail = (res: { errMsg?: string }): void => {
+    if (/offline\s+verifying/i.test(res?.errMsg ?? '') && !h5.legacyShareApi) {
+      console.warn('[useShare] 新分享接口无权限,降级到 onMenuShare* 旧接口:', res?.errMsg)
+      h5.legacyShareApi = true
+      applyLegacyShare(data)
+    }
+  }
+  h5.wx.updateAppMessageShareData({ ...data, fail: onFail })
+  h5.wx.updateTimelineShareData({ title: data.title, link: data.link, imgUrl: data.imgUrl, fail: onFail })
+}
+
+/** 图片路径转绝对 http(s) URL(JSSDK 要求),并带上部署根路径 */
+function toAbsoluteImageUrl(path: string): string {
+  if (/^https?:\/\//i.test(path))
     return path
-  const qs = Object.entries(query)
-    .filter(([, v]) => v !== undefined && v !== null)
-    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
-    .join('&')
-  return qs ? `${path}?${qs}` : path
+  const base = (import.meta.env.VITE_APP_PUBLIC_BASE || '/').replace(/\/+$/, '')
+  return `${window.location.origin}${base}${path.startsWith('/') ? '' : '/'}${path}`
 }
 
-/** 小程序朋友圈分享 query(不带 `?`, 由微信拼接到分享卡片) */
-function buildMpTimelineQuery(opts: UseShareOptions): string {
-  const query = toValue(opts.query)
-  if (!query)
-    return ''
-  return Object.entries(query)
-    .filter(([, v]) => v !== undefined && v !== null)
-    .map(([k, v]) => `${k}=${v}`)
-    .join('&')
-}
-
-export interface UseShareResult {
-  /** H5 分享按钮点击(引导右上角分享); 小程序端为空操作 */
-  share: () => void
-  /** 好友/群分享数据, 传给 onShareAppMessage(必须在页面顶层注册) */
-  shareAppMessage: () => { title: string, path: string, imageUrl?: string }
-  /** 朋友圈分享数据, 传给 onShareTimeline(必须在页面顶层注册) */
-  shareTimeline: () => { title: string, query?: string, imageUrl?: string }
-}
+// ========================= Composable =========================
 
 export function useShare(opts: UseShareOptions): UseShareResult {
-  // ===== 小程序分享数据(内容在触发时实时读取, 兼容异步加载) =====
-  const shareAppMessage = (): { title: string, path: string, imageUrl?: string } => {
-    const title = toValue(opts.title)
-    const imageUrl = toValue(opts.imageUrl) || DEFAULT_SHARE_IMAGE_PATH
-    return {
-      title,
-      path: buildMpSharePath(opts),
-      ...(imageUrl ? { imageUrl } : {}),
-    }
-  }
+  // ===== 小程序分享数据(触发时实时读取, 兼容异步加载) =====
+  const shareAppMessage = (): { title: string, path: string, imageUrl?: string } => ({
+    title: toValue(opts.title),
+    path: buildMpSharePath(opts),
+    imageUrl: toValue(opts.imageUrl) || DEFAULT_SHARE_IMAGE_PATH,
+  })
 
   const shareTimeline = (): { title: string, query?: string, imageUrl?: string } => {
-    const title = toValue(opts.title)
-    const imageUrl = toValue(opts.imageUrl) || DEFAULT_SHARE_IMAGE_PATH
     const query = buildMpTimelineQuery(opts)
     return {
-      title,
+      title: toValue(opts.title),
       ...(query ? { query } : {}),
-      ...(imageUrl ? { imageUrl } : {}),
+      imageUrl: toValue(opts.imageUrl) || DEFAULT_SHARE_IMAGE_PATH,
     }
   }
 
-  // ===== H5 微信 JSSDK(config 为全局单例,每页只负责刷新本页分享数据) =====
+  // ===== H5: config 全局单例, 每页只负责刷新本页分享数据 =====
   // #ifdef H5
   let h5Alive = true
 
-  /**
-   * 把本页(title/desc/imageUrl + 当前完整链接)写入微信分享卡片。
-   * 仅当自己仍是“当前置顶页”时执行,避免后台页晚到的数据覆盖置顶页卡片。
-   */
-  function applyCurrentPageShareData(): void {
-    if (!h5Alive || !h5Configed || !h5Wx || h5CurrentShareApplier !== applyCurrentPageShareData)
-      return
-    // 分享出去的落地链接必须保留路由与 query(hash 模式在 # 之后),
-    // 否则好友/群收到的卡片打开后只会落到站点首页,丢失被分享的页面。
-    const link = window.location.href
-    const title = toValue(opts.title)
+  /** 组装本页分享数据; link 用当前完整 URL 以保留 hash 路由与 query */
+  function buildH5SharePayload(): SharePayload {
     const desc = toValue(opts.desc)
-    // 未传图时用默认 logo 兜底;JSSDK 的 imgUrl 必须是绝对 http(s) URL,
-    // 且要带上部署根路径(import.meta.env.BASE_URL),否则子路径部署时取图 404
-    const h5PublicBase = (import.meta.env.VITE_APP_PUBLIC_BASE || '/').replace(/\/+$/, '')
-    const imageUrl = toValue(opts.imageUrl) || `${window.location.origin}${h5PublicBase}${DEFAULT_SHARE_IMAGE_PATH}`
-    h5Wx.updateAppMessageShareData({
-      title,
+    const imageUrl = toValue(opts.imageUrl) || DEFAULT_SHARE_IMAGE_PATH
+    return {
+      title: toValue(opts.title),
       ...(desc ? { desc } : {}),
-      link,
-      ...(imageUrl ? { imgUrl: imageUrl } : {}),
-    })
-    h5Wx.updateTimelineShareData({
-      title,
-      link,
-      ...(imageUrl ? { imgUrl: imageUrl } : {}),
-    })
+      link: window.location.href,
+      imgUrl: toAbsoluteImageUrl(imageUrl),
+    }
   }
 
-  /** 本页成为置顶页时:注册为本页的应用回调并立即应用(数据未就绪则由 watch 补齐) */
-  function onPageActivated(): void {
+  /** 把本页数据写入微信分享卡片;仅当自己仍是置顶页时才生效 */
+  function applyCurrentPageShare(): void {
+    if (!h5Alive || !h5.wx || h5.applyCurrentPage !== applyCurrentPageShare)
+      return
+    writeShareData(buildH5SharePayload())
+  }
+
+  /** 本页成为置顶页(挂载/显示): 注册为当前页并应用数据 */
+  function activatePage(): void {
     if (!isWeChatBrowser)
       return
-    setCurrentH5ShareApplier(applyCurrentPageShareData)
-    if (h5Configed) {
-      applyCurrentPageShareData()
-    }
-    else {
-      void ensureH5Config().then((ok) => {
-        if (ok && h5Alive)
-          applyCurrentPageShareData()
-      })
-    }
+    h5.applyCurrentPage = applyCurrentPageShare
+    if (h5.wx)
+      applyCurrentPageShare()
+    else
+      void ensureH5Config()
   }
 
-  onMounted(onPageActivated)
-  onShow(onPageActivated)
-  onHide(() => {
-    if (h5CurrentShareApplier === applyCurrentPageShareData)
-      setCurrentH5ShareApplier(null)
-  })
+  /** 本页隐藏/卸载: 若自己仍是当前页则注销, 避免残留覆盖他页 */
+  function deactivatePage(): void {
+    if (h5.applyCurrentPage === applyCurrentPageShare)
+      h5.applyCurrentPage = null
+  }
+
+  onMounted(activatePage)
+  onShow(activatePage)
+  onHide(deactivatePage)
   onUnmounted(() => {
     h5Alive = false
-    if (h5CurrentShareApplier === applyCurrentPageShareData)
-      setCurrentH5ShareApplier(null)
+    deactivatePage()
   })
 
-  // 分享内容变化时(如 circle 详情异步加载完成),刷新微信分享数据
+  // 分享内容变化时(如详情异步加载完成), 刷新微信分享数据
   watch(
     [() => toValue(opts.title), () => toValue(opts.desc), () => toValue(opts.imageUrl)],
     () => {
       if (h5Alive)
-        applyCurrentPageShareData()
+        applyCurrentPageShare()
     },
   )
   // #endif
@@ -321,17 +376,18 @@ export function useShare(opts: UseShareOptions): UseShareResult {
       uni.showToast({ title: '请在微信浏览器中打开后分享', icon: 'none' })
       return
     }
-    if (h5Configed) {
+    if (h5.wx) {
       uni.showToast({ title: '请点击右上角 ··· 分享到好友/朋友圈', icon: 'none' })
       return
     }
     void ensureH5Config().then((ok) => {
       if (ok) {
-        h5CurrentShareApplier?.()
+        // config 成功时 ensureH5Config 已写入当前置顶页数据, 这里只需提示
         uni.showToast({ title: '请点击右上角 ··· 分享到好友/朋友圈', icon: 'none' })
       }
       else {
-        uni.showToast({ title: '分享初始化失败,请稍后重试', icon: 'none' })
+        // 带上真实失败原因(invalid signature / invalid url domain 等),便于定位
+        uni.showToast({ title: `分享初始化失败:${h5.configError ?? '未知错误'}`, icon: 'none' })
       }
     })
     // #endif

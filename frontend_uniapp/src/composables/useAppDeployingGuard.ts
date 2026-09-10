@@ -18,7 +18,7 @@ export async function shouldBlockForAppDeploying(): Promise<boolean> {
   if (!settingsStore.isAppDeploying) {
     return false
   }
-  uni.showToast({ title: '应用发布维护中,功能暂不可用', icon: 'none' })
+  // uni.showToast({ title: '应用发布维护中,功能暂不可用', icon: 'none' })
   uni.reLaunch({ url: HOME_PAGE_PATH })
   return true
 }

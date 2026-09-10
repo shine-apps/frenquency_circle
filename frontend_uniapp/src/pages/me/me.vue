@@ -330,7 +330,7 @@ const roleChipClass = computed(() => {
     </view>
 
     <!-- ====== 设置入口列表 ====== -->
-    <view class="mx-4 rounded-2xl bg-white" v-if="isAppDeploying">
+    <view class="mx-4 rounded-2xl bg-white" v-if="!isAppDeploying">
       <view class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4" @click="handleNotifications">
         <text class="text-sm text-[#333] font-medium">
           消息

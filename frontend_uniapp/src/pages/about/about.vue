@@ -19,6 +19,29 @@ const FEATURES = [
   { title: '兴趣圈子', desc: '发现并加入身边的各类兴趣圈子' },
   { title: '便捷联系', desc: '平台内微信 / 手机号直联,低门槛社交' },
 ]
+
+/** 联系方式 */
+const CONTACT = {
+  name: '祥和',
+  phone: '19219234962',
+}
+
+/** 拨打联系电话 */
+function handleCall() {
+  uni.makePhoneCall({
+    phoneNumber: CONTACT.phone,
+  })
+}
+
+/** 复制联系电话 */
+function handleCopy() {
+  uni.setClipboardData({
+    data: CONTACT.phone,
+    success: () => {
+      uni.showToast({ title: '手机号已复制', icon: 'none' })
+    },
+  })
+}
 </script>
 
 <template>
@@ -58,6 +81,41 @@ const FEATURES = [
         <text class="mt-1 block text-center text-xs leading-5 text-[#999]">
           {{ feature.desc }}
         </text>
+      </view>
+    </view>
+
+    <!-- ====== 联系我们 ====== -->
+    <view class="mx-4 mt-3 rounded-2xl bg-white px-4 py-5">
+      <text class="block text-sm text-[#018d71] font-semibold">
+        联系我们
+      </text>
+      <view class="mt-3 flex items-center justify-between">
+        <view class="flex flex-col" @click="handleCopy">
+          <text class="text-sm text-[#333]">
+            {{ CONTACT.name }}
+          </text>
+          <text class="mt-1 text-xs text-[#999]">
+            {{ CONTACT.phone }}(可加微信)
+          </text>
+        </view>
+        <view class="flex items-center gap-2">
+          <view
+            class="rounded-full border border-[#018d71] px-3 py-1"
+            @click.stop="handleCopy"
+          >
+            <text class="text-xs text-[#018d71]">
+              复制
+            </text>
+          </view>
+          <view
+            class="rounded-full bg-[#018d71] px-3 py-1"
+            @click.stop="handleCall"
+          >
+            <text class="text-xs text-white">
+              拨打电话
+            </text>
+          </view>
+        </view>
       </view>
     </view>
 

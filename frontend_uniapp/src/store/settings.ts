@@ -42,10 +42,23 @@ export const useSettingsStore = defineStore('settings', () => {
     return settings.value.find(s => s.key === key)?.value as T | undefined
   }
 
-  /** 应用是否处于发布维护中(isAppDeploying 为 true 时隐藏创建入口并拦截发布类页面) */
-  const isAppDeploying = computed(
-    () => settings.value.find(s => s.key === 'isAppDeploying')?.value === true,
-  )
+  /**
+   * 应用是否处于发布维护中(隐藏创建入口并拦截发布类页面)。
+   *
+   * - H5 端恒为 false:Web 端不做发布维护拦截(小程序审核期间 Web 仍可正常使用);
+   * - 小程序端:仅当设置项存在时才以实际值为准,
+   *   key 缺失 / 尚未拉取到时按 true 处理(拿不到配置就保守地视为维护中)。
+   */
+  const isAppDeploying = computed(() => {
+    // #ifdef H5
+    return false
+    // #endif
+
+    // #ifndef H5
+    const item = settings.value.find(s => s.key === 'isAppDeploying')
+    return item ? item.value === true : true
+    // #endif
+  })
 
   return {
     settings,

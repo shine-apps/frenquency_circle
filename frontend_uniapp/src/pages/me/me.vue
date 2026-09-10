@@ -2,6 +2,7 @@
 import { computed, reactive, ref } from 'vue'
 import { useUserStore } from '@/store/user'
 import { useTokenStore } from '@/store/token'
+import { useSettingsStore } from '@/store/settings'
 import { getMyProfile, updateMyTags, updateProfile } from '@/api/auth'
 import { getUnreadNotificationCount } from '@/api/notifications'
 import { canCreateCircle } from '@/utils/role'
@@ -23,12 +24,17 @@ definePage({
 
 const userStore = useUserStore()
 const tokenStore = useTokenStore()
+const settingsStore = useSettingsStore()
 
 const user = computed(() => userStore.userInfo)
 const isLoggedIn = computed(() => userStore.isLoggedIn)
+/** 系统设置 isAppDeploying 为 true 时表示应用处于发布维护中,直接读取 store 计算属性 */
+const isAppDeploying = computed(() => settingsStore.isAppDeploying)
 
 // 进入时刷新用户资料(头像/标签/role 最新)
 onShow(() => {
+  // 每次回到我的页同步一次系统设置(命中 10 分钟缓存时无网络开销)
+  void settingsStore.getSettings().catch(() => { /* 拉取失败沿用旧值 */ })
   if (!userStore.isLoggedIn)
     return
   getMyProfile()
@@ -324,7 +330,7 @@ const roleChipClass = computed(() => {
     </view>
 
     <!-- ====== 设置入口列表 ====== -->
-    <view class="mx-4 rounded-2xl bg-white">
+    <view class="mx-4 rounded-2xl bg-white" v-if="isAppDeploying">
       <view class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4" @click="handleNotifications">
         <text class="text-sm text-[#333] font-medium">
           消息

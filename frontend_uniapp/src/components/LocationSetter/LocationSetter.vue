@@ -157,11 +157,6 @@ function handleH5Close(): void {
         <text class="text-sm text-[#333] font-medium">
           {{ title }}
         </text>
-        <view v-if="hasLocation" class="rounded-full bg-[#e8f5f1] px-2 py-0.5">
-          <text class="text-xs text-[#018d71]">
-            已设置
-          </text>
-        </view>
       </view>
       <view class="flex shrink-0 items-center gap-1">
         <wd-button

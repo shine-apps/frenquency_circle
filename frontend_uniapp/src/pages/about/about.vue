@@ -26,7 +26,7 @@ const FEATURES = [
     <!-- ====== Logo 与版本 ====== -->
     <view class="mt-10 flex flex-col items-center">
       <image
-        src="/staticimages/logo.png"
+        src="/static/images/logo.png"
         class="h-[192px] w-[192px] rounded-full shadow"
         mode="aspectFit"
       />

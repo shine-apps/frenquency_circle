@@ -11,6 +11,7 @@ import { useDialog } from '@wot-ui/ui/components/wd-dialog'
 import { getCurrentLocation } from '@/utils/location'
 import { reverseGeocode } from '@/utils/geo'
 import { saveGuestLocation, saveGuestTags } from '@/utils/guest-profile'
+import { closeHomeMbtiEntry, isHomeMbtiEntryClosed } from '@/utils/home-mbti-entry'
 import { activityLevelText, formatDateTime, formatDistance } from '@/utils/format'
 import { canCreateCircle } from '@/utils/role'
 import { useShare } from '@/composables/useShare'
@@ -232,6 +233,10 @@ async function loadAll(lat: number, lng: number, range: number): Promise<void> {
 
 // ====== 进入时尝试定位 ======
 onShow(() => {
+  // 消费来源页(MBTI 等)带入的兴趣筛选:写入本次筛选条件,由下方逻辑触发按该兴趣重新匹配
+  const incomingTags = matchStore.consumePendingTags()
+  if (incomingTags)
+    filterTags.value = incomingTags
   // 每次回到首页同步一次系统设置(命中 10 分钟缓存时无网络开销),避免冷启动竞态与 TTL 内不更新
   void settingsStore.getSettings().catch(() => { /* 拉取失败沿用旧值 */ })
   // 每次回到首页刷新未读消息角标(从通知页返回后也能同步)
@@ -320,6 +325,20 @@ function handleCreateActivity(): void {
 /** 跳通知消息页 */
 function handleGoNotification(): void {
   uni.navigateTo({ url: '/pages/notifications/notifications' })
+}
+
+/** 跳 MBTI 介绍页(反向导流:测完人格可就势用推荐兴趣匹配同趣的人与圈子) */
+function handleGoMbti(): void {
+  uni.navigateTo({ url: '/pages/mbti/intro' })
+}
+
+/** 首页 MBTI 入口是否可见(用户可关闭,关闭后设备维度不再展示) */
+const mbtiEntryVisible = ref(!isHomeMbtiEntryClosed())
+
+/** 关闭首页 MBTI 入口:仅隐藏该区块,不影响页面其他内容 */
+function handleCloseMbtiEntry(): void {
+  mbtiEntryVisible.value = false
+  closeHomeMbtiEntry()
 }
 
 // ====== 未读消息角标 ======
@@ -446,6 +465,37 @@ function handleCircleClick(circleId: string): void {
             </wd-button>
           </wd-badge>
         </view>
+      </view>
+    </view>
+
+    <!-- ====== MBTI 反向入口:测人格,找同好(可关闭) ====== -->
+    <view
+      v-if="mbtiEntryVisible"
+      class="relative mx-4 mt-3 rounded-2xl bg-white shadow-sm active:opacity-80"
+      @click="handleGoMbti"
+    >
+      <!-- 关闭:阻止冒泡,避免误触进入 MBTI -->
+      <view
+        class="absolute left-1.5 top-1.5 z-1 h-5 w-5 flex items-center justify-center"
+        @click.stop="handleCloseMbtiEntry"
+      >
+        <view class="i-carbon:close text-[18px] text-[#ccc] leading-none" />
+      </view>
+      <view class="flex items-center justify-between py-3 pl-7 pr-4">
+        <view class="min-w-0 flex items-center gap-3">
+          <text class="text-lg">🧠</text>
+          <view class="min-w-0">
+            <text class="block text-sm text-[#333] font-medium">
+              测 MBTI,一键找同好
+            </text>
+            <text class="mt-0.5 block text-xs text-[#999]">
+              按性格推荐兴趣,匹配同趣的人与圈子
+            </text>
+          </view>
+        </view>
+        <text class="shrink-0 text-xs text-[#018d71]">
+          ›
+        </text>
       </view>
     </view>
 

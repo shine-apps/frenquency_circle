@@ -2,9 +2,7 @@
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getMbtiTypeDetail } from '@/api/mbti'
-import { useUserStore } from '@/store/user'
-import { useMatchStore } from '@/store/match'
-import { toLoginPage } from '@/utils/toLoginPage'
+import { goHomeMatchWithTags } from '@/utils/matchLink'
 import {
   TEMPERAMENT_COLORS,
   getTemperament,
@@ -19,9 +17,6 @@ definePage({
   },
   excludeLoginPath: true,
 })
-
-const userStore = useUserStore()
-const matchStore = useMatchStore()
 
 const detail = ref<MbtiTypeDetailDTO | null>(null)
 const loading = ref(true)
@@ -57,21 +52,9 @@ function goTest() {
   uni.redirectTo({ url: '/pages/mbti/test' })
 }
 
-/** 找同好圈子 */
-function findCircles(tagName: string) {
-  if (!userStore.isLoggedIn) {
-    uni.showToast({ title: '登录后可找同好圈子', icon: 'none' })
-    toLoginPage()
-    return
-  }
-  matchStore.setMatchResult({
-    people: [],
-    circles: [],
-    rangeKm: matchStore.rangeKm || 5,
-    location: matchStore.location,
-    tags: [tagName],
-  })
-  uni.navigateTo({ url: '/pages/match/match' })
+/** 找同趣的人与圈子:携带该兴趣跳首页匹配(匹配接口未强制登录,游客同样可用) */
+function goFindMatch(tagName: string) {
+  goHomeMatchWithTags([tagName])
 }
 </script>
 
@@ -168,10 +151,10 @@ function findCircles(tagName: string) {
             <text class="mt-2 block text-sm leading-relaxed text-[#666]">
               {{ rec.reason }}
             </text>
-            <view class="mt-2 flex justify-end">
-              <text class="text-xs text-[#018d71] underline" @click="findCircles(rec.tagName)">
-                找同好圈子 ›
-              </text>
+            <view class="mt-3 flex justify-end">
+              <wd-button type="primary" size="small" round @click="goFindMatch(rec.tagName)">
+                找同趣的人与圈子
+              </wd-button>
             </view>
           </view>
 

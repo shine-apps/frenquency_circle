@@ -26,6 +26,11 @@ export const useMatchStore = defineStore('match', () => {
   const page = ref(1)
   /** 当前分页页大小 */
   const pageSize = ref(20)
+  /**
+   * 待首页消费的兴趣筛选标签(来源页跳首页前写入,首页 onShow 消费一次后清空)。
+   * 首页是 tabBar 页,switchTab 不支持 query 参数,故用 store 跨页传递筛选条件。
+   */
+  const pendingTags = ref<string[] | null>(null)
 
   /** 部分更新匹配结果(只更新传入的字段) */
   function setMatchResult(payload: {
@@ -50,6 +55,18 @@ export const useMatchStore = defineStore('match', () => {
       totalCircles.value = payload.totalCircles
   }
 
+  /** 设置待首页消费的兴趣筛选(跳首页前调用,空数组视为清空) */
+  function setPendingTags(tags: string[] | null) {
+    pendingTags.value = tags && tags.length > 0 ? tags : null
+  }
+
+  /** 取出并清空待消费的兴趣筛选(首页 onShow 调用,保证只应用一次) */
+  function consumePendingTags(): string[] | null {
+    const tags = pendingTags.value
+    pendingTags.value = null
+    return tags
+  }
+
   /** 重置为初始状态 */
   function clearMatch() {
     people.value = []
@@ -61,6 +78,7 @@ export const useMatchStore = defineStore('match', () => {
     totalCircles.value = 0
     page.value = 1
     pageSize.value = 20
+    pendingTags.value = null
   }
 
   return {
@@ -73,7 +91,10 @@ export const useMatchStore = defineStore('match', () => {
     totalCircles,
     page,
     pageSize,
+    pendingTags,
     setMatchResult,
+    setPendingTags,
+    consumePendingTags,
     clearMatch,
   }
 })

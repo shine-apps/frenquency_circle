@@ -4,7 +4,6 @@ import { onShareAppMessage, onShareTimeline, onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
 import { useMatchStore } from '@/store/match'
 import { useSettingsStore } from '@/store/settings'
-import { updateMyTags, updateProfile } from '@/api/auth'
 import { matchCircles, matchPeople } from '@/api/locations'
 import { getUnreadNotificationCount } from '@/api/notifications'
 import { LOGIN_PAGE } from '@/router/config'
@@ -60,7 +59,20 @@ onShareTimeline(shareTimeline)
 // #endif
 
 const user = computed(() => userStore.userInfo)
-const userTags = computed(() => user.value?.tags || [])
+
+/** 账号兴趣标签(用户资料中的标签,首页未手动筛选时作为默认筛选条件) */
+const accountTags = computed(() => user.value?.tags || [])
+
+// ====== 首页筛选条件(仅用于本次匹配,不写入用户账号资料) ======
+/**
+ * 首页手动选择的兴趣标签:
+ * - null:尚未在首页选择,跟随账号标签展示与匹配;
+ * - string[]:已在首页选择,仅作为本次匹配的筛选条件,不写入账号资料。
+ */
+const filterTags = ref<string[] | null>(null)
+
+/** 当前生效的筛选标签(首页手动选择优先,否则跟随账号标签) */
+const effectiveTags = computed(() => filterTags.value ?? accountTags.value)
 
 // ====== 资料补全引导 ======
 /**
@@ -128,7 +140,7 @@ async function loadAll(lat: number, lng: number, range: number): Promise<void> {
       matchPeople({
         latitude: lat,
         longitude: lng,
-        tags: userTags.value,
+        tags: effectiveTags.value,
         rangeKm: range,
         page: 1,
         pageSize: 20,
@@ -136,7 +148,7 @@ async function loadAll(lat: number, lng: number, range: number): Promise<void> {
       matchCircles({
         latitude: lat,
         longitude: lng,
-        tags: userTags.value,
+        tags: effectiveTags.value,
         rangeKm: range,
         page: 1,
         pageSize: 20,
@@ -164,7 +176,7 @@ async function loadAll(lat: number, lng: number, range: number): Promise<void> {
       circles: circlesRes.list || [],
       rangeKm: range,
       location: { latitude: lat, longitude: lng },
-      tags: userTags.value,
+      tags: effectiveTags.value,
       totalPeople: peopleRes.total,
       totalCircles: circlesRes.total,
     })
@@ -215,32 +227,23 @@ onShow(() => {
       })
   }
   else {
-    // 兴趣标签变更(从选择页返回)或首次无结果时重新拉取,避免展示陈旧匹配
-    const storeTagsKey = matchStore.tags.join(',')
-    const userTagsKey = userTags.value.join(',')
-    if (storeTagsKey !== userTagsKey || items.value.length === 0) {
+    // 生效筛选标签变化(如账号标签在资料页更新)或首次无结果时重新拉取,避免展示陈旧匹配
+    const matchedTagsKey = matchStore.tags.join(',')
+    const effectiveTagsKey = effectiveTags.value.join(',')
+    if (matchedTagsKey !== effectiveTagsKey || items.value.length === 0) {
       loadAll(latitude.value, longitude.value, rangeKm.value)
     }
   }
 })
 
-/** 标签保存成功后刷新匹配结果(当前坐标已就绪时) */
-async function handleTagsConfirmed(tags: string[]): Promise<void> {
-  // 已登录:自动保存到我的兴趣标签集合(后端),失败则只保留本地,不影响匹配
-  if (userStore.isLoggedIn) {
-    try {
-      const saved = await updateMyTags(tags)
-      userStore.setTags(saved)
-    }
-    catch (e) {
-      console.error('[index] updateMyTags failed:', e)
-      userStore.setTags(tags)
-      uni.showToast({ title: '兴趣保存失败,请重试', icon: 'none' })
-    }
-  }
-  else {
-    // 未登录:仅更新本地状态用于本次匹配展示,不发起后端保存;
-    // 同时暂存到 storage,登录成功后由 restoreGuestProfile 自动回填到账号
+/**
+ * 兴趣标签确认:仅作为本次匹配的筛选条件。
+ * - 已登录:不写入账号标签(用户资料不被首页操作修改),下次进入以账号标签为默认值;
+ * - 未登录:更新本地状态并暂存 storage,登录成功后由 restoreGuestProfile 回填到账号。
+ */
+function handleTagsConfirmed(tags: string[]): void {
+  filterTags.value = tags
+  if (!userStore.isLoggedIn) {
     userStore.setTags(tags)
     saveGuestTags(tags)
   }
@@ -310,36 +313,18 @@ function handleRangeChange(range: number): void {
   }
 }
 
-/** LocationSetter 选点完成后:保存到当前用户资料(已登录)、同步 store、刷新匹配 */
-async function handleLocationUpdated(loc: { latitude: number, longitude: number, address: string }): Promise<void> {
-  // 先更新本地坐标/地址,让 UI 立即回显
+/**
+ * LocationSetter 选点完成:仅作为本次匹配的筛选条件。
+ * - 已登录:不写入账号地址/坐标(用户资料不被首页操作修改),下次进入以账号资料为默认值;
+ * - 未登录:更新本地状态并暂存 storage,登录成功后由 restoreGuestProfile 回填到账号。
+ */
+function handleLocationUpdated(loc: { latitude: number, longitude: number, address: string }): void {
+  // 先更新本地坐标/地址,让 UI 立即回显(仅本次会话有效)
   latitude.value = loc.latitude
   longitude.value = loc.longitude
   address.value = loc.address
 
-  // 已登录:自动保存到我的资料(与兴趣标签保存逻辑 handleTagsConfirmed 的分支结构一致)
-  if (userStore.isLoggedIn) {
-    try {
-      const profile = await updateProfile({
-        address: loc.address,
-        latitude: loc.latitude,
-        longitude: loc.longitude,
-      })
-      // 同步 store,使用后端权威返回值
-      userStore.setLocation(
-        profile.location ?? { latitude: loc.latitude, longitude: loc.longitude },
-        profile.address ?? loc.address,
-      )
-    }
-    catch (e) {
-      console.error('[index] updateProfile failed:', e)
-      // 保存失败不写 store,避免持久化错误坐标;本地 ref 仅本次会话有效
-      uni.showToast({ title: '位置保存失败,请重试', icon: 'none' })
-    }
-  }
-  else {
-    // 未登录:仅更新本地状态用于本次匹配展示,不发起后端保存;
-    // 同时暂存到 storage,登录成功后由 restoreGuestProfile 自动回填到账号
+  if (!userStore.isLoggedIn) {
     userStore.setLocation(
       { latitude: loc.latitude, longitude: loc.longitude },
       loc.address,
@@ -409,7 +394,7 @@ function handleCircleClick(circleId: string): void {
 
     <!-- ====== 兴趣卡片 + 位置卡片 + 范围选择(纯输入/输出组件) ====== -->
     <MatchFilterBar
-      :user-tags="userTags"
+      :user-tags="effectiveTags"
       :latitude="latitude"
       :longitude="longitude"
       :address="address"

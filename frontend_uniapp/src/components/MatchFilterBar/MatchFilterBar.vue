@@ -44,6 +44,8 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   /** 点击兴趣编辑/去选择按钮 */
   (e: 'edit-tags'): void
+  /** 点击清除兴趣标签(清空全部):仅通知父级,清空/匹配由父级决定 */
+  (e: 'clear-tags'): void
   /** 内嵌 TagSelectorPopup confirm:仅转发选择结果,保存由父级决定 */
   (e: 'confirm-tags', tags: string[]): void
   /** 位置选点完成(透传 LocationSetter) */
@@ -118,7 +120,7 @@ function handleTagsConfirmed(tags: string[]): void {
   <view>
     <!-- ====== 我的兴趣卡片 ====== -->
     <view class="mx-4 mt-3 rounded-2xl bg-white p-4 shadow-sm">
-      <view class="flex items-center justify-between">
+      <view class="flex flex-wrap items-center justify-between gap-y-2">
         <view class="flex items-center gap-2">
           <view class="i-carbon:tag text-[18px] text-[#018d71]" />
           <text class="text-sm text-[#333] font-medium">
@@ -135,9 +137,14 @@ function handleTagsConfirmed(tags: string[]): void {
             </text>
           </view>
         </view>
-        <wd-button type="primary" size="small" variant="text" @click="handleEditTags">
-          {{ tagsReady ? '编辑' : '去选择' }} ›
-        </wd-button>
+        <view class="flex shrink-0 items-center gap-1">
+          <wd-button v-if="tagsReady" type="info" size="small" variant="text" @click="emit('clear-tags')">
+            清除
+          </wd-button>
+          <wd-button type="primary" size="small" variant="text" @click="handleEditTags">
+            {{ tagsReady ? '编辑' : '去选择' }} ›
+          </wd-button>
+        </view>
       </view>
       <view v-if="tagsReady" class="mt-3 flex flex-wrap gap-2">
         <text

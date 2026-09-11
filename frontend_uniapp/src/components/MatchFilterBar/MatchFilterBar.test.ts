@@ -1,28 +1,24 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import MatchFilterBar from './MatchFilterBar.vue'
 
-// 阻断真实子组件模块加载(vitest 会自动 hoist vi.mock, 不影响顺序):
+// 子组件用 stubs 隔离真实实现:
 // - LocationSetter 内部 #ifdef H5 会引入 H5LocationPicker → @/utils/amap → @/utils → @/pages.json
 //   (pages.json 含 uni 条件编译注释, vitest 的 vite:json 无法解析)
 // - TagSelectorPopup 依赖 api/store/dialog 等, 测试只关心透传行为
-vi.mock('@/components/LocationSetter/LocationSetter.vue', () => ({
-  default: {
-    name: 'LocationSetter',
-    props: ['latitude', 'longitude', 'address', 'title'],
-    emits: ['update:location'],
-    template: '<view class="location-setter-stub" @click="$emit(\'update:location\', { latitude: 1, longitude: 2, address: \'测试地址\' })" />',
-  },
-}))
+const LocationSetterStub = {
+  name: 'LocationSetter',
+  props: ['latitude', 'longitude', 'address', 'title'],
+  emits: ['update:location'],
+  template: '<view class="location-setter-stub" @click="$emit(\'update:location\', { latitude: 1, longitude: 2, address: \'测试地址\' })" />',
+}
 
-vi.mock('@/components/TagSelectorPopup/TagSelectorPopup.vue', () => ({
-  default: {
-    name: 'TagSelectorPopup',
-    props: ['modelValue', 'initialTags'],
-    emits: ['confirm', 'cancel', 'update:modelValue'],
-    template: '<view class="tag-selector-popup-stub" />',
-  },
-}))
+const TagSelectorPopupStub = {
+  name: 'TagSelectorPopup',
+  props: ['modelValue', 'initialTags'],
+  emits: ['confirm', 'cancel', 'update:modelValue'],
+  template: '<view class="tag-selector-popup-stub" />',
+}
 
 const WdButtonStub = {
   name: 'WdButton',
@@ -60,6 +56,8 @@ function mountBar(props: Record<string, unknown> = {}) {
         'wd-button': WdButtonStub,
         'wd-input': WdInputStub,
         'scroll-view': ScrollViewStub,
+        LocationSetter: LocationSetterStub,
+        TagSelectorPopup: TagSelectorPopupStub,
       },
     },
   })
@@ -82,10 +80,27 @@ describe('匹配过滤栏组件', () => {
 
   it('点击兴趣编辑按钮 emit edit-tags 并打开内嵌弹窗', async () => {
     const wrapper = mountBar({ userTags: ['跑步'] })
-    await wrapper.find('.wd-button-stub').trigger('click')
+    const editBtn = wrapper.findAll('.wd-button-stub').find(b => b.text().includes('编辑'))
+    expect(editBtn).toBeTruthy()
+    await editBtn!.trigger('click')
     expect(wrapper.emitted('edit-tags')).toHaveLength(1)
     // 弹窗显隐由组件自管:点击后 modelValue 置为 true
     expect(wrapper.findComponent({ name: 'TagSelectorPopup' }).props('modelValue')).toBe(true)
+  })
+
+  it('已选兴趣时点击清除按钮 emit clear-tags,组件自身不清空标签展示', async () => {
+    const wrapper = mountBar({ userTags: ['跑步', '阅读'] })
+    const clearBtn = wrapper.findAll('.wd-button-stub').find(b => b.text() === '清除')
+    expect(clearBtn).toBeTruthy()
+    await clearBtn!.trigger('click')
+    expect(wrapper.emitted('clear-tags')).toHaveLength(1)
+    // 是否清空由父级决定:组件仅通知,不改自身展示
+    expect(wrapper.text()).toContain('跑步')
+  })
+
+  it('未选择兴趣时不渲染清除按钮', () => {
+    const wrapper = mountBar({ userTags: [] })
+    expect(wrapper.findAll('.wd-button-stub').find(b => b.text() === '清除')).toBeFalsy()
   })
 
   it('内嵌 TagSelectorPopup confirm 时透传 confirm-tags', async () => {

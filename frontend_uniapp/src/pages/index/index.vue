@@ -119,6 +119,43 @@ const latitude = ref<number | null>(matchStore.location?.latitude ?? user.value?
 const longitude = ref<number | null>(matchStore.location?.longitude ?? user.value?.location?.longitude ?? null)
 const address = ref<string>(user.value?.address || '')
 
+/**
+ * 本次会话用户是否在首页手动选过位置。
+ * 手动选择优先:置位后不再被账号资料默认地址覆盖,登录完成时重置。
+ */
+let locationPicked = false
+
+/**
+ * 已登录且账号已设置位置时,用账号资料的坐标/地址回填首页默认位置。
+ * - 仅更新首页筛选状态,不写入账号资料;
+ * - 返回是否发生实际变化,调用方据此决定是否重新匹配(避免重复请求)。
+ */
+function applyAccountLocation(): boolean {
+  const loc = user.value?.location
+  if (!userStore.isLoggedIn || loc?.latitude == null || loc?.longitude == null)
+    return false
+  const nextAddress = user.value?.address || ''
+  const changed = latitude.value !== loc.latitude
+    || longitude.value !== loc.longitude
+    || address.value !== nextAddress
+  latitude.value = loc.latitude
+  longitude.value = loc.longitude
+  address.value = nextAddress
+  return changed
+}
+
+/**
+ * 登录完成(未登录 → 已登录):首页筛选恢复为账号资料默认值。
+ * - 兴趣标签:重置为跟随账号标签(filterTags = null),登录前的手动筛选不再保留;
+ * - 位置:清除手动标记,回到首页时由 onShow 用账号地址回填。
+ */
+watch(() => userStore.isLoggedIn, (loggedIn) => {
+  if (!loggedIn)
+    return
+  filterTags.value = null
+  locationPicked = false
+})
+
 const rangeKm = ref<number>(5)
 const loading = ref(false)
 const items = ref<MixedItem[]>([])
@@ -201,6 +238,11 @@ onShow(() => {
   void fetchUnreadCount()
   // 昵称为纯数字时引导完善资料(不影响下方定位/匹配流程)
   maybeOpenProfileSetup()
+  // 已登录且未手动选过位置:默认填写账号资料的地址(登录 / 资料页更新后同步)
+  if (!locationPicked && applyAccountLocation()) {
+    loadAll(latitude.value!, longitude.value!, rangeKm.value)
+    return
+  }
   // 同步 store 与 user 中已有的位置(可能在 profile 页刚被更新)
   if (!latitude.value || !longitude.value) {
     if (user.value?.location?.latitude && user.value?.location?.longitude) {
@@ -247,6 +289,19 @@ function handleTagsConfirmed(tags: string[]): void {
     userStore.setTags(tags)
     saveGuestTags(tags)
   }
+  if (latitude.value != null && longitude.value != null) {
+    loadAll(latitude.value, longitude.value, rangeKm.value)
+  }
+}
+
+/**
+ * 清除首页全部兴趣标签:仅清空本次匹配的筛选条件。
+ * - 不调用 saveGuestTags:清除结果不写入本地暂存,不参与登录后回填;
+ * - 不写入账号标签/用户资料(与其他首页筛选操作一致);
+ * - 清空后按距离展示附近的人与圈子(匹配请求不带 tags)。
+ */
+function handleClearTags(): void {
+  filterTags.value = []
   if (latitude.value != null && longitude.value != null) {
     loadAll(latitude.value, longitude.value, rangeKm.value)
   }
@@ -315,10 +370,12 @@ function handleRangeChange(range: number): void {
 
 /**
  * LocationSetter 选点完成:仅作为本次匹配的筛选条件。
- * - 已登录:不写入账号地址/坐标(用户资料不被首页操作修改),下次进入以账号资料为默认值;
+ * - 已登录:不写入账号地址/坐标(用户资料不被首页操作修改),本次会话内以手动选择优先;
  * - 未登录:更新本地状态并暂存 storage,登录成功后由 restoreGuestProfile 回填到账号。
  */
 function handleLocationUpdated(loc: { latitude: number, longitude: number, address: string }): void {
+  // 用户手动选择位置:本次会话优先,不再被账号资料默认地址覆盖
+  locationPicked = true
   // 先更新本地坐标/地址,让 UI 立即回显(仅本次会话有效)
   latitude.value = loc.latitude
   longitude.value = loc.longitude
@@ -401,6 +458,7 @@ function handleCircleClick(circleId: string): void {
       :range-km="rangeKm"
       :ready="ready"
       @confirm-tags="handleTagsConfirmed"
+      @clear-tags="handleClearTags"
       @update:location="handleLocationUpdated"
       @change-range="handleRangeChange"
     />

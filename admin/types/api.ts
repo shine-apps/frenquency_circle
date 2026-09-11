@@ -467,3 +467,73 @@ export type SystemSettingDTO = {
   key: string
   value: unknown
 }
+
+// ---- MBTI 人格测试 ----
+
+/** MBTI 题目 DTO(仅返回参与测试所需的字段,不含答案倾向字母) */
+export type MbtiQuestionDTO = {
+  id: string
+  dimension: "EI" | "SN" | "TF" | "JP"
+  stem: string
+  optionA: string
+  optionB: string
+  sortOrder: number
+}
+
+/** MBTI 单个维度的计票结果(用于结果页得分条) */
+export type MbtiDimensionScoreDTO = {
+  dimension: "EI" | "SN" | "TF" | "JP"
+  first: string
+  second: string
+  firstCount: number
+  secondCount: number
+}
+
+/** MBTI 人格类型 DTO */
+export type MbtiTypeDTO = {
+  code: string
+  name: string
+  nickname: string | null
+  description: string
+  strengths: string[]
+  weaknesses: string[]
+}
+
+/** MBTI 兴趣推荐项 DTO(来自概率矩阵,JOIN 标签库取名称与分类) */
+export type MbtiHobbyRecommendationDTO = {
+  /** 兴趣标签 id(hobby_tags.id) */
+  hobbyTagId: string
+  /** 兴趣标签名称(hobby_tags.name) */
+  tagName: string
+  /** 所属分类名称(标签挂载节点名) */
+  categoryName: string | null
+  /** 推荐概率/权重 0-100 */
+  matchProbability: number
+  /** 该兴趣适合该人格的解释文案 */
+  reason: string
+}
+
+/** MBTI 测试提交响应 */
+export type MbtiSubmitResultDTO = {
+  resultType: string
+  dimensionScores: MbtiDimensionScoreDTO[]
+  type: MbtiTypeDTO
+  recommendations: MbtiHobbyRecommendationDTO[]
+  /** 本次结果是否已保存到历史(登录用户 true,游客 false) */
+  saved: boolean
+  /** 保存的记录 id(saved 为 true 时有值) */
+  recordId: string | null
+}
+
+/** MBTI 测试历史记录列表项 DTO */
+export type MbtiTestRecordDTO = {
+  id: string
+  resultType: string
+  dimensionScores: MbtiDimensionScoreDTO[]
+  createdAt: string
+}
+
+/** MBTI 类型详情 DTO(含按概率排序的爱好推荐) */
+export type MbtiTypeDetailDTO = MbtiTypeDTO & {
+  recommendations: MbtiHobbyRecommendationDTO[]
+}

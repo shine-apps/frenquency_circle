@@ -899,3 +899,250 @@ export const systemSettings = pgTable("system_settings", {
 
 export type SystemSetting = typeof systemSettings.$inferSelect
 export type NewSystemSetting = typeof systemSettings.$inferInsert
+
+// ============================================================================
+// MBTI 人格测试模块
+// ============================================================================
+
+/**
+ * MBTI 维度字面量联合:
+ * - `EI` 外向/内向
+ * - `SN` 实感/直觉
+ * - `TF` 思考/情感
+ * - `JP` 判断/知觉
+ *
+ * 与项目既有惯例一致:用 `text` 列 + TS 联合类型,不用 pgEnum。
+ */
+export const MBTI_DIMENSIONS = ["EI", "SN", "TF", "JP"] as const
+export type MbtiDimension = (typeof MBTI_DIMENSIONS)[number]
+
+/**
+ * MBTI 维度倾向字母字面量联合(选项计分字母的取值域)。
+ */
+export const MBTI_LETTERS = ["E", "I", "S", "N", "T", "F", "J", "P"] as const
+export type MbtiLetter = (typeof MBTI_LETTERS)[number]
+
+/**
+ * MBTI 16 型代码字面量联合。
+ */
+export const MBTI_TYPE_CODES = [
+  "INTJ",
+  "INTP",
+  "ENTJ",
+  "ENTP",
+  "INFJ",
+  "INFP",
+  "ENFJ",
+  "ENFP",
+  "ISTJ",
+  "ISFJ",
+  "ESTJ",
+  "ESFJ",
+  "ISTP",
+  "ISFP",
+  "ESTP",
+  "ESFP",
+] as const
+export type MbtiTypeCode = (typeof MBTI_TYPE_CODES)[number]
+
+/**
+ * MBTI 题目 / 推荐条目的状态字面量联合:
+ * - `active`   启用(参与测试与推荐)
+ * - `disabled` 停用(不参与测试与推荐)
+ */
+export const MBTI_ITEM_STATUSES = ["active", "disabled"] as const
+export type MbtiItemStatus = (typeof MBTI_ITEM_STATUSES)[number]
+
+/**
+ * MBTI 测试题目表。
+ *
+ * 每题归属一个维度(dimension),提供 A/B 两个选项,
+ * 选项计分字母(optionAScore/optionBScore)指向该维度的一对倾向字母
+ * (如 dimension='EI' 时二者分别为 'E'/'I')。
+ * 题目内容参考开源量表 OEJTS(openpsychometrics.org, CC BY-NC-SA 4.0)中文改写。
+ */
+export const mbtiQuestions = pgTable(
+  "mbti_questions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** 题目所属维度(EI | SN | TF | JP) */
+    dimension: text("dimension").$type<MbtiDimension>().notNull(),
+    /** 题干 */
+    stem: text("stem").notNull(),
+    /** 选项 A 文案 */
+    optionA: text("option_a").notNull(),
+    /** 选项 B 文案 */
+    optionB: text("option_b").notNull(),
+    /** 选项 A 计分字母(E/I/S/N/T/F/J/P 之一) */
+    optionAScore: text("option_a_score").$type<MbtiLetter>().notNull(),
+    /** 选项 B 计分字母(与 optionAScore 同维度的一对字母) */
+    optionBScore: text("option_b_score").$type<MbtiLetter>().notNull(),
+    /** 排序权重(展示顺序,按 sortOrder 升序 + createdAt 排序) */
+    sortOrder: integer("sort_order").notNull().default(0),
+    /** 状态:active 参与测试 / disabled 停用 */
+    status: text("status")
+      .$type<MbtiItemStatus>()
+      .notNull()
+      .default("active"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // 出题顺序:按 sortOrder 升序取题
+    index("mbti_questions_sort_idx").on(table.sortOrder),
+    // 按维度 + 排序查询(计分器按题目 dimension 归属累加)
+    index("mbti_questions_dimension_sort_idx").on(table.dimension, table.sortOrder),
+  ]
+)
+
+export type MbtiQuestion = typeof mbtiQuestions.$inferSelect
+export type NewMbtiQuestion = typeof mbtiQuestions.$inferInsert
+
+/**
+ * MBTI 16 型人格字典表。
+ *
+ * code 全局唯一('INTJ' 等 16 个),承载展示文案:名称/别称/描述/优劣势。
+ * seed 幂等 upsert(按 code),管理后台可编辑文案。
+ */
+export const mbtiTypes = pgTable("mbti_types", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  /** 类型代码(如 'INTJ'),全局唯一 */
+  code: text("code").$type<MbtiTypeCode>().notNull().unique(),
+  /** 类型名称(如"建筑师") */
+  name: text("name").notNull(),
+  /** 别称(如"策略家"),可空 */
+  nickname: text("nickname"),
+  /** 类型描述(展示于结果页与类型详情页) */
+  description: text("description").notNull(),
+  /** 优势特质列表(JSONB 字符串数组) */
+  strengths: jsonb("strengths")
+    .$type<string[]>()
+    .notNull()
+    .default(sql`'[]'::jsonb`),
+  /** 弱点特质列表(JSONB 字符串数组) */
+  weaknesses: jsonb("weaknesses")
+    .$type<string[]>()
+    .notNull()
+    .default(sql`'[]'::jsonb`),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+})
+
+export type MbtiType = typeof mbtiTypes.$inferSelect
+export type NewMbtiType = typeof mbtiTypes.$inferInsert
+
+/**
+ * 兴趣 × MBTI 16 型推荐概率矩阵表。
+ *
+ * 每行 = 一个兴趣标签(hobby_tags)对一个 MBTI 类型的推荐概率:
+ * - `hobbyTagId` 外键指向 hobby_tags.id(restrict 删除),保证推荐必须来自现有标签库;
+ * - `typeCode` 外键指向 mbti_types.code(cascade 删除),校验类型合法性;
+ * - `matchProbability` 0-100 的推荐权重,结果页按该类型下权重降序取 top-N;
+ * - `reason` 该兴趣适合该人格的解释文案。
+ *
+ * 未入库的 (tag, type) 组合视为概率 0,无需全矩阵入库。
+ */
+export const mbtiHobbyScores = pgTable(
+  "mbti_hobby_scores",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** 兴趣标签(必须来自 hobby_tags 现有记录,restrict 防误删被引用标签) */
+    hobbyTagId: uuid("hobby_tag_id")
+      .notNull()
+      .references(() => hobbyTags.id, { onDelete: "restrict" }),
+    /** MBTI 类型代码 */
+    typeCode: text("type_code")
+      .$type<MbtiTypeCode>()
+      .notNull()
+      .references(() => mbtiTypes.code, { onDelete: "cascade" }),
+    /** 推荐概率/权重(0-100,越大越优先推荐) */
+    matchProbability: integer("match_probability").notNull(),
+    /** 该兴趣适合该人格的解释文案 */
+    reason: text("reason").notNull(),
+    /** 排序权重(同概率时的稳定排序) */
+    sortOrder: integer("sort_order").notNull().default(0),
+    /** 状态:active 参与推荐 / disabled 停用 */
+    status: text("status")
+      .$type<MbtiItemStatus>()
+      .notNull()
+      .default("active"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // 一个兴趣对一个类型只有一条概率记录
+    uniqueIndex("mbti_hobby_scores_tag_type_idx").on(
+      table.hobbyTagId,
+      table.typeCode
+    ),
+    // 结果页核心查询路径:按类型取概率降序 top-N
+    index("mbti_hobby_scores_type_prob_idx").on(
+      table.typeCode,
+      table.matchProbability
+    ),
+    // 约束:概率取值 0-100
+    check(
+      "mbti_hobby_scores_probability_check",
+      sql`${table.matchProbability} between 0 and 100`
+    ),
+  ]
+)
+
+export type MbtiHobbyScore = typeof mbtiHobbyScores.$inferSelect
+export type NewMbtiHobbyScore = typeof mbtiHobbyScores.$inferInsert
+
+/**
+ * MBTI 测试记录表(仅登录用户落库,游客结果不保存)。
+ *
+ * - `answers` 提交时的原始答案(JSONB 字符串数组,如 ['A','B',...],与题目顺序对应);
+ * - `dimensionScores` 各维度计票快照(JSONB,如 { EI: { E: 3, I: 4 }, ... });
+ * - `resultType` 四字母结果代码。
+ */
+export const mbtiTestRecords = pgTable(
+  "mbti_test_records",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** 测试者(登录用户;游客提交不写库) */
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** 原始答案快照(JSONB 字符串数组,与题目顺序一一对应) */
+    answers: jsonb("answers").$type<string[]>().notNull(),
+    /** 测试结果类型代码(如 'ENFP') */
+    resultType: text("result_type").$type<MbtiTypeCode>().notNull(),
+    /** 各维度计票快照(JSONB) */
+    dimensionScores: jsonb("dimension_scores")
+      .$type<
+        {
+          dimension: "EI" | "SN" | "TF" | "JP"
+          first: string
+          second: string
+          firstCount: number
+          secondCount: number
+        }[]
+      >()
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // 历史记录列表:按用户 + 时间倒序
+    index("mbti_test_records_user_created_idx").on(table.userId, table.createdAt),
+  ]
+)
+
+export type MbtiTestRecord = typeof mbtiTestRecords.$inferSelect
+export type NewMbtiTestRecord = typeof mbtiTestRecords.$inferInsert

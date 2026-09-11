@@ -11,9 +11,16 @@ import {
   circleMembers,
   accounts,
   systemSettings,
+  mbtiQuestions,
+  mbtiTypes,
+  mbtiHobbyScores,
+  type MbtiTypeCode,
   type UserRole,
   type ActivityLevel,
 } from "@/db/schema"
+import { MBTI_QUESTION_SEEDS } from "@/lib/mbti/seed-data/questions"
+import { MBTI_TYPE_SEEDS } from "@/lib/mbti/seed-data/mbti-types"
+import { MBTI_HOBBY_SCORE_SEEDS } from "@/lib/mbti/seed-data/hobby-scores"
 
 /**
  * 计算标签的拼音全拼与首字母。
@@ -545,6 +552,9 @@ async function main() {
   // users.tags / circles.tags 为独立 text[] 数组(按标签名引用),重建后同名标签仍存在,
   // 不会丢失用户/圈子的兴趣关联。仅在需要重置分类结构时执行,生产环境请谨慎。
   console.log("→ 清理旧分类与标签(全量重建)…")
+  // mbti_hobby_scores.hobby_tag_id 对 hobby_tags 为 restrict,必须先删 MBTI 概率矩阵再删标签
+  await db.delete(mbtiHobbyScores)
+  await db.delete(mbtiQuestions)
   await db.delete(hobbyTags)
   await db.delete(categories)
 
@@ -700,7 +710,92 @@ async function main() {
       })
   }
 
-  // === 10. 插入系统设置(幂等:key 冲突时跳过) ===
+  // === 10. MBTI 种子数据(题目全量重建;类型 upsert;概率矩阵全量重建) ===
+  console.log("→ 插入 MBTI 题目…")
+  await db.insert(mbtiQuestions).values(
+    MBTI_QUESTION_SEEDS.map((q) => ({
+      dimension: q.dimension,
+      stem: q.stem,
+      optionA: q.optionA,
+      optionB: q.optionB,
+      optionAScore: q.optionAScore,
+      optionBScore: q.optionBScore,
+      sortOrder: q.sortOrder,
+      status: "active" as const,
+    }))
+  )
+
+  console.log("→ 插入 MBTI 16 型文案(按 code upsert,保留后台可能的文案微调)…")
+  for (const t of MBTI_TYPE_SEEDS) {
+    await db
+      .insert(mbtiTypes)
+      .values({
+        code: t.code,
+        name: t.name,
+        nickname: t.nickname,
+        description: t.description,
+        strengths: t.strengths,
+        weaknesses: t.weaknesses,
+      })
+      .onConflictDoUpdate({
+        target: mbtiTypes.code,
+        set: {
+          name: t.name,
+          nickname: t.nickname,
+          description: t.description,
+          strengths: t.strengths,
+          weaknesses: t.weaknesses,
+          updatedAt: new Date(),
+        },
+      })
+  }
+
+  console.log("→ 插入 MBTI 兴趣推荐概率矩阵…")
+  // 收集概率矩阵引用的全部标签名并映射 hobby_tags.id(引用必须命中现有标签库)
+  const scoreTagNames = [
+    ...new Set(
+      Object.values(MBTI_HOBBY_SCORE_SEEDS).flatMap((entries) =>
+        entries.map((e) => e.tagName)
+      )
+    ),
+  ]
+  const scoreTagRows = await db
+    .select({ id: hobbyTags.id, name: hobbyTags.name })
+    .from(hobbyTags)
+    .where(inArray(hobbyTags.name, scoreTagNames))
+  const scoreTagIdByName = new Map(scoreTagRows.map((r) => [r.name, r.id]))
+
+  const mbtiScoreRows: {
+    hobbyTagId: string
+    typeCode: MbtiTypeCode
+    matchProbability: number
+    reason: string
+    sortOrder: number
+    status: "active"
+  }[] = []
+  for (const [typeCode, entries] of Object.entries(MBTI_HOBBY_SCORE_SEEDS)) {
+    entries.forEach((entry, idx) => {
+      const tagId = scoreTagIdByName.get(entry.tagName)
+      if (!tagId) {
+        throw new Error(
+          `MBTI 推荐矩阵引用的标签 "${entry.tagName}" 不在兴趣标签库中,请核对 seed 数据`
+        )
+      }
+      mbtiScoreRows.push({
+        hobbyTagId: tagId,
+        typeCode: typeCode as MbtiTypeCode,
+        matchProbability: entry.matchProbability,
+        reason: entry.reason,
+        sortOrder: idx,
+        status: "active",
+      })
+    })
+  }
+  if (mbtiScoreRows.length > 0) {
+    await db.insert(mbtiHobbyScores).values(mbtiScoreRows)
+  }
+
+  // === 11. 插入系统设置(幂等:key 冲突时跳过) ===
   console.log("→ 插入系统设置…")
   const settingSeeds = [
     { key: "app_name", value: { zh: "趣邻圈", en: "QuLinQuan" } },
@@ -716,7 +811,7 @@ async function main() {
     .onConflictDoNothing({ target: systemSettings.key })
 
   console.log(
-    `✅ Seeded ${userSeeds.length} users, ${TAG_DEFINITIONS.length} tag definitions, ${circleSeeds.length} circles, ${settingSeeds.length} settings.`
+    `✅ Seeded ${userSeeds.length} users, ${TAG_DEFINITIONS.length} tag definitions, ${circleSeeds.length} circles, ${settingSeeds.length} settings, ${MBTI_QUESTION_SEEDS.length} mbti questions, ${mbtiScoreRows.length} mbti hobby scores.`
   )
   process.exit(0)
 }

@@ -9,6 +9,7 @@ import {
   FolderTreeIcon,
   CircleIcon,
   FileCheckIcon,
+  BrainIcon,
   SettingsIcon,
 } from "lucide-react"
 
@@ -32,6 +33,7 @@ const navItems = [
   { href: "/admin/taxonomy", label: "分类与标签", icon: FolderTreeIcon },
   { href: "/admin/circles", label: "圈子审核", icon: CircleIcon },
   { href: "/admin/teacher-applications", label: "教师认证", icon: FileCheckIcon },
+  { href: "/admin/mbti", label: "MBTI 测试", icon: BrainIcon },
   { href: "/admin/settings", label: "系统设置", icon: SettingsIcon },
 ]
 

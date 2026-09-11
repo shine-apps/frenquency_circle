@@ -64,6 +64,13 @@
       "when": 1789000000000,
       "tag": "0008_wechat_cleanup",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789117036645,
+      "tag": "0009_mbti_module",
+      "breakpoints": true
     }
   ]
 }

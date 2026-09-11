@@ -247,6 +247,11 @@ function handlePrivacy() {
   uni.navigateTo({ url: '/pages/privacy/privacy' })
 }
 
+/** 跳 MBTI 人格测试介绍页 */
+function handleMbti() {
+  uni.navigateTo({ url: '/pages/mbti/intro' })
+}
+
 /** 跳关于页 */
 function handleAbout() {
   uni.navigateTo({ url: '/pages/about/about' })
@@ -511,6 +516,20 @@ const roleChipClass = computed(() => {
         <text class="text-sm text-[#ccc]">
           ›
         </text>
+      </view>
+
+      <view class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4" @click="handleMbti">
+        <text class="text-sm text-[#333] font-medium">
+          MBTI 人格测试
+        </text>
+        <view class="flex items-center gap-2">
+          <text class="text-xs text-[#999]">
+            测测你适合什么兴趣
+          </text>
+          <text class="text-sm text-[#ccc]">
+            ›
+          </text>
+        </view>
       </view>
 
       <view class="flex items-center justify-between px-4 py-4" @click="handleAbout">

@@ -20,7 +20,7 @@ import type {
 } from '@/types'
 
 definePage({
-  layout: 'navbar',
+  layout: 'default',
   style: {
     navigationBarTitleText: '测试结果',
   },

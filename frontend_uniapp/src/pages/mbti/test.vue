@@ -5,7 +5,7 @@ import { useMbtiStore } from '@/store/mbti'
 import type { MbtiQuestionDTO } from '@/types'
 
 definePage({
-  layout: 'navbar',
+  layout: 'default',
   style: {
     navigationBarTitleText: 'MBTI 答题',
   },

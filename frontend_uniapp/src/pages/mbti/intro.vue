@@ -6,7 +6,7 @@ import { goHomeMatchWithTags } from '@/utils/matchLink'
 import { HOME_PAGE_PATH } from '@/router/config'
 
 definePage({
-  layout: 'navbar',
+  layout: 'default',
   style: {
     navigationBarTitleText: 'MBTI 人格测试',
   },

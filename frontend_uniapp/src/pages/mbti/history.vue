@@ -9,7 +9,7 @@ import { formatDateTime } from '@/utils/format'
 import type { MbtiTestRecordDTO } from '@/types'
 
 definePage({
-  layout: 'navbar',
+  layout: 'default',
   style: {
     navigationBarTitleText: 'MBTI 历史记录',
   },

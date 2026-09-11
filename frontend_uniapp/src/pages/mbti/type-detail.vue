@@ -11,7 +11,7 @@ import {
 import type { MbtiTypeDetailDTO } from '@/types'
 
 definePage({
-  layout: 'navbar',
+  layout: 'default',
   style: {
     navigationBarTitleText: '人格详情',
   },

@@ -11,7 +11,7 @@ import {
 import type { MbtiTypeDTO } from '@/types'
 
 definePage({
-  layout: 'navbar',
+  layout: 'default',
   style: {
     navigationBarTitleText: '16 型人格',
   },

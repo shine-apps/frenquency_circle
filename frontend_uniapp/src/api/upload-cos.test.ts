@@ -26,10 +26,11 @@ vi.mock('@/utils/cos-client', () => ({
   getCosClient: getCosClientMock,
 }))
 vi.mock('@/utils', () => ({
-  // token.ts 在模块加载期会读 isDoubleTokenMode;为避免引入真实 pages.json,显式提供
+  // 避免加载真实 src/utils/index.ts(其依赖 pages.json,含 uni 注释)
   getEnvBaseUrl: () => 'http://localhost:3000',
-  isDoubleTokenMode: false,
   HOME_PAGE: '/pages/index/index',
+  // @/utils/toLoginPage → @/router/config 在模块顶层会调用 getAllPages
+  getAllPages: () => [],
 }))
 
 const STUB_CREDS = {

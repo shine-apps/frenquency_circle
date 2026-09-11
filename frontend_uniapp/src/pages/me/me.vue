@@ -262,7 +262,8 @@ function handleLogout() {
     success(res) {
       if (res.confirm) {
         tokenStore.logout()
-        uni.reLaunch({ url: LOGIN_PAGE })
+        // noAutoWx=1:让登录页跳过自动静默微信登录,否则退出后会被立即重新登入
+        uni.reLaunch({ url: `${LOGIN_PAGE}?noAutoWx=1` })
       }
     },
   })

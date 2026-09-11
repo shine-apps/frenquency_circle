@@ -15,19 +15,6 @@ declare global {
     name?: string
     formData?: any
   }
-
-  interface IUserInfo {
-    nickname?: string
-    avatar?: string
-    /** 微信的 openid，非微信没有这个字段 */
-    openid?: string
-  }
-
-  interface IUserToken {
-    token: string
-    refreshToken?: string
-    refreshExpire?: number
-  }
 }
 
 // 扩展 @uni-helper/vite-plugin-uni-pages 的 definePage 参数类型
@@ -45,7 +32,7 @@ declare module '@uni-helper/vite-plugin-uni-pages' {
      *
      * 当前属性供 https://github.com/uni-helper/vite-plugin-uni-layouts 插件使用
      */
-    layout?: 'default'  | false
+    layout?: 'default' | false
     /**
      * 是否从需要登录的路径中排除
      *

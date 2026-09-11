@@ -77,24 +77,18 @@ export function fromUserDTO(dto: UserDTO | UserProfile): Partial<UserInfo> {
   return patch
 }
 
-/** 获取当前登录用户(校验 token + 刷新用户信息) */
-export function fetchCurrentUser() {
-  return http.get<UserDTO>('/api/auth/me')
+/**
+ * 获取当前登录用户的完整资料(含 tags / privacySettings / 业务字段)。
+ * - 走 `GET /api/auth/me`,后端返回 UserProfileDTO
+ * - `PATCH /api/auth/me` 的响应是 UserDTO(无 tags),同一接口但类型不同
+ */
+export function getMyProfile() {
+  return http.get<UserProfile>('/api/auth/me')
 }
 
 /** 更新当前登录用户自己的资料(昵称 / 邮箱 / 头像 URL) */
 export function updateMyProfile(patch: UpdateMyProfileInput) {
   return http.patch<UserDTO>('/api/auth/me', { ...patch })
-}
-
-/**
- * 获取当前登录用户的完整资料(含 tags / privacySettings / 业务字段)。
- * - 走 `GET /api/auth/me`,后端返回 UserProfileDTO
- * - 与 `fetchCurrentUser` 区别:后者返回 UserDTO(无 tags),仅用于 token 校验;
- *   本函数用于需要完整资料的页面(个人中心、隐私设置等)
- */
-export function getMyProfile() {
-  return http.get<UserProfile>('/api/auth/me')
 }
 
 /**
@@ -132,6 +126,49 @@ export async function updatePrivacy(settings: PrivacySettings): Promise<PrivacyS
  */
 export function updateProfile(patch: UpdateProfileInput) {
   return http.patch<UserProfile>('/api/users/me/profile', { ...patch })
+}
+
+/** 微信登录绑定状态(与后端 WechatBindStateDTO 对齐) */
+export interface WechatBindState {
+  /** 当前账号是否已绑定微信 */
+  bound: boolean
+}
+
+/**
+ * 查询当前账号的微信绑定状态。
+ * - GET /api/users/me/wechat
+ * - 绑定关系存后端 accounts 表(provider='wechat-miniprogram', providerAccountId=openid)
+ *
+ * 失败静默(隐藏 http 层 toast)：调用方(个人资料页)按需展示，避免进页面即弹错。
+ */
+export function getWechatBindStatus() {
+  return http.get<WechatBindState>('/api/users/me/wechat', undefined, undefined, {
+    hideErrorToast: true,
+  })
+}
+
+/**
+ * 绑定微信到当前账号(仅微信小程序端可调)。
+ * - POST /api/users/me/wechat,body `{ code }`(wx.login 的 js_code)
+ * - openid 已被其他账号绑定 → 409「该微信已绑定其他账号」
+ *
+ * @param code `wx.login()` 返回的 js_code
+ */
+export function bindWechat(code: string) {
+  return http.post<WechatBindState>('/api/users/me/wechat', { code }, undefined, undefined, {
+    hideErrorToast: true,
+  })
+}
+
+/**
+ * 解绑当前账号的微信绑定。
+ * - DELETE /api/users/me/wechat
+ * - 账号必须仍有其它登录方式(手机号/邮箱)，否则后端返回 400
+ */
+export function unbindWechat() {
+  return http.delete<WechatBindState>('/api/users/me/wechat', undefined, undefined, {
+    hideErrorToast: true,
+  })
 }
 
 /**

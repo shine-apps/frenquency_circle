@@ -27,8 +27,6 @@ interface ImportMetaEnv {
   readonly VITE_APP_PROXY_PREFIX: string
   /** 后端是否有统一前缀 /api */
   readonly VITE_SERVER_HAS_API_PREFIX: 'true' | 'false'
-  /** 认证模式，'single' | 'double' ==> 单token | 双token */
-  readonly VITE_AUTH_MODE: 'single' | 'double'
   /** 是否清除console */
   readonly VITE_DELETE_CONSOLE: string
   // 更多环境变量...

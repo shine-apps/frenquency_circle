@@ -141,6 +141,20 @@ export type AuthUser = {
 export type AuthLoginResponse = {
   token: string
   user: AuthUser
+  /**
+   * JWT 有效期(秒),与 `authConfig.session.maxAge` 同源。
+   * 前端据此设置本地过期时间,避免硬编码导致与后端实际有效期不一致。
+   */
+  expiresIn: number
+}
+
+/**
+ * 微信登录绑定状态(用于 /api/users/me/wechat)。
+ * 绑定关系存 accounts 表(provider='wechat-miniprogram', providerAccountId=openid)。
+ */
+export type WechatBindStateDTO = {
+  /** 当前账号是否已绑定微信 */
+  bound: boolean
 }
 
 /**

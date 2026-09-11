@@ -19,7 +19,9 @@ vi.mock("@/lib/logger", () => ({
   LOG_PREFIX: { AUTH: "AUTH", SMS: "SMS", ACCOUNT: "ACCOUNT", WECHAT: "WECHAT" },
 }))
 
+import { CredentialsSignin } from "next-auth"
 import { POST } from "@/app/api/auth/login/phone/route"
+import { SESSION_MAX_AGE_SECONDS } from "@/lib/auth/session-config"
 import type { AuthLoginResponse, IResponse } from "@/types/api"
 
 function makeRequest(body: unknown) {
@@ -86,6 +88,20 @@ describe("POST /api/auth/login/phone", () => {
     const body = (await res.json()) as IResponse<AuthLoginResponse>
     expect(body.data.token).toBe(FAKE_TOKEN)
     expect(body.data.user).toEqual(FAKE_USER)
+    expect(body.data.expiresIn).toBe(SESSION_MAX_AGE_SECONDS)
+  })
+
+  it("returns 401 when CredentialsSignin is thrown (wrong code)", async () => {
+    // 验证码错误时 authorize 返回 null → @auth/core 抛 CredentialsSignin,
+    // 必须映射为 401「手机号或验证码错误」,而不是 500
+    signInMock.mockRejectedValueOnce(new CredentialsSignin())
+
+    const res = await POST(
+      makeRequest({ phone: "13800138000", code: "123456" })
+    )
+    expect(res.status).toBe(401)
+    const body = (await res.json()) as IResponse<null>
+    expect(body.message).toBe("手机号或验证码错误")
   })
 
   it("returns 500 when signIn throws", async () => {

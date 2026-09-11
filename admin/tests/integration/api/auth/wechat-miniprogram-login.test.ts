@@ -72,13 +72,52 @@ describe("POST /api/auth/wechat-miniprogram/login", () => {
     expect(signInMock).not.toHaveBeenCalled()
   })
 
-  it("returns 400 when phoneCode is missing", async () => {
+  it("treats missing phoneCode as silent login (code only)", async () => {
+    const res = await POST(makeRequest({ code: "js-1" }))
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as IResponse<AuthLoginResponse>
+    expect(body.data.token).toBe(FAKE_TOKEN)
+    // 静默登录不携带 phoneCode 字段
+    expect(signInMock).toHaveBeenCalledWith("wechat-miniprogram", {
+      code: "js-1",
+      redirect: false,
+    })
+  })
+
+  it("maps wechat_not_bound credential error to 400 with readable message", async () => {
+    // Auth.js 会包装 authorize 抛出的普通 Error,故用 CredentialsSignin 子类的 code 传递语义
+    signInMock.mockRejectedValueOnce(
+      Object.assign(new Error("Sign in failed"), { code: "wechat_not_bound" })
+    )
+
     const res = await POST(makeRequest({ code: "js-1" }))
     expect(res.status).toBe(400)
     const body = (await res.json()) as IResponse<null>
     expect(body.code).toBe(400)
-    expect(body.message).toBe("无效的请求参数")
-    expect(signInMock).not.toHaveBeenCalled()
+    expect(body.message).toContain("未绑定账号")
+  })
+
+  it("maps wechat_api_error credential error to 400", async () => {
+    signInMock.mockRejectedValueOnce(
+      Object.assign(new Error("Sign in failed"), { code: "wechat_api_error" })
+    )
+
+    const res = await POST(makeRequest({ code: "js-1" }))
+    expect(res.status).toBe(400)
+    const body = (await res.json()) as IResponse<null>
+    expect(body.message).toContain("微信登录凭证校验失败")
+  })
+
+  it("passes through [WECHAT] errors as 400 (e.g. wechat not bound)", async () => {
+    signInMock.mockRejectedValueOnce(
+      new Error("[WECHAT] 该微信未绑定账号，请先用手机号或邮箱登录后在个人资料中绑定微信")
+    )
+
+    const res = await POST(makeRequest({ code: "js-1" }))
+    expect(res.status).toBe(400)
+    const body = (await res.json()) as IResponse<null>
+    expect(body.code).toBe(400)
+    expect(body.message).toContain("未绑定账号")
   })
 
   it("returns 400 when body is malformed JSON", async () => {

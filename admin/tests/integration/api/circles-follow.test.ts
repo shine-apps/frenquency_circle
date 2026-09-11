@@ -309,9 +309,9 @@ describe("GET /api/circles/followed", () => {
 
   it("returns paginated followed circles, excluding deleted circles", async () => {
     readUserFromTokenMock.mockResolvedValue(USER)
-    // select 1: 分页关注记录(2 条,按关注时间倒序)
+    // select 1: 该用户全部关注记录(2 条,按关注时间倒序)
     // select 2: 对应圈子行(c1 active + c2 deleted)
-    // select 3: 全部关注记录用于 total(2 条)
+    // total 在内存中按过滤后的可见关注数计算,与 list 口径一致
     setSelectResultsQueue([
       [
         { id: "f1", circleId: "c1", userId: USER.id, createdAt: new Date("2026-08-01T00:00:00Z") },
@@ -321,15 +321,14 @@ describe("GET /api/circles/followed", () => {
         makeCircleRow({ id: "c1" }),
         makeCircleRow({ id: "c2", status: "deleted" }),
       ],
-      [{ id: "f1" }, { id: "f2" }],
     ])
     const res = await getFollowedCircles(
       new Request("http://localhost/api/circles/followed?page=1&pageSize=20")
     )
     expect(res.status).toBe(200)
     const body = (await res.json()) as IResponse<Paginated<FollowedCircleDTO>>
-    expect(body.data.total).toBe(2)
-    // 已删除的 c2 被排除
+    // 已删除的 c2 被排除,且不计入 total(total 与 list 口径一致)
+    expect(body.data.total).toBe(1)
     expect(body.data.list).toHaveLength(1)
     expect(body.data.list[0].id).toBe("c1")
     expect(body.data.list[0].followedAt).toBe("2026-08-01T00:00:00.000Z")

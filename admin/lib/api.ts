@@ -49,6 +49,33 @@ const paginationSchema = z.object({
 export type Pagination = z.infer<typeof paginationSchema>
 
 /**
+ * 提取客户端 IP，用于限流等需要按来源区分的场景。
+ *
+ * 优先级与 `nginx.conf` 的代理配置配套：
+ * 1. `x-real-ip` —— nginx 设为 `$remote_addr`，由可信代理写入，**不可被客户端伪造**；
+ * 2. `x-forwarded-for` 的**最后一段** —— nginx 用 `$proxy_add_x_forwarded_for` 追加，
+ *    最后一段才是可信代理看到的地址。取首段会读到客户端可任意伪造的值，
+ *    从而绕过基于 IP 的限流（短信轰炸风险）；
+ * 3. 都没有时返回 `unknown`（此时无法按 IP 限流，仅保留手机号维度的限流）。
+ */
+export function getClientIp(req: Request): string {
+  const realIp = req.headers.get("x-real-ip")?.trim()
+  if (realIp) return realIp
+
+  const xff = req.headers.get("x-forwarded-for")
+  if (xff) {
+    const segments = xff
+      .split(",")
+      .map(segment => segment.trim())
+      .filter(Boolean)
+    const last = segments.at(-1)
+    if (last) return last
+  }
+
+  return "unknown"
+}
+
+/**
  * 解析分页参数。失败时返回 null，由调用方决定如何返回 4xx 响应。
  * 不再抛错，避免非法参数导致 500。
  */

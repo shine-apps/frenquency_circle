@@ -28,9 +28,9 @@ vi.mock('@/store/token', () => ({
 }))
 vi.mock('@/utils', () => ({
   getEnvBaseUrl: () => 'http://localhost:3000',
-  // http.ts 在模块加载期读取 isDoubleTokenMode
-  isDoubleTokenMode: false,
   HOME_PAGE: '/pages/index/index',
+  // @/utils/toLoginPage → @/router/config 在模块顶层会调用 getAllPages
+  getAllPages: () => [],
 }))
 
 /** 模拟一次 uni.request:success / fail 由 payload 决定 */
@@ -53,7 +53,7 @@ beforeEach(() => {
 })
 
 describe('api/cos-credentials', () => {
-  it('GETs /api/upload/cos-credentials via uni.request and unwraps the envelope', async () => {
+  it('gets /api/upload/cos-credentials via uni.request and unwraps the envelope', async () => {
     mockRequestOnce({
       statusCode: 200,
       data: { code: 200, data: STUB_CREDENTIALS, message: 'ok' },

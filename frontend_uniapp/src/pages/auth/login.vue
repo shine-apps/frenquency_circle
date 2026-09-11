@@ -1,8 +1,9 @@
 <script lang="ts" setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useTokenStore } from '@/store/token'
 import { HOME_PAGE_PATH } from '@/router/config'
 import { currRoute } from '@/utils'
+import { acceptAgreement, isAgreementAccepted } from '@/utils/agreement'
 
 definePage({
   layout: 'default',
@@ -35,6 +36,12 @@ const password = ref('')
 const agreed = ref(false)
 const submitting = ref(false)
 
+// 勾选协议即记录授权(设备维度):未同意前,进入登录页不会自动静默登录
+watch(agreed, (accepted) => {
+  if (accepted)
+    acceptAgreement()
+})
+
 let timer: ReturnType<typeof setInterval> | null = null
 
 /** 轻量提示,使用 uni 原生 showToast,跨端一致 */
@@ -50,11 +57,44 @@ onUnload(() => {
   }
 })
 
+// ===== 微信静默登录(仅微信小程序) =====
+// 页面进入即自动尝试:已绑定微信 → 直接登录并跳转(有 redirect 回来源页,否则回首页);
+// 未绑定/失败 → 静默忽略,保持手机号一键登录按钮与登录表单正常可用。
+// #ifdef MP-WEIXIN
+/** 是否已尝试过静默登录(防止 onShow 多次触发时重复请求) */
+let silentWxTried = false
+
+async function trySilentWechatLogin() {
+  if (silentWxTried)
+    return
+  silentWxTried = true
+  // 退出登录跳回本页时携带 noAutoWx=1:跳过静默登录,避免「退出后立即被重新登入」
+  if (currRoute().query.noAutoWx === '1')
+    return
+  // 合规:未同意《用户协议》/《隐私政策》前,不自动处理用户身份信息
+  if (!isAgreementAccepted())
+    return
+  try {
+    await tokenStore.loginByWechatSilent()
+  }
+  catch {
+    // 未绑定微信或静默登录失败:不打扰用户,继续展示登录页
+  }
+  // handleLoginSuccess 中途异常时 token 可能已写入,这里统一兜底跳转
+  if (tokenStore.updateNowTime().hasLogin)
+    goAfterLogin()
+}
+// #endif
+
 // 已登录用户直接跳首页(避免重复登录)
 onShow(() => {
   if (tokenStore.updateNowTime().hasLogin) {
     uni.reLaunch({ url: HOME_PAGE_PATH })
+    return
   }
+  // #ifdef MP-WEIXIN
+  trySilentWechatLogin()
+  // #endif
 })
 
 /** 发送短信验证码 */

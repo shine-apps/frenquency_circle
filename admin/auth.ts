@@ -1,4 +1,4 @@
-import NextAuth from "next-auth"
+import NextAuth, { CredentialsSignin } from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
 import { z } from "zod"
@@ -7,8 +7,10 @@ import { isValidPhone, normalizePhone, phoneToEmail } from "@/lib/sms/phone"
 import { verifyCode } from "@/lib/sms/phone-code-service"
 import { rateLimiter } from "@/lib/sms/rate-limit"
 import {
-  findOrCreateUserAndLinkAccount,
+  findOrCreateUserByProvider,
   findUserByAccount,
+  findUserByAccountOrEmail,
+  linkAccount,
 } from "@/lib/auth/account-service"
 import {
   code2Session,
@@ -25,7 +27,8 @@ function errMessage(err: unknown): string {
 }
 
 const credentialsSchema = z.object({
-  email: z.string().email(),
+  // trim:避免前后空格导致登录失败(输入法/复制粘贴常见)
+  email: z.string().trim().email(),
   password: z.string().min(6),
 })
 
@@ -34,14 +37,38 @@ const phoneCredentialsSchema = z.object({
   code: z.string().length(6),
 })
 
+/**
+ * 微信小程序登录入参（单 provider 双模式）：
+ * - 仅 `code`：微信静默登录，按 openid 查 accounts 绑定关系，未绑定不建号
+ * - `code` + `phoneCode`：手机号授权登录（保留原有能力），成功后自动绑定 openid
+ */
 const wechatMpSchema = z.object({
   code: z.string().min(1),
-  phoneCode: z.string().min(1),
+  phoneCode: z.string().min(1).optional(),
 })
 
 const PROVIDER_CREDENTIALS = "credentials"
 const PROVIDER_PHONE = "phone"
 const PROVIDER_WECHAT_MP = "wechat-miniprogram"
+
+/**
+ * 微信登录可辨识错误（Auth.js v5 约定）。
+ *
+ * `authorize` 抛出的普通 Error 会被 Auth.js 包装成通用 `CredentialsSignin`，
+ * 原始 message 丢失（登录路由只能拿到 500「登录服务异常」）。因此改用
+ * `CredentialsSignin` 子类 + 自定义 `code`，Auth.js 会保留该 `code`，
+ * 由登录路由映射为可读文案。
+ *
+ * @see https://authjs.dev/guides/credentials#handling-errors
+ */
+export class WechatNotBoundSignInError extends CredentialsSignin {
+  code = "wechat_not_bound"
+}
+
+/** 微信侧接口失败(code2Session / getPhoneNumber)；errcode 详情已写日志 */
+export class WechatApiSignInError extends CredentialsSignin {
+  code = "wechat_api_error"
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -62,14 +89,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
         const { email, password } = parsed.data
 
-        // 按 account 查
-        const user = await findUserByAccount(PROVIDER_CREDENTIALS, email)
-        if (!user) {
+        // 先看 credentials 绑定，再回退 users.email：
+        // - 历史/seed 数据可能没有 accounts 行
+        // - 用户改过邮箱时也会回退(改邮箱会同步绑定，见 PATCH /api/auth/me)
+        const resolved = await findUserByAccountOrEmail({
+          provider: PROVIDER_CREDENTIALS,
+          providerAccountId: email,
+          email,
+        })
+        if (!resolved) {
           logger.warn(LOG_PREFIX.AUTH, "Credentials login: user not found", {
             email,
           })
           return null
         }
+        const user = resolved.user
 
         const ok = await bcrypt.compare(password, user.passwordHash)
         if (!ok) {
@@ -77,6 +111,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             userId: user.id,
           })
           return null
+        }
+
+        // 密码校验通过后再补写绑定：避免为「无法用密码登录的账号」
+        //(如手机号派生用户，passwordHash 是不可用值)写入 credentials 绑定
+        if (resolved.matchedBy === "email") {
+          await linkAccount({
+            userId: user.id,
+            provider: PROVIDER_CREDENTIALS,
+            providerAccountId: email,
+          })
+          logger.info(LOG_PREFIX.AUTH, "Credentials login: binding backfilled", {
+            userId: user.id,
+          })
         }
 
         logger.info(LOG_PREFIX.AUTH, "Credentials login success", {
@@ -124,8 +171,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         rateLimiter.resetPhone(phone)
 
         // Find-or-create 用户 + link account
+        // 采用「按 provider 绑定优先、派生邮箱兜底」的解析方式：
+        // 用户改过邮箱后仍能落到原账号，而不是按派生邮箱新建重复账号
         const email = phoneToEmail(phone)
-        const user = await findOrCreateUserAndLinkAccount({
+        const user = await findOrCreateUserByProvider({
           email,
           name: phone,
           role: "USER",
@@ -146,10 +195,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
 
-    // ============ 微信小程序手机号登录 ============
-    // 流程：wx.login() 拿 js_code → code2Session 换 openid/session_key →
-    //       <button open-type="getPhoneNumber"> 拿 phone_code → getPhoneNumber 换真实手机号 →
-    //       find-or-create user + link account (按手机号绑定)
+    // ============ 微信小程序登录（单 provider 双模式）============
+    // 凭 phoneCode 是否存在区分：
+    // - 无 phoneCode：微信静默登录。wx.login() 拿 js_code → code2Session 换 openid →
+    //   按 accounts(wechat-miniprogram, openid) 找已绑定账号，命中即签发 token；
+    //   未绑定则抛 [WECHAT] 错误，不自动建号。
+    // - 有 phoneCode：手机号授权登录（保留）。<button open-type="getPhoneNumber"> 拿 phone_code →
+    //   getPhoneNumber 换真实手机号 → find-or-create 用户（手机身份记 provider="phone"）→
+    //   自动把 openid 绑定到该账号（仅此流程自动绑定）。
     Credentials({
       id: PROVIDER_WECHAT_MP,
       name: "微信小程序",
@@ -194,16 +247,41 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               errmsg: err.errmsg,
               raw: err.raw,
             })
-            // 透传微信错误,便于登录页直接看到真实原因(而非泛化 401)
-            throw new Error(`[WECHAT] 微信登录凭证校验失败 errcode=${err.errcode} msg=${err.errmsg}`)
+            // 可辨识错误码交给登录路由映射为可读文案(errcode 详情已在上方日志)
+            throw new WechatApiSignInError()
           }
           logger.warn(LOG_PREFIX.WECHAT, "code2Session failed", { error: errMessage(err) })
           throw err
         }
-        logger.info(LOG_PREFIX.WECHAT, "code2Session ok", {
-          openid: session.openid,
-        })
+        const openid = session.openid
+        logger.info(LOG_PREFIX.WECHAT, "code2Session ok", { openid })
 
+        // ---- 模式一：微信静默登录（无 phoneCode）----
+        // 仅限已绑定微信的账号：按 accounts(provider='wechat-miniprogram',
+        // providerAccountId=openid) 查绑定关系，命中即登录；未绑定直接报错、不建号。
+        // 该分支不调用 getAccessToken/getPhoneNumber，省去两次外部接口调用。
+        if (!parsed.data.phoneCode) {
+          const bound = await findUserByAccount(PROVIDER_WECHAT_MP, openid)
+          if (!bound) {
+            logger.warn(LOG_PREFIX.WECHAT, "Silent login: wechat not bound", {
+              openid,
+            })
+            // 未绑定：不自动建号，由登录路由映射为「未绑定微信」文案
+            throw new WechatNotBoundSignInError()
+          }
+          logger.info(LOG_PREFIX.AUTH, "WeChat MP silent login success", {
+            userId: bound.id,
+            openid,
+          })
+          return {
+            id: bound.id,
+            email: bound.email,
+            name: bound.name,
+            role: bound.role as UserRole,
+          }
+        }
+
+        // ---- 模式二：手机号授权登录（保留原有能力）----
         let accessToken: string
         try {
           accessToken = await getAccessToken({ appId, appSecret, apiBase })
@@ -228,12 +306,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               errmsg: err.errmsg,
               raw: err.raw,
             })
-            // 透传微信错误,便于登录页直接看到真实原因(而非泛化 401)
+            // 可辨识错误码交给登录路由;errcode 与排障提示写日志
+            // (errcode=-10000 常见于开发者工具不支持真实手机号 / 未开通「获取手机号」能力)
             const hint =
               err.errcode === -10000
-                ? "（开发者工具不支持真实手机号,或小程序未开通「获取手机号」能力;请确认后台已开通并在真机预览/体验版测试）"
+                ? "开发者工具不支持真实手机号,或小程序未开通「获取手机号」能力;请确认后台已开通并在真机预览/体验版测试"
                 : ""
-            throw new Error(`[WECHAT] 微信获取手机号失败 errcode=${err.errcode} msg=${err.errmsg}${hint}`)
+            logger.warn(LOG_PREFIX.WECHAT, "getPhoneNumber hint", { hint })
+            throw new WechatApiSignInError()
           }
           logger.warn(LOG_PREFIX.WECHAT, "getPhoneNumber failed", { error: errMessage(err) })
           throw err
@@ -243,16 +323,53 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null
         }
 
-        // 按手机号绑定：与 phone provider 行为一致；首登自动 link SMS 用户
-        const user = await findOrCreateUserAndLinkAccount({
+        // 手机身份记在 phone provider 下（与短信登录一致，后续可复用同一账号）；
+        // 微信绑定关系单独记在 wechat-miniprogram + openid，避免与手机号语义混淆。
+        // 解析顺序同为「accounts 绑定优先、派生邮箱兜底」
+        const user = await findOrCreateUserByProvider({
           email: phoneToEmail(phone),
           name: phone,
           role: "USER",
-          provider: PROVIDER_WECHAT_MP,
+          provider: PROVIDER_PHONE,
           providerAccountId: phone,
         })
 
-        logger.info(LOG_PREFIX.AUTH, "WeChat MP login success", {
+        // 仅「微信手机号授权登录」流程自动绑定微信。
+        // openid 已属他人时只记 warn 并跳过，不阻断本次登录（避免误伤一码多账号场景）；
+        // 绑定自身异常同样不影响登录结果。
+        try {
+          const owner = await findUserByAccount(PROVIDER_WECHAT_MP, openid)
+          if (!owner) {
+            await linkAccount({
+              userId: user.id,
+              provider: PROVIDER_WECHAT_MP,
+              providerAccountId: openid,
+              type: "oauth",
+            })
+            logger.info(LOG_PREFIX.WECHAT, "WeChat auto-bound after phone login", {
+              userId: user.id,
+              openid,
+            })
+          } else if (owner.id === user.id) {
+            logger.info(LOG_PREFIX.WECHAT, "WeChat already bound to current user", {
+              userId: user.id,
+              openid,
+            })
+          } else {
+            logger.warn(
+              LOG_PREFIX.WECHAT,
+              "WeChat bound to another user, skip auto-bind",
+              { userId: user.id, openid, ownerId: owner.id }
+            )
+          }
+        } catch (err) {
+          logger.error(LOG_PREFIX.WECHAT, "WeChat auto-bind failed", {
+            userId: user.id,
+            error: errMessage(err),
+          })
+        }
+
+        logger.info(LOG_PREFIX.AUTH, "WeChat MP phone login success", {
           userId: user.id,
           phone,
         })

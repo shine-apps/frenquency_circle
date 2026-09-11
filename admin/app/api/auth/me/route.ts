@@ -2,7 +2,7 @@ import { and, eq, ne } from "drizzle-orm"
 import { z } from "zod"
 
 import { db } from "@/lib/db"
-import { users, DEFAULT_PRIVACY_SETTINGS } from "@/db/schema"
+import { accounts, users, DEFAULT_PRIVACY_SETTINGS } from "@/db/schema"
 import { corsOptions, fail, ok, withCors } from "@/lib/api"
 import { readUserFromToken } from "@/lib/auth/session-token"
 import { fetchUserTags } from "@/lib/user-tags"
@@ -142,11 +142,34 @@ export async function PATCH(req: Request) {
   const { name, email, avatarUrl, gender, birthday } = parsed.data
 
   // 邮箱被他人占用 → 409
+  // previousEmail 用于随后同步 credentials 绑定（邮箱是邮箱密码登录的 providerAccountId）
+  let previousEmail: string | null = null
   if (email !== undefined) {
+    const current = await db.query.users.findFirst({
+      where: eq(users.id, authUser.id),
+      columns: { email: true },
+    })
+    previousEmail = current?.email ?? null
+
     const exists = await db.query.users.findFirst({
       where: and(eq(users.email, email), ne(users.id, authUser.id)),
     })
     if (exists) {
+      return withCors(fail(409, "该邮箱已被其他用户使用"), req)
+    }
+
+    // accounts 侧同样可能被他人占用（例如对方改过邮箱，users.email 已不带该值）
+    const accountOwner = await db.query.accounts.findFirst({
+      where: and(
+        eq(accounts.provider, "credentials"),
+        eq(accounts.providerAccountId, email),
+        ne(accounts.userId, authUser.id)
+      ),
+    })
+    if (accountOwner) {
+      logger.warn(LOG_PREFIX.AUTH, "me: email taken by another account row", {
+        userId: authUser.id,
+      })
       return withCors(fail(409, "该邮箱已被其他用户使用"), req)
     }
   }
@@ -171,6 +194,26 @@ export async function PATCH(req: Request) {
 
   if (!updated) {
     return withCors(fail(404, "User not found"), req)
+  }
+
+  // 同步 credentials 绑定：邮箱即邮箱密码登录的 providerAccountId，
+  // 不同步会导致「改完邮箱后用新邮箱+密码登录查不到账号」。
+  // 若该用户本就没有 credentials 绑定行（如手机号用户），此处影响 0 行，
+  // 下次邮箱密码登录会由 provider 侧回填（见 auth.ts 的 findUserByAccountOrEmail）。
+  if (email !== undefined && previousEmail && previousEmail !== email) {
+    await db
+      .update(accounts)
+      .set({ providerAccountId: email, updatedAt: new Date() })
+      .where(
+        and(
+          eq(accounts.userId, authUser.id),
+          eq(accounts.provider, "credentials"),
+          eq(accounts.providerAccountId, previousEmail)
+        )
+      )
+    logger.info(LOG_PREFIX.AUTH, "me: credentials binding synced", {
+      userId: authUser.id,
+    })
   }
 
   logger.info(LOG_PREFIX.AUTH, "me: profile updated", {

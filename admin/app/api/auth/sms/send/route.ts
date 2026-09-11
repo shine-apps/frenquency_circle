@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
-import { corsOptions, fail, withCors } from "@/lib/api"
+import { corsOptions, fail, getClientIp, withCors } from "@/lib/api"
 import type { IResponse } from "@/types/api"
 import { isValidPhone, normalizePhone } from "@/lib/sms/phone"
-import { issueCode } from "@/lib/sms/phone-code-service"
+import { isIssueCapped, issueCode } from "@/lib/sms/phone-code-service"
 import { createSmsSender } from "@/lib/sms/sms-sender"
 import { rateLimiter } from "@/lib/sms/rate-limit"
 import { logger, LOG_PREFIX } from "@/lib/logger"
@@ -11,18 +11,6 @@ import { logger, LOG_PREFIX } from "@/lib/logger"
 const sendCodeSchema = z.object({
   phone: z.string().min(1),
 })
-
-/**
- * 提取客户端 IP：优先 x-forwarded-for 首段，其次 x-real-ip，最后回退 "unknown"。
- */
-function getClientIp(req: Request): string {
-  const xff = req.headers.get("x-forwarded-for")
-  if (xff) {
-    const first = xff.split(",")[0]?.trim()
-    if (first) return first
-  }
-  return req.headers.get("x-real-ip") ?? "unknown"
-}
 
 export async function OPTIONS(req: Request) {
   return corsOptions(req)
@@ -70,7 +58,16 @@ export async function POST(req: Request) {
     return withCors(fail(429, "发送次数过多，请稍后再试"), req)
   }
 
-  // 5. 生成并持久化验证码
+  // 5. DB 维度的发放上限兜底:进程内限流器是实例本地的,多实例部署时
+  //    无法反映全局发放量,这里直接用发放记录做「按手机号」的全局上限
+  if (await isIssueCapped(phone)) {
+    logger.warn(LOG_PREFIX.SMS, "Send rejected: phone issue cap reached", {
+      phone,
+    })
+    return withCors(fail(429, "发送次数过多，请稍后再试"), req)
+  }
+
+  // 6. 生成并持久化验证码
   let code: string
   try {
     code = await issueCode(phone)

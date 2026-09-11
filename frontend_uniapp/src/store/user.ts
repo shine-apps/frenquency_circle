@@ -1,7 +1,7 @@
 import type { ActivityLevel, LocationPoint, PrivacySettings, UserDTO, UserGender, UserProfile, UserRole } from '@/types'
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { fetchCurrentUser, fromUserDTO } from '@/api/auth'
+import { fromUserDTO, getMyProfile } from '@/api/auth'
 
 /**
  * 前端用户信息模型(对应原 Taro 项目 store/user.ts 的 UserInfo)。
@@ -38,11 +38,6 @@ export interface UserInfo {
   address?: string | null
   /** 用户已绑定的兴趣标签名称数组(默认空数组,存 hobby_tags.name) */
   tags: string[]
-  // 以下字段用于兼容 unibest 模板的 IUserInfoRes 结构
-  username?: string
-  nickname?: string
-  roles?: UserRole[]
-  userId?: number
 }
 
 /** 初始化状态(未登录) */
@@ -64,20 +59,6 @@ export const useUserStore = defineStore(
     const isLoggedIn = computed(() => !!userInfo.value.id)
 
     /**
-     * 将 UserInfo 同步为兼容模板的 IUserInfoRes 字段,
-     * 避免模板页面(me.vue 等)读取 username/nickname 失败。
-     */
-    function normalizeUserInfo(user: UserInfo): UserInfo {
-      return {
-        ...user,
-        username: user.username ?? user.email,
-        nickname: user.nickname ?? user.name,
-        roles: user.roles ?? (user.role ? [user.role] : []),
-        userId: user.userId ?? 0,
-      }
-    }
-
-    /**
      * 初始化用户会话(仅登录成功、建立会话时调用)。
      * - 全量替换:以初始状态为底合并登录响应,清除上一会话/本地缓存的残留字段
      * - 乐观写入:先用登录响应中的基础信息填充,随后由 `fetchUserInfo` 补全完整资料
@@ -86,7 +67,7 @@ export const useUserStore = defineStore(
     function initUserSession(val: UserInfo) {
       // 不写入默认头像:avatar 始终与 avatarUrl 保持一致,
       // 无头像时由各页面 v-else 兜底展示昵称首字,避免登录瞬间"图片→文字"的跳变
-      userInfo.value = normalizeUserInfo({ ...userInfoState, ...val })
+      userInfo.value = { ...userInfoState, ...val }
     }
 
     /** 删除用户信息 */
@@ -98,10 +79,9 @@ export const useUserStore = defineStore(
     /**
      * 从后端刷新当前用户信息。
      * - 走 `GET /api/auth/me`,返回完整 UserProfile
-     * - 与模板的 getUserInfo(`/user/info`) 不同,趣邻圈后端无该接口
      */
     async function fetchUserInfo() {
-      const dto = await fetchCurrentUser()
+      const dto = await getMyProfile()
       setProfile(dto)
       return userInfo.value
     }
@@ -111,7 +91,7 @@ export const useUserStore = defineStore(
      * 对外更新一律走语义化 setter,保证 DTO 映射与字段同步集中在一处处理。
      */
     function mergeUserInfo(patch: Partial<UserInfo>) {
-      userInfo.value = normalizeUserInfo({ ...userInfo.value, ...patch })
+      userInfo.value = { ...userInfo.value, ...patch }
     }
 
     /** 设置兴趣标签名称列表 */
@@ -147,7 +127,7 @@ export const useUserStore = defineStore(
         const stored = uni.getStorageSync('user_info')
         if (stored && typeof stored === 'object') {
           const tags = Array.isArray(stored.tags) ? stored.tags : []
-          userInfo.value = normalizeUserInfo({ ...userInfoState, ...stored, tags })
+          userInfo.value = { ...userInfoState, ...stored, tags }
         }
       }
       catch {

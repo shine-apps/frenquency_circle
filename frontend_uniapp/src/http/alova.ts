@@ -6,7 +6,7 @@ import { createServerTokenAuthentication } from 'alova/client'
 import VueHook from 'alova/vue'
 import { toLoginPage } from '@/utils/toLoginPage'
 import { useTokenStore } from '@/store/token'
-import { ContentTypeEnum, ResultEnum, ShowMessage } from './tools/enum'
+import { ContentTypeEnum, isSuccessResultCode, ResultEnum, ShowMessage } from './tools/enum'
 
 // 配置动态Tag
 export const API_DOMAINS = {
@@ -21,22 +21,14 @@ const { onAuthRequired, onResponseRefreshToken } = createServerTokenAuthenticati
   typeof VueHook,
   typeof uniappRequestAdapter
 >({
-  // 如果下面拦截不到，请使用 refreshTokenOnSuccess by 群友@琛
+  // 单 token 模式无 refresh token:登录态失效直接回登录页并中断本次请求
   refreshTokenOnError: {
     isExpired: (error) => {
       return error.response?.status === ResultEnum.Unauthorized
     },
     handler: async () => {
-      try {
-        // 双 token 模式下由 http.ts 的队列统一刷新;此处仅做登录态兜底
-        const tokenStore = useTokenStore()
-        await tokenStore.refreshToken()
-      }
-      catch (error) {
-        // 切换到登录页
-        toLoginPage({ mode: 'reLaunch' })
-        throw error
-      }
+      toLoginPage({ mode: 'reLaunch' })
+      throw new Error('[请求错误]：登录已过期')
     },
   },
 })
@@ -103,8 +95,8 @@ const alovaInstance = createAlova({
 
     // 处理业务逻辑错误
     const { code, message, data } = rawData as IResponse
-    // 0和200当做成功都很普遍，这里直接兼容两者，见 ResultEnum
-    if (code !== ResultEnum.Success0 && code !== ResultEnum.Success200) {
+    // 成功码兼容 0 与 2xx(创建类接口返回 201/203),与 http.ts 保持一致
+    if (!isSuccessResultCode(code)) {
       if (config.meta?.toast !== false) {
         uni.showToast({
           title: message,

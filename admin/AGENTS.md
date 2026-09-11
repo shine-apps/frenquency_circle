@@ -93,7 +93,10 @@ All commands run from the project root with no `cd` needed.
 │   ├── logger.ts                     # Structured logger (info/warn/error + LOG_PREFIX)
 │   ├── utils.ts                      # cn() and other shadcn helpers
 │   ├── auth/
-│   │   └── account-service.ts        # findUserByAccount / linkAccount / findOrCreateUserAndLinkAccount
+│   │   ├── account-service.ts        # findUserByAccount / linkAccount / findUserByAccountOrEmail / findOrCreateUserByProvider / unlinkAccount
+│   │   ├── token-login.ts            # Token 模式登录公共流程: signIn → 提取 JWT → 回传 { token, user, expiresIn }
+│   │   ├── session-config.ts         # SESSION_MAX_AGE_SECONDS(会话有效期单一来源,与登录响应 expiresIn 同源)
+│   │   └── session-token.ts          # JWT 提取/解析 + SESSION_COOKIE_NAMES(cookie 名唯一来源)
 │   ├── sms/
 │   │   ├── phone.ts                  # PHONE_RE / normalizePhone / isValidPhone / phoneToEmail / generateCode
 │   │   ├── phone-code-service.ts     # issueCode / verifyCode (bcrypt-hashed, TTL, attempt cap)
@@ -130,7 +133,8 @@ All commands run from the project root with no `cd` needed.
     │       └── wechat/miniprogram.test.ts
     ├── integration/
     │   ├── api/auth/sms-send.test.ts              # MSW-backed, relative URLs
-    │   └── api/auth/wechat-miniprogram-login.test.ts  # vi.mock @/auth, direct POST invocation
+    │   ├── api/auth/wechat-miniprogram-login.test.ts  # vi.mock @/auth, direct POST invocation
+    │   └── api/users-me-wechat-bind.test.ts       # 微信绑定/解绑/状态接口(mock account-service + wechat)
     └── e2e/auth.spec.ts
 ```
 
@@ -152,7 +156,7 @@ All commands run from the project root with no `cd` needed.
 
 - **Schema** lives only in `db/schema.ts`. Column names are `snake_case`; field names are `camelCase`. Primary keys are `uuid().defaultRandom()`. Timestamps use `timestamp({ withTimezone: true }).notNull().defaultNow()`.
 - **Tables:**
-  - `users` — id, email (unique), name, passwordHash, role, avatarUrl, createdAt, updatedAt. **Phase 1 扩展字段:** `phone` / `wechatOpenid` / `latitude` / `longitude`(lat/lng 双列方案替代 PostGIS Point)/ `address` / `privacySettings`(JSONB)/ `practiceYears` / `activityLevel` / `lastActiveAt`;`role` 类型扩展为 `'ADMIN' | 'USER' | 'TEACHER'`。
+  - `users` — id, email (unique), name, passwordHash, role, avatarUrl, createdAt, updatedAt. **Phase 1 扩展字段:** `phone` / `latitude` / `longitude`(lat/lng 双列方案替代 PostGIS Point)/ `address` / `privacySettings`(JSONB)/ `practiceYears` / `activityLevel` / `lastActiveAt`;`role` 类型扩展为 `'ADMIN' | 'USER' | 'TEACHER'`。(原预留列 `wechatOpenid` 已由迁移 `0008_wechat_cleanup.sql` 删除,微信 openid 只存 `accounts` 表。)
   - `accounts` — id, userId (FK → users, cascade delete), provider, providerAccountId, type, createdAt, updatedAt. Unique index on `(provider, providerAccountId)`; index on `userId`.
   - `smsVerificationCodes` — id, phone, codeHash (bcrypt), attempts, expiresAt, consumedAt, createdAt. Index on `phone`.
   - `hobby_tags` — id, name(三级具体标签), category(一级大类), subCategory(二级中类,可空), pinyin, pinyinInitials, status(`'pending' | 'approved' | 'rejected'`), createdBy, createdAt, updatedAt. 索引:name ILIKE、pinyin、pinyinInitials、(category+name)、status。三级分类体系:一级大类(中国传统文化艺术 / 西方与世界艺术 / 数字新媒体艺术 / 现代生活美学)→ 二级中类(运动健身…)→ 三级具体标签(太极拳…)。users.tags / circles.tags 为 text[] 名称数组(存 hobby_tags.name),有 GIN 索引。
@@ -182,8 +186,13 @@ All commands run from the project root with no `cd` needed.
   }
   ```
 
-- **SMS send endpoint** (`POST /api/auth/sms/send`): public, rate-limited. Response body is `IResponse<null>` with `message: "验证码已发送"` and HTTP 201. Does **not** leak whether the phone is registered (anti-enumeration). Failure responses: 400 (invalid phone), 429 (rate limit, Chinese message), 500 (issue failed), 502 (SMS provider failed — no rollback of issued code).
-- **WeChat mini-program login endpoint** (`POST /api/auth/wechat-miniprogram/login`): public (微信小程序客户端调用),body `{ code, phoneCode }`(对应 `wx.login()` 的 js_code 与 getPhoneNumber 按钮的 phone_code)。内部调用 `signIn("wechat-miniprogram", { ..., redirect: false })`,Auth.js 自动写 session cookie。成功响应 `IResponse<{ provider: "wechat-miniprogram" }>` HTTP 200;失败 400 (参数缺失) / 401 (登录失败) / 500 (内部异常)。
+- **SMS send endpoint** (`POST /api/auth/sms/send`): public, rate-limited. Response body is `IResponse<null>` with `message: "验证码已发送"` and HTTP 201. Does **not** leak whether the phone is registered (anti-enumeration). Failure responses: 400 (invalid phone), 429 (rate limit, Chinese message), 500 (issue failed), 502 (SMS provider failed — no rollback of issued code). 注意成功码是 **201**(非 200),前端判定成功必须接受 2xx(见 `frontend_uniapp/src/http/tools/enum.ts` 的 `isSuccessResultCode`)。
+- **Token 模式登录接口** (`POST /api/auth/login/credentials`、`POST /api/auth/login/phone`、`POST /api/auth/wechat-miniprogram/login`): 小程序 / H5 使用,不依赖 cookie。三者共用 `lib/auth/token-login.ts` 的 `signInAndIssueToken`,成功统一返回 `IResponse<AuthLoginResponse>`(`{ token, user, expiresIn }`,HTTP 200)。错误语义:凭据不正确(含验证码错误)→ **401**(文案分别为「邮箱或密码错误」/「手机号或验证码错误」);微信侧可辨识错误(未绑定、微信接口失败)→ 400;服务端配置/意外异常 → 500。
+- **WeChat mini-program login endpoint** (`POST /api/auth/wechat-miniprogram/login`): public (微信小程序客户端调用),body `{ code, phoneCode? }`。单 provider 双模式:
+  - 仅 `code`(对应 `wx.login()` 的 js_code)= **微信静默登录**:按 openid 查 accounts 绑定关系,已绑定才签发 token;未绑定返回 400 + `[WECHAT] 该微信未绑定账号...`,**不自动建号**。
+  - `code` + `phoneCode`(getPhoneNumber 按钮的 phone_code)= **手机号授权登录**(保留):换真实手机号完成登录,并自动把 openid 绑定到该账号。
+  内部调用 `signIn("wechat-miniprogram", { ..., redirect: false })`,Auth.js 自动写 session cookie。成功响应 `IResponse<AuthLoginResponse>`(含 `{ token, user }`) HTTP 200;失败 400 (参数缺失 / 微信侧错误 / 未绑定) / 401 (登录失败) / 500 (内部异常)。
+- **WeChat bind endpoints** (`GET / POST / DELETE /api/users/me/wechat`): 登录用户可调(走 `requireSession`)。`GET` 返回 `IResponse<WechatBindStateDTO>`(`{ bound: boolean }`);`POST` body `{ code }` 绑定微信(openid 已被他人绑定时 409);`DELETE` 解绑,但要求账号仍有非 `wechat-miniprogram` 的登录方式(否则 400),守卫用 SQL `EXISTS` 子查询与删除原子完成。绑定关系存 `accounts(provider='wechat-miniprogram', providerAccountId=openid)`,**不写 `users.wechatOpenid`**(该列已删除)。
 - **File upload endpoint** (`POST /api/upload`): 登录用户可调,接收 `multipart/form-data`,字段 `file` (必填) 与 `purpose` (可选,`'avatar' | 'generic'`,默认 `generic`)。鉴权用 `readUserFromToken`(同 `/api/auth/me`)。MIME 与大小限制走 env:`UPLOAD_MAX_BYTES`(默认 5 MiB) / `UPLOAD_ALLOWED_MIME`(默认 `image/jpeg,image/png,image/webp,image/gif`)。文件落到 `public/uploads/<yyyy>/<mm>/<uuid>.<ext>`,Next.js 自动以 `/uploads/...` 暴露,公开 URL 用 env `NEXT_PUBLIC_APP_URL` 拼接。失败 400 (无 file / purpose 非法) / 401 (未登录) / 413 (超限) / 415 (MIME 非法) / 500 (落盘失败)。响应体 `IResponse<UploadResult>`,其中 `key` 为相对路径(用于将来切换 OSS 驱动时做删除)。
 - **COS STS 凭证端点** (`GET /api/upload/cos-credentials`):登录用户可调,返回 `IResponse<CosCredentials>`(含临时 SecretId/Key/Token + bucket/region/prefix/publicBaseUrl)。客户端拿到后用 `cos-js-sdk-v5` 直传 COS,文件字节不经后端。失败 401(未登录)/ 500(STS 失败)。scope 按 userId 隔离,scope prefix = `<COS_KEY_PREFIX>/<userId>/*`。
 
@@ -234,13 +243,15 @@ All commands run from the project root with no `cd` needed.
 
 ## Authentication
 
-- **`auth.config.ts`** holds the framework-agnostic config (pages, `authorized` callback, `jwt` / `session` callbacks). The `jwt` callback transfers `id`, `role`, and `provider` from `user`/`account` into the token; the `session` callback copies them onto `session.user`.
+- **`auth.config.ts`** holds the framework-agnostic config (pages, `authorized` callback, `jwt` / `session` callbacks). The `jwt` callback transfers `id`, `role`, and `provider` from `user`/`account` into the token; the `session` callback copies them onto `session.user`. `session.maxAge` 取 `lib/auth/session-config.ts` 的 `SESSION_MAX_AGE_SECONDS`,与登录响应 `expiresIn` **同源** —— 两者不一致会让前端按另一套时长判定过期(出现过「token 实际有效 30 天、前端 24 小时就踢人」)。
 - **`auth.ts`** registers three Credentials providers plus an OAuth extension point (commented):
-  - `id: "credentials"` — email + password. Looks up user via `findUserByAccount` first, falls back to `users` table by email (backward compat for seed users without an `accounts` row). On success, calls `linkAccount` to backfill the binding.
-  - `id: "phone"` — phone + 6-digit code. Calls `verifyCode`, resets phone rate limit, then `findOrCreateUserAndLinkAccount` (auto-creates user with unusable `passwordHash` so phone users can never log in via email/password).
-  - `id: "wechat-miniprogram"` — 微信小程序手机号登录。`authorize` 接收 `{ code, phoneCode }`,调用 `code2Session` + `getPhoneNumber` 拿真实手机号,按手机号绑定到 user。客户端必须经由 `POST /api/auth/wechat-miniprogram/login` 路由(服务端调用 `signIn`),不能从 admin Web 走 `signIn`。
+  - `id: "credentials"` — email + password. 用 `findUserByAccountOrEmail` 解析(accounts 绑定优先,`users.email` 兜底,兼容 seed 数据与刚改过邮箱的用户);**密码校验通过后**才 `linkAccount` 回填缺失的绑定,避免为「无法用密码登录的账号」(如手机号派生用户)写入 credentials 绑定。
+  - `id: "phone"` — phone + 6-digit code. Calls `verifyCode`, resets phone rate limit, then `findOrCreateUserByProvider`(accounts 优先 + email 兜底;自动建号时 `passwordHash` 为不可用值,手机号用户无法走邮箱密码登录)。
+  - `id: "wechat-miniprogram"` — 微信小程序登录,**单 provider 双模式**(凭 `phoneCode` 是否存在区分):仅 `code` 时走静默登录(`code2Session` → openid → `findUserByAccount("wechat-miniprogram", openid)`,未绑定抛 `WechatNotBoundSignInError`、不建号);带 `phoneCode` 时走手机号授权登录(`getPhoneNumber` → phone → `findOrCreateUserByProvider` 记 `provider="phone"` → 自动 `linkAccount` 写入 openid 绑定;openid 已属他人时跳过绑定但不阻断登录)。客户端必须经由 `POST /api/auth/wechat-miniprogram/login` 路由(服务端调用 `signIn`),不能从 admin Web 走 `signIn`。
   - OAuth extension point: documented inline. Future OAuth providers will need to handle `events.createUser` / `events.linkAccount` manually since this project does **not** use `@auth/drizzle-adapter` (kept minimal — only `accounts` table, no `sessions` / `verificationTokens`).
-- **`lib/auth/account-service.ts`** centralizes user/account lifecycle: `findUserByAccount`, `linkAccount` (idempotent upsert), `findOrCreateUserAndLinkAccount`. All providers should go through these helpers — do not write raw `db.insert(users)` / `db.insert(accounts)` in `authorize`.
+- **`lib/auth/account-service.ts`** centralizes user/account lifecycle: `findUserByAccount`, `findUserByAccountOrEmail`(accounts 绑定优先、email 兜底), `linkAccount` (idempotent upsert), `findOrCreateUserAndLinkAccount`(仅按 email 查,建号场景用), `findOrCreateUserByProvider`(**登录入口用**), `hasBoundProvider`(是否已绑定某 provider,如微信)、`hasOtherLoginMethod`(解绑守卫)、`unlinkAccount`(带 `EXISTS` 守卫的原子解绑)。All providers should go through these helpers — do not write raw `db.insert(users)` / `db.insert(accounts)` in `authorize`.
+- **`lib/auth/token-login.ts`** — Token 模式登录的唯一实现:`signInAndIssueToken({ req, provider, credentials, label, invalidCredentialsMessage, mapError })` 负责 `signIn(..., { redirect: false })` → 提取 JWT(Set-Cookie,失败再读 `cookies()`)→ 解析用户 → 返回 `{ token, user, expiresIn }`。**新增/修改登录入口一律复用它,不要复制粘贴路由骨架**:`authorize` 返回 null 时 Auth.js 抛 `CredentialsSignin`,漏映射会把「凭据错误」报成 500(`phone` 路由曾如此)。
+- **身份锚点是 `accounts` 绑定关系,不是 `users.email`**:`email` 可被用户修改(`PATCH /api/auth/me` 会同步 `(credentials, 旧email)` → `(credentials, 新email)`,并对 `users.email` 与 accounts 双向做占用校验);手机号用户的 email 由 `phoneToEmail` 派生。改邮箱/改手机号后必须仍登录到**同一个** user,因此登录解析一律走 `findUserByAccountOrEmail` / `findOrCreateUserByProvider`,不要直接用 email 查 `users`。
 - **`proxy.ts`** exports `auth as proxy`. Do not create a `middleware.ts` — it is removed in Next.js 16. The `authorized` callback in `auth.config.ts` gates `/admin/:path*`.
 - **Type augmentations** live in `types/next-auth.d.ts`. When adding a new session field, update the `jwt` and `session` callbacks in `auth.config.ts` in the same change.
 - **`PROVIDER_CREDENTIALS` / `PROVIDER_PHONE` / `PROVIDER_WECHAT_MP`** constants live in `auth.ts`. Use these instead of string literals when calling `signIn("phone", ...)` etc.
@@ -250,6 +261,8 @@ All commands run from the project root with no `cd` needed.
 - **`lib/sms/phone.ts`** — pure helpers. `PHONE_RE = /^1[3-9]\d{9}$/`, `normalizePhone` (strips `+86` / `0086` / `86` / whitespace), `isValidPhone`, `phoneToEmail` (`${phone}@${PHONE_DOMAIN ?? "phonedomain.com"}`), `generateCode` (6-digit via `crypto.randomInt`).
 - **`lib/sms/phone-code-service.ts`** — `issueCode(phone)` generates + bcrypt-hashes + persists a code with TTL (default 300s). `verifyCode(phone, code)` returns a `VerifyResult` union: `ok | not_found | expired | max_attempts | mismatch`. Successful verify marks `consumedAt = now`; mismatch increments `attempts`; `attempts >= 5` blocks further tries.
 - **`lib/sms/rate-limit.ts`** — in-memory `Map`-based limiter. `checkAndConsumePhone` (60s cooldown + 5/hr cap), `checkAndConsumeIp` (10/hr cap). Env-tunable via `SMS_RATE_PHONE_COOLDOWN_SECONDS` / `SMS_RATE_PHONE_HOURLY` / `SMS_RATE_IP_HOURLY`. **Not multi-instance safe** — swap for Redis if scaling horizontally.
+- **DB 维度的发放上限兜底** — `phone-code-service.ts` 的 `isIssueCapped(phone)` 直接统计 `sms_verification_codes` 近 1 小时发放量,默认 **10 条/小时/手机号**(`SMS_ISSUE_HOURLY_PER_PHONE`),`sms/send` 在进程内限流通过后调用。多实例部署时进程内计数各自独立,该兜底保证「按手机号」的全局上限。
+- **客户端 IP 提取** — `lib/api.ts` 的 `getClientIp(req)`:优先 `x-real-ip`(nginx 设为 `$remote_addr`,不可伪造),其次 `x-forwarded-for` **最后一段**(nginx 为追加式,首段可被客户端伪造),都没有返回 `unknown`。限流等按 IP 的逻辑一律用它,不要自行解析 XFF。
 - **`lib/sms/sms-sender.ts`** — `SmsSender` interface + `ConsoleSmsSender` (dev fallback) + `createSmsSender()` factory. Cached singleton.
 - **`lib/sms/aliyun-sms.ts`** — `AliyunSmsSender` with lazy client init. Sends via `client.sendSms(req)` with `templateParam: JSON.stringify({ code })`.
 
@@ -275,17 +288,25 @@ All commands run from the project root with no `cd` needed.
 
 ### WeChat Mini-Program provider
 
-- **适用场景**: 微信小程序端通过 `getPhoneNumber` 按钮拿到手机号登录。**仅支持 2022+ 新接口**(`phone_code` + `getuserphonenumber`),不支持旧的 `encryptedData`/`iv` 解密流程。
-- **登录入口**: 只能从服务端调用,不能从 admin Web `signIn` 调用。`app/api/auth/wechat-miniprogram/login/route.ts` 接收 `{ code, phoneCode }`,内部调用 `signIn("wechat-miniprogram", { code, phoneCode, redirect: false })`,成功后 Auth.js 自动写 session cookie。
-- **三方调用链**:
+- **适用场景**: 微信小程序端两种登录方式 —— ①静默登录(`wx.login` 即可,要求微信已绑定账号)；②手机号授权登录(`getPhoneNumber`,`**仅支持 2022+ 新接口**`:`phone_code` + `getuserphonenumber`,不支持旧的 `encryptedData`/`iv` 解密流程)。
+- **登录入口**: 只能从服务端调用,不能从 admin Web `signIn` 调用。`app/api/auth/wechat-miniprogram/login/route.ts` 接收 `{ code, phoneCode? }`,内部调用 `signIn("wechat-miniprogram", { code, phoneCode?, redirect: false })`,成功后 Auth.js 自动写 session cookie。
+- **模式一 · 静默登录**(无 `phoneCode`):
+  1. `wx.login()` 拿 `js_code` → `code2Session` 换 `openid`
+  2. `findUserByAccount("wechat-miniprogram", openid)` 查已绑定账号
+  3. 命中 → 签发 token;未命中 → 抛 `[WECHAT] 该微信未绑定账号...`(路由透传 400),**不创建账号**。此分支不调用 `getAccessToken`/`getPhoneNumber`。
+- **模式二 · 手机号授权登录**(有 `phoneCode`,自动绑定):
   1. `wx.login()` 拿 `js_code` → `code2Session` 换 `openid` / `session_key`(用于排障日志)
   2. `<button open-type="getPhoneNumber">` 拿 `phone_code` → `getPhoneNumber` 用服务端 `access_token` 换真实手机号
-  3. `findOrCreateUserAndLinkAccount` 完成 user / account 绑定
+  3. `findOrCreateUserAndLinkAccount({ provider: "phone", providerAccountId: phone })` 完成 user / 手机登录方式绑定
+  4. **自动绑定微信**: `openid` 未被占用 → `linkAccount({ provider: "wechat-miniprogram", providerAccountId: openid, type: "oauth" })`;已属本人 → 幂等跳过;已属他人 → 记 `warn` 并跳过,**不阻断登录**
+- **绑定/解绑接口**: `GET / POST / DELETE /api/users/me/wechat`(见 API conventions),个人资料页提供显式绑定与解绑;解绑要求账号仍有其它登录方式。
 - **`lib/wechat/miniprogram.ts`** — 微信服务端 API 客户端。导出 `code2Session` / `getAccessToken`(进程内缓存,提前 5 分钟视为过期)/ `getPhoneNumber` / `readWechatMpConfig` / `WechatMpError`。所有调用走原生 `fetch` + `AbortController`(默认 8 秒超时),不引入新 HTTP 客户端依赖。
-- **绑定策略**: `provider = "wechat-miniprogram"`,`providerAccountId = phone`(按手机号绑定)。与现有 `phone` provider 共用同一索引,首登时若同号 SMS 用户已存在则自动 link 到同一 user。
+- **绑定策略**: `provider = "wechat-miniprogram"`,`providerAccountId = openid`(微信身份绑定);手机号身份记在 `provider = "phone"` 下,两者分离,便于「是否已绑定微信」判定与解绑守卫。旧版以手机号为 key 的 `wechat-miniprogram` 记录由迁移 `0008_wechat_cleanup.sql` 清理。
+- **错误码约定**: `authorize` 内不要抛普通 `Error` —— Auth.js v5 会把它包装成通用 `CredentialsSignin`,原始 message 丢失(路由只能拿到 500)。微信侧错误统一抛 `CredentialsSignin` 子类(`WechatNotBoundSignInError` → `wechat_not_bound`、`WechatApiSignInError` → `wechat_api_error`),登录路由按 `code` 映射为 400 + 可读文案。
+- **协议授权门槛**: 进入登录页的自动静默登录只对**已勾选过《用户协议》**的用户生效(小程序端 `utils/agreement.ts` 记录授权,设备维度);首次使用必须通过登录页勾选协议 + 正常登录完成授权,之后才会自动静默登录。
 - **默认 role**: `USER`。微信登录用户访问 `/admin/*` 会被 `app/admin/layout.tsx` 的 `role === "ADMIN"` 守卫重定向到 `/`,与 SMS 用户行为一致。
 - **环境变量**: `WECHAT_MP_APP_ID` / `WECHAT_MP_APP_SECRET` / `WECHAT_MP_API_BASE`(默认 `https://api.weixin.qq.com`)。任一必填空时登录返回 401 + 日志 `missing app config`。
-- **不持久化 openid**: 仅在 `code2Session ok` 日志中记录,便于排障;不加 `wechatOpenid` 列。
+- **openid 持久化在 `accounts` 表**(不再只写日志):`accounts` 是绑定关系的唯一事实来源;**不写 `users.wechatOpenid`**,避免双写漂移(该预留列已由迁移 `0008_wechat_cleanup.sql` 删除,因为从未被写入过)。
 - **CORS 不需要**: 微信小程序 `wx.request` 不强制 CORS,服务端不返回额外 CORS 头。
 
 ### Login UI flow

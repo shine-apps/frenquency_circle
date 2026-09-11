@@ -1,21 +1,8 @@
 import { cookies } from "next/headers"
 
 import { corsOptions, ok, withCors } from "@/lib/api"
+import { SESSION_COOKIE_NAMES } from "@/lib/auth/session-token"
 import { logger, LOG_PREFIX } from "@/lib/logger"
-
-/**
- * 需要清除的 session cookie 名称。
- * Auth.js v5 默认使用 `authjs.session-token`(HTTPS 环境对应
- * `__Secure-authjs.session-token`)，v4 时代为 `next-auth.session-token`。
- * 这里保留两套以兼容历史 token。与 `lib/auth/session-token.ts` 中的
- * SESSION_COOKIE_NAMES 保持一致。
- */
-const SESSION_COOKIE_NAMES = [
-  "authjs.session-token",
-  "__Secure-authjs.session-token",
-  "next-auth.session-token",
-  "__Secure-next-auth.session-token",
-] as const
 
 /**
  * 退出登录(Token 双模式兼容)。

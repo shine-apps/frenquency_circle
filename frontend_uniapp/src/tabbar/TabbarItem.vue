@@ -32,7 +32,8 @@ function getImageByIndex(index: number, item: CustomTabBarItem) {
     <template v-if="item.iconType === 'image'">
       <image :src="getImageByIndex(index, item)" mode="scaleToFill" :class="isBulge ? 'h-80px w-80px' : 'h-24px w-24px'" />
     </template>
-    <view class="mt-2px text-12px">
+    <!-- 凸起项(中间大按钮)只显示图标,不显示文字 -->
+    <view v-if="!isBulge" class="mt-2px text-12px">
       {{ item.text }}
     </view>
     <!-- 角标显示 -->

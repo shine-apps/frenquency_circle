@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs"
-import { and, desc, eq, isNull, sql } from "drizzle-orm"
+import { and, desc, eq, gte, isNull, sql } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { smsVerificationCodes } from "@/db/schema"
 import { generateCode } from "./phone"
@@ -41,6 +41,43 @@ export async function issueCode(phone: string): Promise<string> {
     createdAt: now,
   })
   return code
+}
+
+/** 单手机号验证码发放上限(默认 10 条/小时),可用 SMS_ISSUE_HOURLY_PER_PHONE 覆盖 */
+function issueHourlyCap(): number {
+  const v = process.env.SMS_ISSUE_HOURLY_PER_PHONE
+  const n = v ? Number(v) : 10
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 10
+}
+
+/** 发放统计窗口:1 小时 */
+const ISSUE_WINDOW_MS = 60 * 60 * 1000
+
+/**
+ * 该手机号在统计窗口内的发放量是否已达上限。
+ *
+ * 为什么需要它:`lib/sms/rate-limit.ts` 是进程内 Map,多实例部署时
+ * 单实例计数无法反映全局发放量;而验证码发放记录本就落在数据库,
+ * 直接用它做「按手机号」的全局兜底,防止单个号码被短信轰炸
+ * (IP 维度的限流仍是实例本地的,见 getClientIp)。
+ */
+export async function isIssueCapped(phone: string): Promise<boolean> {
+  const rows = await db
+    .select({ issued: sql<number>`count(*)::int` })
+    .from(smsVerificationCodes)
+    .where(
+      and(
+        eq(smsVerificationCodes.phone, phone),
+        gte(
+          smsVerificationCodes.createdAt,
+          new Date(Date.now() - ISSUE_WINDOW_MS)
+        )
+      )
+    )
+    .limit(1)
+
+  const issued = Number(rows[0]?.issued ?? 0)
+  return issued >= issueHourlyCap()
 }
 
 /**

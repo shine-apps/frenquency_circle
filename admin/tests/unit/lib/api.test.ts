@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { fail, ok, parsePagination } from "@/lib/api"
+import { fail, getClientIp, ok, parsePagination } from "@/lib/api"
 
 describe("lib/api", () => {
   describe("ok", () => {
@@ -57,6 +57,38 @@ describe("lib/api", () => {
     it("returns null when pageSize exceeds cap", () => {
       const params = new URLSearchParams({ pageSize: "500" })
       expect(parsePagination(params)).toBeNull()
+    })
+  })
+
+  describe("getClientIp", () => {
+    it("prefers x-real-ip (written by the trusted proxy, not spoofable)", () => {
+      const req = new Request("http://localhost/api", {
+        headers: {
+          "x-real-ip": "203.0.113.7",
+          // 客户端可伪造的首段不应生效
+          "x-forwarded-for": "1.2.3.4, 203.0.113.7",
+        },
+      })
+      expect(getClientIp(req)).toBe("203.0.113.7")
+    })
+
+    it("falls back to the last x-forwarded-for segment", () => {
+      // nginx 的 $proxy_add_x_forwarded_for 会把真实地址追加到最后
+      const req = new Request("http://localhost/api", {
+        headers: { "x-forwarded-for": "1.2.3.4, 203.0.113.9" },
+      })
+      expect(getClientIp(req)).toBe("203.0.113.9")
+    })
+
+    it("returns unknown when no proxy headers exist", () => {
+      expect(getClientIp(new Request("http://localhost/api"))).toBe("unknown")
+    })
+
+    it("ignores blank header values", () => {
+      const req = new Request("http://localhost/api", {
+        headers: { "x-real-ip": "  ", "x-forwarded-for": " , " },
+      })
+      expect(getClientIp(req)).toBe("unknown")
     })
   })
 })

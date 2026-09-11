@@ -29,7 +29,6 @@ type UserRow = {
   role: string
   avatarUrl: string | null
   phone: string | null
-  wechatOpenid: string | null
   latitude: number | null
   longitude: number | null
   address: string | null
@@ -139,7 +138,6 @@ function makeUserRow(overrides: Partial<UserRow> = {}): UserRow {
     role: overrides.role ?? "USER",
     avatarUrl: overrides.avatarUrl ?? null,
     phone: overrides.phone ?? null,
-    wechatOpenid: overrides.wechatOpenid ?? null,
     latitude: overrides.latitude ?? null,
     longitude: overrides.longitude ?? null,
     address: overrides.address ?? null,

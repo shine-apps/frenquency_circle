@@ -6,8 +6,10 @@ import type { AuthUser, UserRole } from "@/types/api"
  * Session cookie 名称。
  * Auth.js v5 默认使用 `authjs.session-token`(HTTPS 环境对应 `__Secure-authjs.session-token`),
  * v4 时代则是 `next-auth.session-token`。本数组保留两套以兼容历史 token。
+ *
+ * 退出登录(清 cookie)也复用本常量,避免两处各维护一份导致漏清 cookie。
  */
-const SESSION_COOKIE_NAMES = [
+export const SESSION_COOKIE_NAMES = [
   "authjs.session-token",
   "__Secure-authjs.session-token",
   "next-auth.session-token",

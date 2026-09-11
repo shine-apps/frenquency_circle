@@ -19,7 +19,9 @@ vi.mock("@/lib/logger", () => ({
   LOG_PREFIX: { AUTH: "AUTH", SMS: "SMS", ACCOUNT: "ACCOUNT", WECHAT: "WECHAT" },
 }))
 
+import { CredentialsSignin } from "next-auth"
 import { POST } from "@/app/api/auth/login/credentials/route"
+import { SESSION_MAX_AGE_SECONDS } from "@/lib/auth/session-config"
 import type { AuthLoginResponse, IResponse } from "@/types/api"
 
 function makeRequest(body: unknown) {
@@ -93,6 +95,21 @@ describe("POST /api/auth/login/credentials", () => {
     expect(body.code).toBe(200)
     expect(body.data.token).toBe(FAKE_TOKEN)
     expect(body.data.user).toEqual(FAKE_USER)
+    // 有效期与 session.maxAge 同源下发,前端据此判定过期
+    expect(body.data.expiresIn).toBe(SESSION_MAX_AGE_SECONDS)
+  })
+
+  it("returns 401 when CredentialsSignin is thrown (wrong password)", async () => {
+    // authorize 返回 null 时 @auth/core 会抛 CredentialsSignin,
+    // 属于「凭据不正确」,必须映射为 401 而不是 500
+    signInMock.mockRejectedValueOnce(new CredentialsSignin())
+
+    const res = await POST(
+      makeRequest({ email: "a@b.com", password: "secret1" })
+    )
+    expect(res.status).toBe(401)
+    const body = (await res.json()) as IResponse<null>
+    expect(body.message).toBe("邮箱或密码错误")
   })
 
   it("returns 500 when signIn throws", async () => {

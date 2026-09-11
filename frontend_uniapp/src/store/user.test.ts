@@ -1,9 +1,9 @@
-import { fetchCurrentUser } from '@/api/auth'
+import { getMyProfile } from '@/api/auth'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useUserStore } from './user'
 
 vi.mock('@/api/auth', () => ({
-  fetchCurrentUser: vi.fn(),
+  getMyProfile: vi.fn(),
   fromUserDTO: vi.fn(),
 }))
 
@@ -32,7 +32,7 @@ describe('useUserStore', () => {
     expect(store.isLoggedIn).toBe(false)
   })
 
-  it('initUserSession：正确更新用户信息并补齐模板兼容字段', () => {
+  it('initUserSession：以初始状态为底写入登录响应字段', () => {
     const store = useUserStore()
     store.initUserSession({
       id: 'u1',
@@ -43,9 +43,8 @@ describe('useUserStore', () => {
     })
     expect(store.userInfo.id).toBe('u1')
     expect(store.userInfo.name).toBe('张三')
-    expect(store.userInfo.username).toBe('zhangsan@example.com')
-    expect(store.userInfo.nickname).toBe('张三')
-    expect(store.userInfo.roles).toEqual(['USER'])
+    expect(store.userInfo.email).toBe('zhangsan@example.com')
+    expect(store.userInfo.role).toBe('USER')
     // 不再写入默认头像:avatar 与 avatarUrl 同源,无头像时由 UI 兜底展示昵称首字
     expect(store.userInfo.avatar).toBeUndefined()
   })
@@ -105,10 +104,11 @@ describe('useUserStore', () => {
       email: 'api@x.com',
       role: 'USER' as const,
       avatarUrl: 'https://x.com/a.png',
+      tags: [],
       createdAt: '2025-01-01',
       updatedAt: '2025-01-01',
     }
-    vi.mocked(fetchCurrentUser).mockResolvedValue(mockUser)
+    vi.mocked(getMyProfile).mockResolvedValue(mockUser)
     // fromUserDTO 映射结果
     const { fromUserDTO } = await import('@/api/auth')
     vi.mocked(fromUserDTO).mockReturnValue({

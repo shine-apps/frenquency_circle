@@ -11,43 +11,54 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 type Row = Record<string, unknown>
 
-const { mockDb, chainUpdate, findFirstMock, readUserFromTokenMock } =
-  vi.hoisted(() => {
-    // findFirst 队列:每次调用取队首,缺省返回 null
-    const findFirstMock = vi.fn()
+const {
+  mockDb,
+  chainUpdate,
+  findFirstMock,
+  accountsFindFirstMock,
+  readUserFromTokenMock,
+} = vi.hoisted(() => {
+  // findFirst 队列:每次调用取队首,缺省返回 null
+  const findFirstMock = vi.fn()
+  // accounts.findFirst:邮箱变更时的绑定占用校验
+  const accountsFindFirstMock = vi.fn()
 
-    const chainUpdate: {
-      set: ReturnType<typeof vi.fn>
-      where: ReturnType<typeof vi.fn>
-      returning: ReturnType<typeof vi.fn>
-    } = {
-      set: vi.fn(function (this: unknown) {
-        return chainUpdate
-      }),
-      where: vi.fn(function (this: unknown) {
-        return chainUpdate
-      }),
-      returning: vi.fn(),
-    }
+  const chainUpdate: {
+    set: ReturnType<typeof vi.fn>
+    where: ReturnType<typeof vi.fn>
+    returning: ReturnType<typeof vi.fn>
+  } = {
+    set: vi.fn(function (this: unknown) {
+      return chainUpdate
+    }),
+    where: vi.fn(function (this: unknown) {
+      return chainUpdate
+    }),
+    returning: vi.fn(),
+  }
 
-    const mockDb = {
-      query: {
-        users: {
-          findFirst: findFirstMock,
-        },
+  const mockDb = {
+    query: {
+      users: {
+        findFirst: findFirstMock,
       },
-      update: vi.fn(function (this: unknown) {
-        return chainUpdate
-      }),
-    }
+      accounts: {
+        findFirst: accountsFindFirstMock,
+      },
+    },
+    update: vi.fn(function (this: unknown) {
+      return chainUpdate
+    }),
+  }
 
-    return {
-      mockDb,
-      chainUpdate,
-      findFirstMock,
-      readUserFromTokenMock: vi.fn(),
-    }
-  })
+  return {
+    mockDb,
+    chainUpdate,
+    findFirstMock,
+    accountsFindFirstMock,
+    readUserFromTokenMock: vi.fn(),
+  }
+})
 
 vi.mock("@/lib/db", () => ({
   db: mockDb,
@@ -102,6 +113,8 @@ function fakeRow(overrides: Record<string, unknown> = {}): Row {
 
 beforeEach(() => {
   findFirstMock.mockReset()
+  accountsFindFirstMock.mockReset()
+  accountsFindFirstMock.mockResolvedValue(null)
   chainUpdate.set.mockClear()
   chainUpdate.where.mockClear()
   chainUpdate.returning.mockReset()
@@ -150,17 +163,38 @@ describe("PATCH /api/auth/me", () => {
     expect(mockDb.update).toHaveBeenCalledTimes(1)
   })
 
-  it("returns 200 on valid email update (no conflict)", async () => {
+  it("returns 200 on valid email update and syncs credentials binding", async () => {
     readUserFromTokenMock.mockResolvedValue(FAKE_AUTH)
-    findFirstMock.mockResolvedValue(null) // 邮箱未被他人占用
+    // 第 1 次:读取旧邮箱;第 2 次:邮箱去重(未被占用)
+    findFirstMock
+      .mockResolvedValueOnce({ email: "old@example.com" })
+      .mockResolvedValueOnce(null)
     const updatedRow = fakeRow({ email: "new@example.com" })
     chainUpdate.returning.mockResolvedValue([updatedRow])
+
     const res = await PATCH(makeRequest({ email: "new@example.com" }))
     expect(res.status).toBe(200)
     const body = (await res.json()) as IResponse<{ email: string }>
     expect(body.data.email).toBe("new@example.com")
-    // 邮箱去重确实查了 DB
-    expect(findFirstMock).toHaveBeenCalledTimes(1)
+    // users 侧查了 2 次(旧邮箱 + 去重),accounts 侧查了 1 次(绑定占用)
+    expect(findFirstMock).toHaveBeenCalledTimes(2)
+    expect(accountsFindFirstMock).toHaveBeenCalledTimes(1)
+    // 邮箱变更后同步 credentials 绑定(users 一次 + accounts 一次)
+    expect(mockDb.update).toHaveBeenCalledTimes(2)
+  })
+
+  it("returns 409 when the email is taken by another credentials binding", async () => {
+    readUserFromTokenMock.mockResolvedValue(FAKE_AUTH)
+    findFirstMock
+      .mockResolvedValueOnce({ email: "old@example.com" })
+      .mockResolvedValueOnce(null) // users 侧无冲突
+    accountsFindFirstMock.mockResolvedValueOnce({ id: "acc-1" }) // accounts 侧被他人占用
+
+    const res = await PATCH(makeRequest({ email: "new@example.com" }))
+    expect(res.status).toBe(409)
+    const body = (await res.json()) as IResponse<null>
+    expect(body.message).toBe("该邮箱已被其他用户使用")
+    expect(mockDb.update).not.toHaveBeenCalled()
   })
 
   it("returns 409 when email is already used by another user", async () => {

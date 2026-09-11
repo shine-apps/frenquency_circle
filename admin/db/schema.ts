@@ -86,8 +86,6 @@ export const users = pgTable("users", {
   avatarUrl: text("avatar_url"),
   /** 用户手机号(可空,phone/wechat-miniprogram provider 登录后写入) */
   phone: text("phone"),
-  /** 微信 openid(暂不持久化,预留字段以便后续扩展) */
-  wechatOpenid: text("wechat_openid"),
   /**
    * 用户微信号(可空,最长 50 字符,空串归一为 null)。
    * 人-人联系链路中唯一可对外展示的联系方式:

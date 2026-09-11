@@ -12,14 +12,8 @@ const baseTabbarList = reactive<CustomTabBarItem[]>(_tabbarList.map(item => ({
 
 const userRoles = computed(() => {
   const userStore = useUserStore()
-  const userInfo = userStore.userInfo
-  if (Array.isArray(userInfo?.roles) && userInfo.roles.length > 0) {
-    return userInfo.roles
-  }
-  if (userInfo?.role) {
-    return [userInfo.role]
-  }
-  return []
+  const role = userStore.userInfo?.role
+  return role ? [role] : []
 })
 
 const tabbarList = computed(() => {

@@ -1,8 +1,8 @@
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
 import { useUserStore } from '@/store/user'
-import { getMyProfile, updateMyProfile, updateProfile, verifyPhoneBind } from '@/api/auth'
-import { sendSmsCode } from '@/api/login'
+import { bindWechat, getMyProfile, getWechatBindStatus, unbindWechat, updateMyProfile, updateProfile, verifyPhoneBind } from '@/api/auth'
+import { getWxCode, sendSmsCode } from '@/api/login'
 import { uploadFileToCos } from '@/api/upload'
 import { chooseImages } from '@/utils/chooseImage'
 import { toLoginWithRedirect } from '@/utils/toLoginPage'
@@ -51,6 +51,14 @@ const sendingCode = ref(false)
 const bindingPhone = ref(false)
 let countdownTimer: ReturnType<typeof setInterval> | null = null
 
+// ===== 微信登录绑定状态 =====
+// 注意与上方「微信号」(users.wechat,手填文本,对外联系方式)区分:
+// 这里指微信授权登录绑定(后端 accounts 表 provider='wechat-miniprogram' + openid)。
+/** 当前账号是否已绑定微信(以服务端为准) */
+const wechatBound = ref(false)
+/** 绑定/解绑请求进行中(防重复提交) */
+const bindingWechat = ref(false)
+
 /** 从 store 回填表单初值 */
 function fillFromUser() {
   const u = user.value
@@ -74,6 +82,8 @@ onShow(() => {
     toLoginWithRedirect()
     return
   }
+  // 微信绑定状态与资料并行拉取(失败静默,不阻塞资料展示)
+  refreshWechatBind()
   getMyProfile()
     .then((profile) => {
       userStore.setProfile(profile)
@@ -87,6 +97,67 @@ onShow(() => {
       loading.value = false
     })
 })
+
+/** 刷新微信登录绑定状态(失败静默,保持原值) */
+function refreshWechatBind() {
+  getWechatBindStatus()
+    .then((state) => {
+      wechatBound.value = state.bound
+    })
+    .catch(() => {})
+}
+
+// ===== 微信登录绑定(仅微信小程序可操作) =====
+/** 绑定微信:wx.login 拿 code → 后端 code2Session 换 openid 并写入 accounts 绑定 */
+async function handleBindWechat() {
+  if (bindingWechat.value)
+    return
+  bindingWechat.value = true
+  try {
+    const code = await getWxCode()
+    const state = await bindWechat(code.code)
+    wechatBound.value = state.bound
+    toast.show({ msg: '微信绑定成功', iconName: 'success' })
+  }
+  catch (e) {
+    toast.show({ msg: (e as Error).message || '微信绑定失败,请重试', iconName: 'error' })
+  }
+  finally {
+    bindingWechat.value = false
+  }
+}
+
+/** 执行解绑:后端会校验账号仍有其它登录方式,否则返回可读错误 */
+async function doUnbindWechat() {
+  bindingWechat.value = true
+  try {
+    const state = await unbindWechat()
+    wechatBound.value = state.bound
+    toast.show({ msg: '已解绑微信', iconName: 'success' })
+  }
+  catch (e) {
+    toast.show({ msg: (e as Error).message || '解绑失败,请重试', iconName: 'error' })
+  }
+  finally {
+    bindingWechat.value = false
+  }
+}
+
+/** 解绑微信:先二次确认,避免误触导致无法微信一键登录 */
+function handleUnbindWechat() {
+  if (bindingWechat.value)
+    return
+  uni.showModal({
+    title: '解绑微信',
+    content: '解绑后将无法使用微信一键登录,确定解绑吗?',
+    confirmText: '解绑',
+    cancelText: '取消',
+    success: (res) => {
+      if (res.confirm)
+        doUnbindWechat()
+    },
+  })
+}
 
 // ===== 头像上传与裁剪 =====
 /** 从 tempFilePath 推断文件名(裁剪后无扩展名时兜底) */
@@ -701,10 +772,44 @@ async function handleBindPhone() {
                 修改手机号
               </text>
             </view>
+            <view class="mx-3 h-px bg-[#f5f5f5]" />
+
+            <!-- 微信登录绑定行:与上方「微信号」(手填对外联系方式)不同,这里是微信授权登录绑定 -->
+            <view class="flex items-center gap-3.5 py-2">
+              <view class="h-10 w-10 flex shrink-0 items-center justify-center rounded-xl bg-[#e8f5f1] text-[18px] text-[#018d71]">
+                <text>登</text>
+              </view>
+              <view class="min-w-0 flex flex-1 flex-col gap-0.5">
+                <text class="text-xs text-[#999]">微信登录绑定</text>
+                <text class="break-all text-[15px] text-[#333] font-medium">{{ wechatBound ? '已绑定' : '未绑定' }}</text>
+              </view>
+              <!-- #ifdef MP-WEIXIN -->
+              <text
+                v-if="!wechatBound"
+                class="cursor-pointer text-xs text-[#018d71]"
+                :class="bindingWechat ? 'opacity-50' : ''"
+                @click="handleBindWechat"
+              >
+                绑定微信
+              </text>
+              <text
+                v-else
+                class="cursor-pointer text-xs text-[#e68a00]"
+                :class="bindingWechat ? 'opacity-50' : ''"
+                @click="handleUnbindWechat"
+              >
+                解绑
+              </text>
+              <!-- #endif -->
+              <!-- #ifndef MP-WEIXIN -->
+              <text class="text-xs text-[#bbb]">仅微信小程序内可管理</text>
+              <!-- #endif -->
+            </view>
 
             <view class="pb-1 pt-2 text-xs text-[#999] leading-[1.6]">
               昵称、邮箱、性别、生日点击右侧编辑图标修改,保存后即时生效。
               微信号仅在你公开联系方式或同意联系请求后,才会被他人看到。
+              微信登录绑定用于微信一键登录,可在微信小程序内绑定或解绑。
             </view>
           </view>
         </view>

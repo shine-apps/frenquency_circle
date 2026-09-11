@@ -12,9 +12,7 @@ const { tokenStoreStub, uniRequestMock } = vi.hoisted(() => ({
   tokenStoreStub: {
     updateNowTime: () => tokenStoreStub,
     validToken: 'fake-token-123',
-    tokenInfo: { refreshToken: '' },
     logout: vi.fn(),
-    refreshToken: vi.fn(),
   },
   uniRequestMock: vi.fn(),
 }))
@@ -25,8 +23,9 @@ vi.mock('@/store/token', () => ({
 // 避免加载真实 src/utils/index.ts(其内部 import { pages } from '@/pages.json',含 uni 注释,vitest 的 vite:json 无法解析)
 vi.mock('@/utils', () => ({
   getEnvBaseUrl: () => 'http://localhost:3000',
-  isDoubleTokenMode: false,
   HOME_PAGE: '/pages/index/index',
+  // @/utils/toLoginPage → @/router/config 在模块顶层会调用 getAllPages
+  getAllPages: () => [],
 }))
 
 // 提供 uni 命名空间(uni.request / 弹窗等)

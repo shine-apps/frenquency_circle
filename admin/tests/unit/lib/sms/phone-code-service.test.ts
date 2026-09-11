@@ -58,7 +58,11 @@ vi.mock("bcryptjs", () => ({
   default: { compare: compareMock, hash: hashMock },
 }))
 
-import { verifyCode, issueCode } from "@/lib/sms/phone-code-service"
+import {
+  verifyCode,
+  issueCode,
+  isIssueCapped,
+} from "@/lib/sms/phone-code-service"
 
 function resetMock() {
   mockDb._selectResult = []
@@ -181,6 +185,23 @@ describe("lib/sms/phone-code-service", () => {
       expect(mockDb.update).toHaveBeenCalledTimes(1)
       expect(chainUpdate.set).toHaveBeenCalledTimes(1)
       expect(chainUpdate.where).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe("isIssueCapped", () => {
+    it("returns true when issued count reaches the hourly cap (default 10)", async () => {
+      mockDb._selectResult = [{ issued: 10 }]
+      await expect(isIssueCapped("13800138000")).resolves.toBe(true)
+    })
+
+    it("returns false below the cap", async () => {
+      mockDb._selectResult = [{ issued: 3 }]
+      await expect(isIssueCapped("13800138000")).resolves.toBe(false)
+    })
+
+    it("returns false when nothing was issued in the window", async () => {
+      mockDb._selectResult = []
+      await expect(isIssueCapped("13800138000")).resolves.toBe(false)
     })
   })
 })

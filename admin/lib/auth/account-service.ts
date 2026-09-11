@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 import bcrypt from "bcryptjs"
-import { and, eq } from "drizzle-orm"
+import { and, eq, exists, ne } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { accounts, users } from "@/db/schema"
 import { logger, LOG_PREFIX } from "@/lib/logger"
@@ -129,4 +129,150 @@ export async function findOrCreateUserAndLinkAccount(params: {
   })
 
   return user
+}
+
+/** `findUserByAccountOrEmail` 的解析结果 */
+export type ResolvedAccountUser = {
+  user: typeof users.$inferSelect
+  /**
+   * 命中来源：
+   * - `account`：accounts 绑定命中（稳定身份锚点）
+   * - `email`：绑定行缺失，按 `users.email` 兜底命中（历史/seed 数据，或用户刚改过邮箱）
+   */
+  matchedBy: "account" | "email"
+}
+
+/**
+ * 解析「provider 绑定优先、邮箱兜底」的已存在用户（只读，不创建）。
+ *
+ * 为什么需要它：`findOrCreateUserAndLinkAccount` 仅按 `users.email` 查找，
+ * 而 email 是**可变字段**（`PATCH /api/auth/me` 可改）且手机号用户的 email 是派生的
+ * （`{phone}@phonedomain.com`）。一旦用户改过邮箱，按 email 查就会落空并
+ * **新建重复账号**，同时 link 命中唯一索引只更新 updatedAt，绑定关系仍指向旧账号。
+ * 因此登录解析统一改为：先看 accounts 绑定关系，再回退 email。
+ */
+export async function findUserByAccountOrEmail(params: {
+  provider: string
+  providerAccountId: string
+  email: string
+}): Promise<ResolvedAccountUser | undefined> {
+  const bound = await findUserByAccount(params.provider, params.providerAccountId)
+  if (bound) return { user: bound, matchedBy: "account" }
+
+  const byEmail = await db.query.users.findFirst({
+    where: eq(users.email, params.email),
+  })
+  if (!byEmail) return undefined
+  return { user: byEmail, matchedBy: "email" }
+}
+
+/**
+ * 「provider 绑定优先、邮箱兜底」的 find-or-create + link。
+ *
+ * 与 `findOrCreateUserAndLinkAccount` 的区别见 `findUserByAccountOrEmail` 注释：
+ * 本方法是登录入口（手机号 / 微信手机号）应使用的版本，命中已有账号时不再新建，
+ * 并以幂等 upsert 补齐 provider 绑定（与旧行为一致）。
+ */
+export async function findOrCreateUserByProvider(params: {
+  email: string
+  name: string
+  role?: string
+  provider: string
+  providerAccountId: string
+  type?: ProviderType
+}) {
+  const resolved = await findUserByAccountOrEmail(params)
+  if (resolved) {
+    await linkAccount({
+      userId: resolved.user.id,
+      provider: params.provider,
+      providerAccountId: params.providerAccountId,
+      type: params.type,
+    })
+    return resolved.user
+  }
+  return findOrCreateUserAndLinkAccount(params)
+}
+
+/**
+ * 判断用户在指定 provider 下是否存在登录绑定记录。
+ * 例如：「是否已绑定微信」= hasBoundProvider(userId, "wechat-miniprogram")。
+ */
+export async function hasBoundProvider(
+  userId: string,
+  provider: string
+): Promise<boolean> {
+  const rows = await db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(and(eq(accounts.userId, userId), eq(accounts.provider, provider)))
+    .limit(1)
+  return rows.length > 0
+}
+
+/**
+ * 判断用户除指定 provider 外是否仍有其它登录方式。
+ *
+ * 用于解绑守卫：解绑微信（wechat-miniprogram）后账号必须仍能用手机号/邮箱等登录，
+ * 否则用户会彻底失去登录能力。
+ */
+export async function hasOtherLoginMethod(
+  userId: string,
+  excludeProvider: string
+): Promise<boolean> {
+  const rows = await db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(
+      and(eq(accounts.userId, userId), ne(accounts.provider, excludeProvider))
+    )
+    .limit(1)
+  return rows.length > 0
+}
+
+/**
+ * 解绑：删除用户在指定 provider 下的绑定记录。
+ *
+ * 「仍存在其它登录方式」的守卫被写进同一条 DELETE 的 EXISTS 子查询，
+ * 与删除在同一语句内原子完成，避免「先校验后删除」在并发下解掉唯一登录方式
+ * （如两个解绑请求同时通过校验）。
+ *
+ * @returns 实际删除的行数；0 表示无其它登录方式（被守卫拦下）或本就无绑定
+ */
+export async function unlinkAccount(params: {
+  userId: string
+  provider: string
+  providerAccountId?: string
+}): Promise<number> {
+  const { userId, provider, providerAccountId } = params
+
+  // 同用户下存在任意一条其它 provider 的 account 即视为仍有其它登录方式
+  const otherLoginMethod = db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(and(eq(accounts.userId, userId), ne(accounts.provider, provider)))
+
+  const deleted = await db
+    .delete(accounts)
+    .where(
+      and(
+        eq(accounts.userId, userId),
+        eq(accounts.provider, provider),
+        providerAccountId
+          ? eq(accounts.providerAccountId, providerAccountId)
+          : undefined,
+        exists(otherLoginMethod)
+      )
+    )
+    .returning({ id: accounts.id })
+
+  if (deleted.length > 0) {
+    logger.info(LOG_PREFIX.ACCOUNT, "Account unlinked", {
+      userId,
+      provider,
+      removed: deleted.length,
+    })
+  }
+
+  return deleted.length
 }

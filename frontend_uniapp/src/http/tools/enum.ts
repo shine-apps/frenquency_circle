@@ -30,8 +30,20 @@ export enum HttpErrorType {
   Network = 'network',
 }
 
+/**
+ * 判断业务码是否表示成功。
+ *
+ * 兼容两类约定：
+ * - `0`：部分后端以 0 表示成功（见 ResultEnum.Success0）
+ * - `2xx`：与 HTTP 状态码镜像。后端「创建类」接口会返回 201/203
+ *   （如 `POST /api/auth/sms/send` 201、`POST /api/circles` 203），
+ *   旧实现只认 0/200，会把成功响应当成业务错误 reject，
+ *   导致调用方后续逻辑不执行（例如验证码倒计时不启动）。
+ */
 export function isSuccessResultCode(code: number): boolean {
-  return [ResultEnum.Success0, ResultEnum.Success200].includes(code)
+  if (code === ResultEnum.Success0)
+    return true
+  return typeof code === 'number' && code >= 200 && code < 300
 }
 
 export function getResponseMessage(responseData: Partial<IResponse<any>> | undefined, fallback = '请求错误'): string {

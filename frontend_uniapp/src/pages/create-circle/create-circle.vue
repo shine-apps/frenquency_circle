@@ -241,11 +241,7 @@ onLoad(async (options) => {
     // 用户资料可能尚未拉全,再用完整资料(含标签/地址)刷新一次
     try {
       const profile = await getMyProfile()
-      userStore.updateUser({
-        tags: profile.tags ?? userStore.userInfo.tags,
-        address: profile.address ?? userStore.userInfo.address ?? null,
-        location: profile.location ?? userStore.userInfo.location ?? null,
-      })
+      userStore.setProfile(profile)
       applyUserDefaults()
     }
     catch {

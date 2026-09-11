@@ -1,4 +1,4 @@
-import type { ActivityLevel, UserGender, UserRole as BusinessUserRole, PrivacySettings, TagDTO, UserProfile } from '@/types'
+import type { ActivityLevel, UserDTO as BusinessUserDTO, UserRole as BusinessUserRole, PrivacySettings, TagDTO, UserGender, UserProfile } from '@/types'
 
 // 认证模式类型
 export type AuthMode = 'single' | 'double'
@@ -119,23 +119,13 @@ export interface AuthLoginResponse {
   user: AuthUser
 }
 
-/** /api/auth/me 返回的完整用户信息 */
-export interface UserDTO {
-  id: string
-  email: string
-  name: string
-  role: BusinessUserRole
-  /** 头像 URL(可空) */
-  avatarUrl?: string | null
-  /** 微信号(可空)。人-人联系链路中唯一可对外展示的联系方式 */
-  wechat?: string | null
-  /** 性别(可空,资料补全前为 null) */
-  gender?: UserGender | null
-  /** 生日(YYYY-MM-DD,可空) */
-  birthday?: string | null
-  createdAt: string
-  updatedAt: string
-}
+/**
+ * /api/auth/me 返回的完整用户信息。
+ * 直接复用 @/types 定义:后端 toUserDTO 实际返回 phone / practiceYears /
+ * activityLevel / privacySettings / location / address,两份结构必须同源,
+ * 否则 DTO 映射只能依赖运行时 in 判断,无法被类型系统校验。
+ */
+export type UserDTO = BusinessUserDTO
 
 /**
  * PATCH /api/auth/me 请求体(全部可选,至少传 1 个字段)。

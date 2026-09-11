@@ -29,25 +29,52 @@ export function toUserInfo(auth: { id: string, email: string, name: string, role
 }
 
 /**
- * 将后端 UserDTO 映射为前端 UserInfo 局部更新。
- * 用于 `useUserStore.updateUser` 入参:
- * - `avatar` 字段沿用旧语义(头像展示)
- * - `avatarUrl` 字段保留(后端原值,便于后续编辑页回填)
- * - `phone` 从最新 email 重算(避免邮箱变更后残留旧手机号)
+ * 将后端用户资料映射为前端 UserInfo 局部更新。
+ *
+ * 这是「后端 DTO → 内部模型」的唯一映射入口:所有资料写入(store 的
+ * `fetchUserInfo` / `setProfile`)都必须经过它,以保证:
+ * - `avatar` 展示字段与 `avatarUrl` 权威字段始终同步,避免改了头像但 UI 停留旧值
+ * - `phone` 优先取后端绑定值,缺失时回退为从 email 提取
+ * - 完整资料(UserProfile)附带的 tags / address / location 等业务字段一并映射
+ *   (按字段存在性判断,后端未返回的字段保持本地值不变,不会被 undefined 覆盖)
  */
-export function fromUserDTO(dto: UserDTO): Partial<UserInfo> {
-  return {
+export function fromUserDTO(dto: UserDTO | UserProfile): Partial<UserInfo> {
+  const patch: Partial<UserInfo> = {
     id: dto.id,
     name: dto.name,
     email: dto.email,
     role: dto.role,
     phone: extractPhone(dto.email),
-    wechat: dto.wechat ?? null,
-    gender: dto.gender ?? null,
-    birthday: dto.birthday ?? null,
-    avatar: dto.avatarUrl ?? undefined,
-    avatarUrl: dto.avatarUrl ?? undefined,
   }
+  // 可空字段统一按"后端是否返回该键"写入,未返回则保持本地值,
+  // 避免部分响应静默清空本地已保存的数据
+  if ('wechat' in dto)
+    patch.wechat = dto.wechat ?? null
+  if ('gender' in dto)
+    patch.gender = dto.gender ?? null
+  if ('birthday' in dto)
+    patch.birthday = dto.birthday ?? null
+  if ('avatarUrl' in dto) {
+    // 头像双字段必须在同一处同步,防止只更新 avatarUrl 而 avatar 停留在旧值
+    patch.avatar = dto.avatarUrl ?? undefined
+    patch.avatarUrl = dto.avatarUrl ?? undefined
+  }
+  // 以下为完整资料(UserProfile)才包含的业务字段,逐一按存在性映射
+  if ('phone' in dto && dto.phone)
+    patch.phone = dto.phone
+  if ('tags' in dto)
+    patch.tags = dto.tags
+  if ('practiceYears' in dto)
+    patch.practiceYears = dto.practiceYears ?? null
+  if ('activityLevel' in dto)
+    patch.activityLevel = dto.activityLevel ?? undefined
+  if ('privacySettings' in dto)
+    patch.privacySettings = dto.privacySettings ?? undefined
+  if ('location' in dto)
+    patch.location = dto.location ?? null
+  if ('address' in dto)
+    patch.address = dto.address ?? null
+  return patch
 }
 
 /** 获取当前登录用户(校验 token + 刷新用户信息) */

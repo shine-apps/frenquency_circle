@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { computed, ref, watch } from 'vue'
-import { updateMyProfile, fromUserDTO } from '@/api/auth'
+import { updateMyProfile } from '@/api/auth'
 import { uploadFileToCos } from '@/api/upload'
 import { useUserStore } from '@/store/user'
 import type { UserGender } from '@/types'
@@ -239,7 +239,7 @@ async function handleConfirm() {
       patch.birthday = birthday.value
     }
     const res = await updateMyProfile(patch)
-    userStore.updateUser(fromUserDTO(res))
+    userStore.setProfile(res)
     emit('success')
     // 保持 saving=true,防重复提交,待父组件关闭弹窗
   }

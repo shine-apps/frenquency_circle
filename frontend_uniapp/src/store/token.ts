@@ -217,7 +217,7 @@ export const useTokenStore = defineStore(
       setTokenInfo({ token: res.token, expiresIn: 86400 })
       const userStore = useUserStore()
       // 先写基础用户信息(登录响应),再异步拉取完整资料
-      userStore.setUserInfo(toUserInfo(res.user) as UserInfo)
+      userStore.initUserSession(toUserInfo(res.user) as UserInfo)
       await userStore.fetchUserInfo()
       // 未登录时暂存的兴趣/位置,登录成功后尝试回填到账号
       // (内部无缓存时直接返回,失败静默,不阻断登录流程)

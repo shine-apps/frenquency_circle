@@ -1,4 +1,4 @@
-import type { ActivityLevel, LocationPoint, PrivacySettings, UserGender, UserRole } from '@/types'
+import type { ActivityLevel, LocationPoint, PrivacySettings, UserDTO, UserGender, UserProfile, UserRole } from '@/types'
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { fetchCurrentUser, fromUserDTO } from '@/api/auth'
@@ -77,18 +77,16 @@ export const useUserStore = defineStore(
       }
     }
 
-    /** 设置用户信息(全量替换) */
-    function setUserInfo(val: UserInfo) {
-      // 若头像为空 则使用默认头像
-      if (!val.avatar) {
-        val.avatar = '/static/images/default-avatar.png'
-      }
+    /**
+     * 初始化用户会话(仅登录成功、建立会话时调用)。
+     * - 全量替换:以初始状态为底合并登录响应,清除上一会话/本地缓存的残留字段
+     * - 乐观写入:先用登录响应中的基础信息填充,随后由 `fetchUserInfo` 补全完整资料
+     * - 注意:刷新服务端资料请使用 `setProfile`,本方法会重置未传字段
+     */
+    function initUserSession(val: UserInfo) {
+      // 不写入默认头像:avatar 始终与 avatarUrl 保持一致,
+      // 无头像时由各页面 v-else 兜底展示昵称首字,避免登录瞬间"图片→文字"的跳变
       userInfo.value = normalizeUserInfo({ ...userInfoState, ...val })
-    }
-
-    /** 设置用户头像 */
-    function setUserAvatar(avatar: string) {
-      userInfo.value.avatar = avatar
     }
 
     /** 删除用户信息 */
@@ -99,40 +97,48 @@ export const useUserStore = defineStore(
 
     /**
      * 从后端刷新当前用户信息。
-     * - 走 `GET /api/auth/me`,返回 UserDTO
+     * - 走 `GET /api/auth/me`,返回完整 UserProfile
      * - 与模板的 getUserInfo(`/user/info`) 不同,趣邻圈后端无该接口
      */
     async function fetchUserInfo() {
       const dto = await fetchCurrentUser()
-      const patch = fromUserDTO(dto)
-      updateUser(patch)
+      setProfile(dto)
       return userInfo.value
     }
 
-    /** 部分更新用户信息(自动持久化) */
-    function updateUser(patch: Partial<UserInfo>) {
-      const next = normalizeUserInfo({ ...userInfo.value, ...patch })
-      userInfo.value = next
+    /**
+     * 底层局部合并(仅 store 内部使用)。
+     * 对外更新一律走语义化 setter,保证 DTO 映射与字段同步集中在一处处理。
+     */
+    function mergeUserInfo(patch: Partial<UserInfo>) {
+      userInfo.value = normalizeUserInfo({ ...userInfo.value, ...patch })
     }
 
     /** 设置兴趣标签名称列表 */
     function setTags(tags: string[]) {
-      updateUser({ tags })
+      mergeUserInfo({ tags })
     }
 
     /** 设置隐私设置 */
     function setPrivacy(settings: PrivacySettings) {
-      updateUser({ privacySettings: settings })
+      mergeUserInfo({ privacySettings: settings })
     }
 
-    /** 部分更新业务字段(来自 UserProfile) */
-    function setProfile(patch: Partial<Omit<UserInfo, 'id'>>) {
-      updateUser(patch)
+    /**
+     * 用后端最新用户资料刷新本地 store(服务端资料更新的唯一入口)。
+     * - 入参为后端原始 DTO / Profile,内部统一经 `fromUserDTO` 映射,
+     *   保证 avatar / avatarUrl 等字段同步,UI 不会停留旧值
+     * - 与 `initUserSession` 的分工:本方法为局部合并,只更新后端返回的字段,
+     *   不会重置未传字段;登录建立会话请使用 `initUserSession`
+     * - 不再对外暴露任意字段的 merge 入口,避免调用方绕过映射造成字段不同步
+     */
+    function setProfile(dto: UserDTO | UserProfile) {
+      mergeUserInfo(fromUserDTO(dto))
     }
 
     /** 设置当前位置与地址 */
     function setLocation(loc: LocationPoint | null, address?: string | null) {
-      updateUser(address !== undefined ? { location: loc, address } : { location: loc })
+      mergeUserInfo(address !== undefined ? { location: loc, address } : { location: loc })
     }
 
     /** 从存储恢复登录态(App 启动调用) */
@@ -152,11 +158,9 @@ export const useUserStore = defineStore(
     return {
       userInfo,
       isLoggedIn,
-      setUserInfo,
-      setUserAvatar,
+      initUserSession,
       clearUserInfo,
       fetchUserInfo,
-      updateUser,
       setTags,
       setPrivacy,
       setProfile,

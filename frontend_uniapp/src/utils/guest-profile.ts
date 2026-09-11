@@ -75,8 +75,8 @@ function clearGuestProfile(): void {
  *
  * 设计要点:
  * - 本地无暂存数据直接返回,不产生额外网络请求(老用户登录零开销);
- * - 是否已设置以 `getMyProfile()` 返回的完整资料为准,因为
- *   `fetchUserInfo()` 经 `fromUserDTO` 会丢弃 tags/location,不能作为判断依据;
+ * - 是否已设置以 `getMyProfile()` 返回的完整资料为准(store 中的值可能来自
+ *   本地缓存或被后续操作覆盖,不能作为账号真实状态的判断依据);
  * - 逐字段独立判断,仅在该字段尚未设置时写入,绝不覆盖账号已有数据;
  * - 整体 try/catch,失败保留缓存(下次登录可重试)且不阻断登录流程。
  */

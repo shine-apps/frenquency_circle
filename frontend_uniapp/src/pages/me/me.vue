@@ -190,14 +190,9 @@ function handleMyCircles() {
   uni.navigateTo({ url: '/pages/my-circles/my-circles' })
 }
 
-/** 跳我关注的圈子页 */
-function handleFollowedCircles() {
-  uni.navigateTo({ url: '/pages/followed-circles/followed-circles' })
-}
-
-/** 跳我关注的人页 */
-function handleFollowedUsers() {
-  uni.navigateTo({ url: '/pages/followed-users/followed-users' })
+/** 跳我的关注页(默认「我关注的人」Tab,可在页内切换到圈子) */
+function handleFollowed() {
+  uni.navigateTo({ url: '/pages/followed/followed' })
 }
 
 /** 跳联系请求页(打招呼的收发处理) */
@@ -403,7 +398,7 @@ const roleChipClass = computed(() => {
       <view class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4" @click="handleMyCircles">
         <view class="flex flex-col">
           <text class="text-sm text-[#333] font-medium">
-            我的圈子
+            我匹配的圈子
           </text>
           <text class="mt-0.5 text-xs text-[#999]">
             最近匹配的圈子
@@ -414,27 +409,13 @@ const roleChipClass = computed(() => {
         </text>
       </view>
 
-      <view class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4" @click="handleFollowedCircles">
+      <view class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4" @click="handleFollowed">
         <view class="flex flex-col">
           <text class="text-sm text-[#333] font-medium">
-            我关注的圈子
+            我的关注
           </text>
           <text class="mt-0.5 text-xs text-[#999]">
-            一键回看感兴趣的圈子
-          </text>
-        </view>
-        <text class="text-sm text-[#ccc]">
-          ›
-        </text>
-      </view>
-
-      <view class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4" @click="handleFollowedUsers">
-        <view class="flex flex-col">
-          <text class="text-sm text-[#333] font-medium">
-            我关注的人
-          </text>
-          <text class="mt-0.5 text-xs text-[#999]">
-            收藏的同趣伙伴,随时回看
+            关注的人与圈子,一键回看
           </text>
         </view>
         <text class="text-sm text-[#ccc]">

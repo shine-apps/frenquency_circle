@@ -1,7 +1,9 @@
 <script lang="ts" setup>
 import { computed } from 'vue'
+import { onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { useMbtiStore } from '@/store/mbti'
 import { useUserStore } from '@/store/user'
+import { useShare } from '@/composables/useShare'
 import { goHomeMatchWithTags } from '@/utils/matchLink'
 import { HOME_PAGE_PATH } from '@/router/config'
 
@@ -15,6 +17,19 @@ definePage({
 
 const userStore = useUserStore()
 const mbtiStore = useMbtiStore()
+
+// ====== 分享(小程序好友/朋友圈 + H5 微信 JSSDK,引导朋友来测) ======
+const { share, shareAppMessage, shareTimeline } = useShare({
+  title: 'MBTI 人格测试｜发现适合你的兴趣',
+  path: '/pages/mbti/intro',
+  desc: '精简版问卷 · 约 5 分钟,测出你的 16 型人格与推荐兴趣',
+})
+
+// 分享钩子必须在页面顶层直接注册, 编译器才能生成微信小程序 Page 配置
+// #ifdef MP-WEIXIN
+onShareAppMessage(shareAppMessage)
+onShareTimeline(shareTimeline)
+// #endif
 
 /** 是否存在可用的推荐兴趣(本次会话最近一次测试结果) */
 const hasRecommendations = computed(() => (mbtiStore.lastResult?.recommendations.length ?? 0) > 0)
@@ -137,6 +152,20 @@ function goHome() {
           </view>
           <text class="text-xs text-[#999]">看看其他人格适合什么 ›</text>
         </view>
+      </view>
+
+      <!-- 分享入口:小程序端为原生转发按钮(点击直接唤起转发);H5 微信浏览器点击后引导右上角分享 -->
+      <view class="mt-3">
+        <!-- #ifdef MP-WEIXIN -->
+        <wd-button plain round block open-type="share">
+          分享给好友
+        </wd-button>
+        <!-- #endif -->
+        <!-- #ifdef H5 -->
+        <wd-button plain round block @click="share">
+          分享给好友
+        </wd-button>
+        <!-- #endif -->
       </view>
     </view>
 

@@ -44,10 +44,13 @@ const {
   chainUpdate,
   insertReturningMock,
   updateReturningMock,
+  selectChains,
   setSelectResultsQueue,
   readUserFromTokenMock,
 } = vi.hoisted(() => {
   const selectResultsQueue: Record<string, unknown>[][] = []
+  /** 每次 db.select() 创建的查询链(供断言 where 条件) */
+  const selectChains: { where: ReturnType<typeof vi.fn> }[] = []
 
   function makeSelectChain(result: Record<string, unknown>[]) {
     const chain = {
@@ -61,6 +64,7 @@ const {
         reject?: (reason: unknown) => unknown
       ) => Promise.resolve(result).then(resolve, reject),
     }
+    selectChains.push(chain)
     return chain
   }
 
@@ -105,6 +109,7 @@ const {
     chainUpdate,
     insertReturningMock,
     updateReturningMock,
+    selectChains,
     setSelectResultsQueue: (results: Record<string, unknown>[][]) => {
       selectResultsQueue.length = 0
       selectResultsQueue.push(...results)
@@ -130,6 +135,7 @@ const {
   }
   insertReturningMock: ReturnType<typeof vi.fn>
   updateReturningMock: ReturnType<typeof vi.fn>
+  selectChains: { where: ReturnType<typeof vi.fn> }[]
   setSelectResultsQueue: (results: Record<string, unknown>[][]) => void
   readUserFromTokenMock: ReturnType<typeof vi.fn>
 }
@@ -159,6 +165,7 @@ import {
   PATCH as patchActivity,
   DELETE as cancelActivity,
 } from "@/app/api/activities/[activityId]/route"
+import { extractSqlParamValues } from "@/tests/helpers/sql-params"
 import type { IResponse, ActivityDTO, ActivityListDTO } from "@/types/api"
 
 const TEACHER = {
@@ -255,6 +262,7 @@ beforeEach(() => {
   chainUpdate.set.mockClear()
   chainUpdate.where.mockClear()
   readUserFromTokenMock.mockReset()
+  selectChains.length = 0
   setSelectResultsQueue([])
 })
 
@@ -385,8 +393,8 @@ describe("GET /api/activities", () => {
     setSelectResultsQueue([
       // 列表查询:只返回 active
       [makeActivityRow({ id: "a1", status: "active" })],
-      // 总数查询
-      [{ id: "a1" }],
+      // count() 查询(pg 的 count 为字符串)
+      [{ value: "1" }],
     ])
     const res = await listActivities(makeGetRequest(`/api/activities`))
     expect(res.status).toBe(200)
@@ -402,12 +410,47 @@ describe("GET /api/activities", () => {
         makeActivityRow({ id: "a1", status: "active" }),
         makeActivityRow({ id: "a2", status: "cancelled" }),
       ],
-      [{ id: "a1" }, { id: "a2" }],
+      [{ value: "2" }],
     ])
     const res = await listActivities(makeGetRequest(`/api/activities`, { mine: "1" }))
     expect(res.status).toBe(200)
     const body = (await res.json()) as IResponse<ActivityListDTO>
     expect(body.data.list).toHaveLength(2)
+    expect(body.data.total).toBe(2)
+  })
+
+  it("lists active activities of the given creator when creatorId is provided", async () => {
+    readUserFromTokenMock.mockResolvedValue(OTHER_USER)
+    setSelectResultsQueue([
+      [makeActivityRow({ id: "a1", status: "active" })],
+      [{ value: "1" }],
+    ])
+    const res = await listActivities(
+      makeGetRequest(`/api/activities`, { creatorId: TEACHER.id })
+    )
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as IResponse<ActivityListDTO>
+    expect(body.data.list).toHaveLength(1)
+    expect(body.data.list[0]!.id).toBe("a1")
+    expect(body.data.total).toBe(1)
+    // 对外口径:过滤条件必须同时落在 creatorId 与 active 状态上
+    const whereParams = extractSqlParamValues(
+      selectChains[0]!.where.mock.calls[0]?.[0]
+    )
+    expect(whereParams).toContain(TEACHER.id)
+    expect(whereParams).toContain("active")
+  })
+
+  it("returns 400 when creatorId is not a uuid", async () => {
+    readUserFromTokenMock.mockResolvedValue(OTHER_USER)
+    const res = await listActivities(
+      makeGetRequest(`/api/activities`, { creatorId: "not-a-uuid" })
+    )
+    expect(res.status).toBe(400)
+    const body = (await res.json()) as IResponse<null>
+    expect(body.message).toContain("creatorId")
+    // 非法 id 不应打到数据库(否则 Postgres 会抛 22P02 → 500)
+    expect(mockDb.select).not.toHaveBeenCalled()
   })
 
   it("returns 400 when pagination is invalid", async () => {

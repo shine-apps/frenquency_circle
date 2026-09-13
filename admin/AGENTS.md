@@ -220,6 +220,10 @@ All commands run from the project root with no `cd` needed.
 - **`PUT /api/circles/:id`**:校验 `creatorId === 当前用户`(否则 403)→ 更新可变字段(title/description/contactPhone/wechat/activityTime/maxMembers/tagIds)。
 - **`DELETE /api/circles/:id`**:校验创建者 → 软删除(`status='deleted'`),不再被匹配。
 - **`GET /api/circles/mine`**:返回当前用户创建的圈子列表(分页)。
+- **`GET /api/circles`**:登录用户,`?creatorId=<userId>` 返回该用户**已上线**(`status='active'`)的圈子分页(公开主页展示「TA 发布的圈子」);`creatorId` 缺失或非 uuid 返回 400。
+- **`GET /api/circles/followed`**:登录用户,`?userId=<userId>` 查看指定用户关注的圈子(缺省为自己;排除已删除圈子;`userId` 非 uuid 返回 400)。查看他人列表会写 `CONTACT` 审计日志。
+- **`GET /api/activities?creatorId=<userId>`**:登录用户,查看指定发布者的活动(仅 `active`,公开主页展示「TA 发布的活动」;与 `mine=1` 同时出现时以它为准)。
+- **`GET /api/users/:id/profile`**:公开主页,返回 `PublicUserProfileDTO`(含 `role`,供主页判断是否展示 TA 发布的圈子 / 活动)。
 - **`POST /api/circles/:id/contact`**:zod 校验 `contactType` → 插入 `contactLogs` → 返回 `{ contactPhone?, wechat? }`(根据圈子字段)。
 
 ### Phase 4: 管理后台 API

@@ -154,6 +154,13 @@ function handleCopyWechat(wechat: string) {
   })
 }
 
+/** 跳创建者主页 */
+function handleCreatorClick() {
+  if (!circle.value)
+    return
+  uni.navigateTo({ url: `/pages/user-home/user-home?id=${circle.value.creator.id}` })
+}
+
 /** 跳编辑页 */
 function handleEdit() {
   if (!circle.value)
@@ -235,7 +242,7 @@ function handleBack() {
         </view>
 
         <!-- ====== 3. 创建者卡片 ====== -->
-        <view class="mx-4 mt-3 flex items-center gap-3 rounded-2xl bg-white p-4">
+        <view class="mx-4 mt-3 flex items-center gap-3 rounded-2xl bg-white p-4" @click="handleCreatorClick">
           <view class="h-12 w-12 flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#e8f5f1]">
             <image v-if="circle.creator.avatarUrl" :src="circle.creator.avatarUrl" class="h-full w-full" mode="aspectFill" />
             <text v-else class="text-lg text-[#018d71] font-medium">

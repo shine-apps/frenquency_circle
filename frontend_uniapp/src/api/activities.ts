@@ -12,6 +12,8 @@ export interface ActivityListParams {
   pageSize?: number
   /** 只看自己发布的(含已取消),仅发布者可传 */
   mine?: boolean
+  /** 指定发布者(仅返回 active)。公开主页展示「TA 发布的活动」时使用 */
+  creatorId?: string
 }
 
 /** 发布活动(TEACHER / ADMIN 可直接发布,无需圈子)。返回新建活动 */
@@ -22,12 +24,18 @@ export function createActivity(input: CreateActivityInput) {
   )
 }
 
-/** 活动列表(分页,按起始时间倒序;默认全局 active,传 mine=1 只看自己发布) */
+/**
+ * 活动列表(分页,按起始时间倒序)。
+ * - 默认全局 active
+ * - `mine: true` 只看自己发布(含已取消,仅发布者可传)
+ * - `creatorId` 查看指定发布者(仅 active,公开主页用)
+ */
 export function getActivities(params?: ActivityListParams) {
   return http.get<ActivityListDTO>('/api/activities', {
     ...(params?.page !== undefined ? { page: params.page } : {}),
     ...(params?.pageSize !== undefined ? { pageSize: params.pageSize } : {}),
     ...(params?.mine ? { mine: 1 } : {}),
+    ...(params?.creatorId ? { creatorId: params.creatorId } : {}),
   })
 }
 

@@ -60,11 +60,14 @@ const {
   chainUpdate,
   insertReturningMock,
   updateWhereMock,
+  selectChains,
   setSelectResultsQueue,
   readUserFromTokenMock,
 } = vi.hoisted(() => {
   // select 队列:每次 db.select() 调用取出队首结果
   const selectResultsQueue: Record<string, unknown>[][] = []
+  /** 每次 db.select() 创建的查询链(供断言 where 条件) */
+  const selectChains: { where: ReturnType<typeof vi.fn> }[] = []
 
   // 构造 thenable select chain,支持 from/where/orderBy/limit/offset
   function makeSelectChain(result: Record<string, unknown>[]) {
@@ -79,6 +82,7 @@ const {
         reject?: (reason: unknown) => unknown
       ) => Promise.resolve(result).then(resolve, reject),
     }
+    selectChains.push(chain)
     return chain
   }
 
@@ -123,6 +127,7 @@ const {
     chainUpdate,
     insertReturningMock,
     updateWhereMock,
+    selectChains,
     setSelectResultsQueue: (results: Record<string, unknown>[][]) => {
       selectResultsQueue.length = 0
       selectResultsQueue.push(...results)
@@ -150,6 +155,7 @@ const {
   }
   insertReturningMock: ReturnType<typeof vi.fn>
   updateWhereMock: ReturnType<typeof vi.fn>
+  selectChains: { where: ReturnType<typeof vi.fn> }[]
   setSelectResultsQueue: (results: Record<string, unknown>[][]) => void
   readUserFromTokenMock: ReturnType<typeof vi.fn>
 }
@@ -173,13 +179,14 @@ vi.mock("@/lib/logger", () => ({
   },
 }))
 
-import { POST } from "@/app/api/circles/route"
+import { POST, GET as listCircles } from "@/app/api/circles/route"
 import {
   GET as getCircleById,
   PUT as putCircle,
   DELETE as deleteCircle,
 } from "@/app/api/circles/[id]/route"
 import { GET as getMyCircles } from "@/app/api/circles/mine/route"
+import { extractSqlParamValues } from "@/tests/helpers/sql-params"
 import type { IResponse, CircleDetailDTO, CircleDTO, Paginated } from "@/types/api"
 
 const TEACHER_USER = {
@@ -321,6 +328,7 @@ beforeEach(() => {
   chainUpdate.set.mockClear()
   updateWhereMock.mockClear()
   readUserFromTokenMock.mockReset()
+  selectChains.length = 0
   setSelectResultsQueue([])
 })
 
@@ -956,8 +964,8 @@ describe("GET /api/circles/mine", () => {
     readUserFromTokenMock.mockResolvedValue(TEACHER_USER)
     const circle1 = makeCircleRow({ id: "c1" })
     const circle2 = makeCircleRow({ id: "c2" })
-    // 1) 分页查询返回 2 行 2) 总数查询返回 3 行(total=3)
-    setSelectResultsQueue([[circle1, circle2], [{ id: "c1" }, { id: "c2" }, { id: "c3" }]])
+    // 1) 分页查询返回 2 行 2) count() 查询返回 3(pg 的 count 为字符串)
+    setSelectResultsQueue([[circle1, circle2], [{ value: "3" }]])
 
     const res = await getMyCircles(
       makeGetRequest("/api/circles/mine", { page: "1", pageSize: "20" })
@@ -981,5 +989,72 @@ describe("GET /api/circles/mine", () => {
     const body = (await res.json()) as IResponse<null>
     expect(body.code).toBe(400)
     expect(body.message).toBe("Invalid pagination parameters")
+  })
+})
+
+describe("GET /api/circles", () => {
+  it("returns 401 when not logged in", async () => {
+    readUserFromTokenMock.mockResolvedValue(null)
+    const res = await listCircles(
+      makeGetRequest("/api/circles", { creatorId: TEACHER_USER.id })
+    )
+    expect(res.status).toBe(401)
+  })
+
+  it("returns 400 when creatorId is missing", async () => {
+    readUserFromTokenMock.mockResolvedValue(TEACHER_USER)
+    const res = await listCircles(makeGetRequest("/api/circles"))
+    expect(res.status).toBe(400)
+    const body = (await res.json()) as IResponse<null>
+    expect(body.message).toContain("creatorId")
+    expect(mockDb.select).not.toHaveBeenCalled()
+  })
+
+  it("returns 400 when pagination is invalid", async () => {
+    readUserFromTokenMock.mockResolvedValue(TEACHER_USER)
+    const res = await listCircles(
+      makeGetRequest("/api/circles", { creatorId: TEACHER_USER.id, page: "0" })
+    )
+    expect(res.status).toBe(400)
+    const body = (await res.json()) as IResponse<null>
+    expect(body.message).toBe("Invalid pagination parameters")
+  })
+
+  it("returns 400 when creatorId is not a uuid", async () => {
+    readUserFromTokenMock.mockResolvedValue(REGULAR_USER)
+    const res = await listCircles(
+      makeGetRequest("/api/circles", { creatorId: "not-a-uuid" })
+    )
+    expect(res.status).toBe(400)
+    const body = (await res.json()) as IResponse<null>
+    expect(body.message).toContain("creatorId")
+    // 非法 id 不应打到数据库(否则 Postgres 会抛 22P02 → 500)
+    expect(mockDb.select).not.toHaveBeenCalled()
+  })
+
+  it("returns paginated circles of the given creator", async () => {
+    readUserFromTokenMock.mockResolvedValue(REGULAR_USER)
+    setSelectResultsQueue([
+      [makeCircleRow({ id: "c1", status: "active" })],
+      [{ value: "1" }],
+    ])
+    const res = await listCircles(
+      makeGetRequest("/api/circles", {
+        creatorId: TEACHER_USER.id,
+        page: "1",
+        pageSize: "20",
+      })
+    )
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as IResponse<Paginated<CircleDTO>>
+    expect(body.data.list).toHaveLength(1)
+    expect(body.data.list[0]!.id).toBe("c1")
+    expect(body.data.total).toBe(1)
+    // 过滤条件必须同时落在 creatorId 与 active 状态上(主页只展示 TA 已上线的圈子)
+    const whereParams = extractSqlParamValues(
+      selectChains[0]!.where.mock.calls[0]?.[0]
+    )
+    expect(whereParams).toContain(TEACHER_USER.id)
+    expect(whereParams).toContain("active")
   })
 })

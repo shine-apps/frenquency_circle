@@ -1,6 +1,8 @@
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
 import { onShareAppMessage, onShareTimeline, onShow } from '@dcloudio/uni-app'
+import { getActivities } from '@/api/activities'
+import { getFollowedCircles, getUserCircles } from '@/api/circles'
 import { getUserProfile } from '@/api/search'
 import {
   acceptContactRequest,
@@ -11,11 +13,12 @@ import {
   unfollowUser,
 } from '@/api/users'
 import { toLoginPage } from '@/utils/toLoginPage'
-import { activityLevelShortText, formatDate, practiceYearsText } from '@/utils/format'
+import { activityLevelShortText, formatDate, formatDateTime, practiceYearsText } from '@/utils/format'
+import { canCreateCircle } from '@/utils/role'
 import { useUserStore } from '@/store/user'
 import { useShare } from '@/composables/useShare'
 import type { HttpError } from '@/http/types'
-import type { PublicUserProfileDTO } from '@/types'
+import type { ActivityDTO, CircleDTO, FollowedCircleDTO, PublicUserProfileDTO } from '@/types'
 
 definePage({
   layout: 'default',
@@ -74,6 +77,8 @@ async function fetchProfile(id: string) {
     const data = await getUserProfile(id)
     profile.value = data
     notFound.value = false
+    // 资料到位后并行拉取内容区块,不阻塞资料展示
+    void fetchProfileContent(data)
   }
   catch (e) {
     const err = e as HttpError
@@ -100,6 +105,182 @@ onLoad((options) => {
 onShow(() => {
   fetchProfile(userId.value)
 })
+
+// ====== 主页内容区块(TA 关注的圈子 / TA 发布的圈子与活动) ======
+/** 区块预览条数 */
+const PREVIEW_SIZE = 3
+/** 「查看全部」时一次性拉取的条数 */
+const EXPANDED_SIZE = 50
+
+/** 列表区块状态 */
+interface ContentSection<T> {
+  list: T[]
+  total: number
+  loading: boolean
+}
+
+function createSection<T>(): ContentSection<T> {
+  return { list: [], total: 0, loading: false }
+}
+
+/** TA 关注的圈子 */
+const followedSection = ref<ContentSection<FollowedCircleDTO>>(createSection())
+/** TA 发布的圈子(仅老师 / 管理员主页展示) */
+const publishedCirclesSection = ref<ContentSection<CircleDTO>>(createSection())
+/** TA 发布的活动(仅老师 / 管理员主页展示) */
+const publishedActivitiesSection = ref<ContentSection<ActivityDTO>>(createSection())
+
+/** 各区块是否已展开全部(展开后隐藏入口) */
+const followedExpanded = ref(false)
+const publishedCirclesExpanded = ref(false)
+const publishedActivitiesExpanded = ref(false)
+
+/** 是否展示「TA 发布的圈子 / 活动」:仅老师 / 管理员 */
+const showPublished = computed(() => canCreateCircle(profile.value?.role))
+
+/** 主页归属人称:自己的主页用「我」,他人主页用「TA」 */
+const ownerLabel = computed(() => (isSelf.value ? '我' : 'TA'))
+
+/**
+ * 拉取指定用户关注的圈子;失败静默,不干扰资料展示。
+ * @returns 是否拉取成功,供「查看全部」判断能否收起入口
+ */
+async function loadFollowedCircles(userId: string, expand = false): Promise<boolean> {
+  followedSection.value.loading = true
+  try {
+    const res = await getFollowedCircles({
+      userId,
+      page: 1,
+      pageSize: expand ? EXPANDED_SIZE : PREVIEW_SIZE,
+    })
+    followedSection.value.list = res.list
+    followedSection.value.total = res.total
+    return true
+  }
+  catch (e) {
+    console.warn('[UserHome] followed circles error:', (e as Error)?.message)
+    return false
+  }
+  finally {
+    followedSection.value.loading = false
+  }
+}
+
+/**
+ * 拉取指定用户发布的圈子(仅 active)。
+ * @returns 是否拉取成功
+ */
+async function loadPublishedCircles(userId: string, expand = false): Promise<boolean> {
+  publishedCirclesSection.value.loading = true
+  try {
+    const res = await getUserCircles(userId, {
+      page: 1,
+      pageSize: expand ? EXPANDED_SIZE : PREVIEW_SIZE,
+    })
+    publishedCirclesSection.value.list = res.list
+    publishedCirclesSection.value.total = res.total
+    return true
+  }
+  catch (e) {
+    console.warn('[UserHome] published circles error:', (e as Error)?.message)
+    return false
+  }
+  finally {
+    publishedCirclesSection.value.loading = false
+  }
+}
+
+/**
+ * 拉取指定用户发布的活动(仅 active)。
+ * @returns 是否拉取成功
+ */
+async function loadPublishedActivities(userId: string, expand = false): Promise<boolean> {
+  publishedActivitiesSection.value.loading = true
+  try {
+    const res = await getActivities({
+      creatorId: userId,
+      page: 1,
+      pageSize: expand ? EXPANDED_SIZE : PREVIEW_SIZE,
+    })
+    publishedActivitiesSection.value.list = res.list
+    publishedActivitiesSection.value.total = res.total
+    return true
+  }
+  catch (e) {
+    console.warn('[UserHome] published activities error:', (e as Error)?.message)
+    return false
+  }
+  finally {
+    publishedActivitiesSection.value.loading = false
+  }
+}
+
+/** 上一次拉取内容区块的用户 id,仅在查看对象变化时复位展开态 */
+let contentUserId = ''
+
+/**
+ * 拉取主页内容区块。
+ * 关注的圈子对所有用户展示;发布的圈子与活动仅老师 / 管理员展示。
+ * 仅当查看对象变化时复位展开态,避免从详情页返回(onShow 重拉)后把已展开的列表折叠回预览。
+ */
+function fetchProfileContent(p: PublicUserProfileDTO) {
+  const switched = contentUserId !== p.id
+  contentUserId = p.id
+  if (switched) {
+    followedExpanded.value = false
+    publishedCirclesExpanded.value = false
+    publishedActivitiesExpanded.value = false
+  }
+
+  const tasks: Promise<boolean>[] = [
+    loadFollowedCircles(p.id, followedExpanded.value),
+  ]
+  if (canCreateCircle(p.role)) {
+    tasks.push(
+      loadPublishedCircles(p.id, publishedCirclesExpanded.value),
+      loadPublishedActivities(p.id, publishedActivitiesExpanded.value),
+    )
+  }
+  else {
+    publishedCirclesSection.value = createSection()
+    publishedActivitiesSection.value = createSection()
+  }
+  return Promise.all(tasks)
+}
+
+/** 展开「TA 关注的圈子」全部(拉取成功才收起入口,失败保留入口以便重试) */
+async function handleExpandFollowed() {
+  if (!profile.value || followedExpanded.value)
+    return
+  if (await loadFollowedCircles(profile.value.id, true))
+    followedExpanded.value = true
+}
+
+/** 展开「TA 发布的圈子」全部(失败可重试) */
+async function handleExpandPublishedCircles() {
+  if (!profile.value || publishedCirclesExpanded.value)
+    return
+  if (await loadPublishedCircles(profile.value.id, true))
+    publishedCirclesExpanded.value = true
+}
+
+/** 展开「TA 发布的活动」全部(失败可重试) */
+async function handleExpandPublishedActivities() {
+  if (!profile.value || publishedActivitiesExpanded.value)
+    return
+  if (await loadPublishedActivities(profile.value.id, true))
+    publishedActivitiesExpanded.value = true
+}
+
+/** 跳圈子详情 */
+function handleCircleClick(circleId: string) {
+  uni.navigateTo({ url: `/pages/circle/circle?id=${circleId}` })
+}
+
+/** 跳活动详情 */
+function handleActivityClick(activityId: string) {
+  uni.navigateTo({ url: `/pages/activity/activity?activityId=${activityId}` })
+}
 
 // ====== 底部操作状态机 ======
 type ActionState
@@ -381,6 +562,146 @@ function renderTags(tags: string[]): { visible: string[], rest: number } {
           >
             +{{ renderTags(profile.tags).rest }}
           </text>
+        </view>
+      </view>
+
+      <!-- ====== 关注的圈子 ====== -->
+      <view class="mx-4 mt-4 rounded-2xl bg-white p-5 shadow-sm">
+        <view class="flex items-center justify-between">
+          <text class="text-sm text-[#333] font-medium">
+            {{ ownerLabel }}关注的圈子
+          </text>
+          <text v-if="followedSection.total > 0" class="text-xs text-[#999]">
+            共 {{ followedSection.total }} 个
+          </text>
+        </view>
+
+        <view v-if="followedSection.loading" class="flex flex-col items-center py-4">
+          <text class="text-xs text-[#999]">
+            加载中...
+          </text>
+        </view>
+        <view v-else-if="followedSection.list.length === 0" class="flex flex-col items-center py-4">
+          <text class="text-xs text-[#999]">
+            {{ ownerLabel }}还没有关注任何圈子
+          </text>
+        </view>
+        <view v-else class="mt-3 flex flex-col gap-2.5">
+          <view
+            v-for="c in followedSection.list"
+            :key="c.id"
+            class="rounded-xl bg-[#f7f9f8] px-4 py-3 active:bg-[#eef4f2]"
+            @click="handleCircleClick(c.id)"
+          >
+            <text class="block truncate text-sm text-[#333] font-medium">{{ c.title }}</text>
+            <view class="mt-1 flex items-center justify-between gap-2">
+              <text class="min-w-0 flex-1 truncate text-xs text-[#999]">{{ c.address }}</text>
+              <text class="shrink-0 text-xs text-[#999]">关注于 {{ formatDate(c.followedAt) }}</text>
+            </view>
+          </view>
+          <view
+            v-if="!followedExpanded && followedSection.total > followedSection.list.length"
+            class="flex items-center justify-center pt-1"
+            @click="handleExpandFollowed"
+          >
+            <text class="text-xs text-[#018d71]">
+              查看全部 {{ followedSection.total }} 个 ›
+            </text>
+          </view>
+        </view>
+      </view>
+
+      <!-- ====== 发布的圈子(仅老师 / 管理员) ====== -->
+      <view v-if="showPublished" class="mx-4 mt-4 rounded-2xl bg-white p-5 shadow-sm">
+        <view class="flex items-center justify-between">
+          <text class="text-sm text-[#333] font-medium">
+            {{ ownerLabel }}发布的圈子
+          </text>
+          <text v-if="publishedCirclesSection.total > 0" class="text-xs text-[#999]">
+            共 {{ publishedCirclesSection.total }} 个
+          </text>
+        </view>
+
+        <view v-if="publishedCirclesSection.loading" class="flex flex-col items-center py-4">
+          <text class="text-xs text-[#999]">
+            加载中...
+          </text>
+        </view>
+        <view v-else-if="publishedCirclesSection.list.length === 0" class="flex flex-col items-center py-4">
+          <text class="text-xs text-[#999]">
+            {{ ownerLabel }}还没有发布过圈子
+          </text>
+        </view>
+        <view v-else class="mt-3 flex flex-col gap-2.5">
+          <view
+            v-for="c in publishedCirclesSection.list"
+            :key="c.id"
+            class="rounded-xl bg-[#f7f9f8] px-4 py-3 active:bg-[#eef4f2]"
+            @click="handleCircleClick(c.id)"
+          >
+            <text class="block truncate text-sm text-[#333] font-medium">{{ c.title }}</text>
+            <view class="mt-1 flex items-center justify-between gap-2">
+              <text class="min-w-0 flex-1 truncate text-xs text-[#999]">{{ c.address }}</text>
+              <text class="shrink-0 text-xs text-[#999]">创建于 {{ formatDate(c.createdAt) }}</text>
+            </view>
+          </view>
+          <view
+            v-if="!publishedCirclesExpanded && publishedCirclesSection.total > publishedCirclesSection.list.length"
+            class="flex items-center justify-center pt-1"
+            @click="handleExpandPublishedCircles"
+          >
+            <text class="text-xs text-[#018d71]">
+              查看全部 {{ publishedCirclesSection.total }} 个 ›
+            </text>
+          </view>
+        </view>
+      </view>
+
+      <!-- ====== 发布的活动(仅老师 / 管理员) ====== -->
+      <view v-if="showPublished" class="mx-4 mt-4 rounded-2xl bg-white p-5 shadow-sm">
+        <view class="flex items-center justify-between">
+          <text class="text-sm text-[#333] font-medium">
+            {{ ownerLabel }}发布的活动
+          </text>
+          <text v-if="publishedActivitiesSection.total > 0" class="text-xs text-[#999]">
+            共 {{ publishedActivitiesSection.total }} 个
+          </text>
+        </view>
+
+        <view v-if="publishedActivitiesSection.loading" class="flex flex-col items-center py-4">
+          <text class="text-xs text-[#999]">
+            加载中...
+          </text>
+        </view>
+        <view v-else-if="publishedActivitiesSection.list.length === 0" class="flex flex-col items-center py-4">
+          <text class="text-xs text-[#999]">
+            {{ ownerLabel }}还没有发布过活动
+          </text>
+        </view>
+        <view v-else class="mt-3 flex flex-col gap-2.5">
+          <view
+            v-for="a in publishedActivitiesSection.list"
+            :key="a.id"
+            class="rounded-xl bg-[#f7f9f8] px-4 py-3 active:bg-[#eef4f2]"
+            @click="handleActivityClick(a.id)"
+          >
+            <text class="block truncate text-sm text-[#333] font-medium">{{ a.title }}</text>
+            <view class="mt-1 flex items-center justify-between gap-2">
+              <text class="min-w-0 flex-1 truncate text-xs text-[#999]">
+                报名截止 {{ formatDateTime(a.registrationDeadline) }}
+              </text>
+              <text class="shrink-0 text-xs text-[#999]">起始 {{ formatDateTime(a.startTime) }}</text>
+            </view>
+          </view>
+          <view
+            v-if="!publishedActivitiesExpanded && publishedActivitiesSection.total > publishedActivitiesSection.list.length"
+            class="flex items-center justify-center pt-1"
+            @click="handleExpandPublishedActivities"
+          >
+            <text class="text-xs text-[#018d71]">
+              查看全部 {{ publishedActivitiesSection.total }} 个 ›
+            </text>
+          </view>
         </view>
       </view>
 

@@ -26,6 +26,12 @@ export interface MyCirclesParams {
   pageSize?: number
 }
 
+/** 圈子列表查询参数(按创建者过滤) */
+export interface UserCirclesParams {
+  page?: number
+  pageSize?: number
+}
+
 /** 创建圈子(需 TEACHER 角色)。24 小时内最多 5 个,超限返回 429 */
 export function createCircle(input: CreateCircleInput) {
   return http.post<CreateCircleResult>('/api/circles', input as unknown as Record<string, unknown>)
@@ -69,9 +75,26 @@ export function unfollowCircle(id: string) {
   return http.delete<{ followed: false }>(`/api/circles/${encodeURIComponent(id)}/follow`)
 }
 
-/** 我关注的圈子列表(分页,按关注时间倒序,排除已删除) */
-export function getFollowedCircles(params?: MyCirclesParams) {
+/**
+ * 关注的圈子列表(分页,按关注时间倒序,排除已删除)。
+ * 传 userId 时查看该用户关注的圈子(公开主页展示 TA 关注的圈子);
+ * 不传则为当前登录用户自己的关注列表。
+ */
+export function getFollowedCircles(params?: MyCirclesParams & { userId?: string }) {
   return http.get<Paginated<FollowedCircleDTO>>('/api/circles/followed', {
+    ...(params?.page !== undefined ? { page: params.page } : {}),
+    ...(params?.pageSize !== undefined ? { pageSize: params.pageSize } : {}),
+    ...(params?.userId ? { userId: params.userId } : {}),
+  })
+}
+
+/**
+ * 指定用户发布的圈子列表(分页,仅 active)。
+ * 用于公开主页展示「TA 发布的圈子」;未上线/已下线/违规圈子不会返回。
+ */
+export function getUserCircles(userId: string, params?: UserCirclesParams) {
+  return http.get<Paginated<CircleDTO>>('/api/circles', {
+    creatorId: userId,
     ...(params?.page !== undefined ? { page: params.page } : {}),
     ...(params?.pageSize !== undefined ? { pageSize: params.pageSize } : {}),
   })

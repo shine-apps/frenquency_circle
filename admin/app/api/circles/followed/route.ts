@@ -2,36 +2,18 @@ import { desc, eq, inArray } from "drizzle-orm"
 
 import { db } from "@/lib/db"
 import { circles, circleFollows } from "@/db/schema"
-import { corsOptions, fail, ok, withCors, parsePagination } from "@/lib/api"
+import { corsOptions, fail, isUuid, ok, withCors, parsePagination } from "@/lib/api"
 import { requireSession } from "@/lib/auth-utils"
-import type { CircleDTO, FollowedCircleDTO, Paginated } from "@/types/api"
-
-/** 将 circles 表行转换为 CircleDTO(与 mine/route.ts 保持一致) */
-function toCircleDTO(row: typeof circles.$inferSelect): CircleDTO {
-  return {
-    id: row.id,
-    title: row.title,
-    description: row.description,
-    creatorId: row.creatorId,
-    latitude: row.latitude,
-    longitude: row.longitude,
-    address: row.address,
-    contactPhone: row.contactPhone,
-    wechat: row.wechat,
-    activityTime: row.activityTime,
-    maxMembers: row.maxMembers,
-    memberCount: row.memberCount,
-    status: row.status,
-    coverImages: row.coverImages ?? [],
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  }
-}
+import { toCircleDTO } from "@/lib/circles"
+import { logger, LOG_PREFIX } from "@/lib/logger"
+import type { FollowedCircleDTO, Paginated } from "@/types/api"
 
 /**
  * GET /api/circles/followed
  *
- * 返回当前用户关注的圈子列表(分页,按关注时间倒序,排除已删除圈子)。
+ * 返回指定用户关注的圈子列表(分页,按关注时间倒序,排除已删除圈子)。
+ * - `?userId=<id>`:查看该用户关注的圈子(公开主页展示 TA 关注的圈子);
+ *   缺省为当前登录用户自己的关注列表
  */
 export async function OPTIONS(req: Request) {
   return corsOptions(req)
@@ -41,13 +23,27 @@ export async function GET(req: Request) {
   // 1. 鉴权
   const guard = await requireSession(req)
   if ("response" in guard) return guard.response
-  const userId = guard.user.id
+  const currentUserId = guard.user.id
 
-  // 2. 解析分页
+  // 2. 解析分页与目标用户(显式传 userId 时必须是 uuid,否则 Postgres 抛 22P02 → 500)
   const url = new URL(req.url)
   const pagination = parsePagination(url.searchParams)
   if (!pagination) {
     return withCors(fail(400, "Invalid pagination parameters"), req)
+  }
+  const userIdParam = url.searchParams.get("userId")?.trim()
+  if (userIdParam && !isUuid(userIdParam)) {
+    return withCors(fail(400, "userId 参数格式不正确"), req)
+  }
+  /** 关注列表归属用户:默认自己,传 userId 时查看他人(公开主页) */
+  const userId = userIdParam || currentUserId
+
+  // 查看他人关注列表属半公开信息,留痕便于审计(需要时可按需增加隐私开关)
+  if (userId !== currentUserId) {
+    logger.info(LOG_PREFIX.CONTACT, "followed circles viewed", {
+      viewerId: currentUserId,
+      targetId: userId,
+    })
   }
 
   // 3. 查询该用户全部关注记录(一次取出,在内存中过滤已删除圈子后再分页,

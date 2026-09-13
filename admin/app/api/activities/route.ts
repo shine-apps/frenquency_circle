@@ -1,8 +1,8 @@
-import { and, desc, eq } from "drizzle-orm"
+import { and, count, desc, eq } from "drizzle-orm"
 
 import { db } from "@/lib/db"
 import { activities } from "@/db/schema"
-import { corsOptions, fail, ok, parsePagination, withCors } from "@/lib/api"
+import { corsOptions, fail, isUuid, ok, parsePagination, withCors } from "@/lib/api"
 import { requireSession } from "@/lib/auth-utils"
 import { logger, LOG_PREFIX } from "@/lib/logger"
 import { createActivitySchema, type CreateActivityInput } from "@/lib/activities"
@@ -85,6 +85,8 @@ export async function POST(req: Request) {
  * 活动列表(分页,按起始时间倒序)。
  * - 非创建者:仅见全局 active 活动。
  * - 创建者:`?mine=1` 时只看自己发布的(含 cancelled)。
+ * - `?creatorId=<id>`:查看指定发布者的活动(仅 active),供公开主页展示「TA 发布的活动」;
+ *   与 mine=1 同时出现时以 creatorId 为准(对外口径只暴露 active)
  */
 export async function GET(req: Request) {
   // 1. 鉴权
@@ -92,18 +94,25 @@ export async function GET(req: Request) {
   if ("response" in guard) return guard.response
   const userId = guard.user.id
 
-  // 2. 解析分页
+  // 2. 解析分页与过滤条件
   const url = new URL(req.url)
   const pagination = parsePagination(url.searchParams)
   if (!pagination) {
     return withCors(fail(400, "Invalid pagination parameters"), req)
   }
   const mine = url.searchParams.get("mine") === "1"
+  const creatorId = url.searchParams.get("creatorId")?.trim()
+  // creatorId 必须是 uuid,否则 Postgres 抛 22P02 → 500
+  if (creatorId && !isUuid(creatorId)) {
+    return withCors(fail(400, "creatorId 参数格式不正确"), req)
+  }
 
-  // 3. 查询条件:mine=1 只看自己发布;否则全局 active
-  const where = mine
-    ? eq(activities.creatorId, userId)
-    : eq(activities.status, "active")
+  // 3. 查询条件:creatorId 只看指定发布者(仅 active);mine=1 只看自己发布;否则全局 active
+  const where = creatorId
+    ? and(eq(activities.creatorId, creatorId), eq(activities.status, "active"))
+    : mine
+      ? eq(activities.creatorId, userId)
+      : eq(activities.status, "active")
 
   const rows = await db
     .select()
@@ -113,11 +122,11 @@ export async function GET(req: Request) {
     .limit(pagination.pageSize)
     .offset((pagination.page - 1) * pagination.pageSize)
 
-  const totalRows = await db
-    .select({ id: activities.id })
+  const [totalRow] = await db
+    .select({ value: count() })
     .from(activities)
     .where(where)
-  const total = totalRows.length
+  const total = Number(totalRow?.value ?? 0)
 
   const list: ActivityDTO[] = rows.map(toActivityDTO)
   const result: Paginated<ActivityDTO> = {

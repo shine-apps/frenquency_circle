@@ -1,13 +1,15 @@
 import { z } from "zod"
-import { and, eq, gte, inArray } from "drizzle-orm"
+import { and, count, desc, eq, gte, inArray } from "drizzle-orm"
 
 import { db } from "@/lib/db"
 import { circles, circleMembers, hobbyTags } from "@/db/schema"
-import { corsOptions, fail, ok, withCors } from "@/lib/api"
+import { corsOptions, fail, isUuid, ok, withCors, parsePagination } from "@/lib/api"
 import { requireSession } from "@/lib/auth-utils"
+import { toCircleDTO } from "@/lib/circles"
 import { logger, LOG_PREFIX } from "@/lib/logger"
 import { notifyAdmins } from "@/lib/notifications"
 import { recordInterestEvents } from "@/lib/interest-events"
+import type { CircleDTO, Paginated } from "@/types/api"
 
 /** 手机号格式(与 lib/sms/phone.ts PHONE_RE 一致) */
 const PHONE_RE = /^1[3-9]\d{9}$/
@@ -203,4 +205,58 @@ export async function POST(req: Request) {
     ok({ circleId: circleRow.id, status: "pending" }, { status: 201 }),
     req
   )
+}
+
+/**
+ * GET /api/circles
+ *
+ * 圈子列表(分页,按创建时间倒序)。
+ * - `?creatorId=<userId>`:返回该用户**已上线**(status=active)的圈子,
+ *   供公开主页展示「TA 发布的圈子」;pending / offline / violated / deleted 一律不外泄
+ * - 缺少 creatorId 返回 400(本接口不提供全站圈子流,避免无意义的全表扫描)
+ */
+export async function GET(req: Request) {
+  // 1. 鉴权
+  const guard = await requireSession(req)
+  if ("response" in guard) return guard.response
+
+  // 2. 解析分页与创建者(creatorId 必须是 uuid,否则 Postgres 会抛 22P02 → 500)
+  const url = new URL(req.url)
+  const pagination = parsePagination(url.searchParams)
+  if (!pagination) {
+    return withCors(fail(400, "Invalid pagination parameters"), req)
+  }
+  const creatorId = url.searchParams.get("creatorId")?.trim()
+  if (!isUuid(creatorId)) {
+    return withCors(fail(400, "creatorId 参数缺失或格式不正确"), req)
+  }
+
+  // 3. 列表与总数同口径(同一 where 条件)
+  const where = and(
+    eq(circles.creatorId, creatorId),
+    eq(circles.status, "active")
+  )
+
+  const rows = await db
+    .select()
+    .from(circles)
+    .where(where)
+    .orderBy(desc(circles.createdAt))
+    .limit(pagination.pageSize)
+    .offset((pagination.page - 1) * pagination.pageSize)
+
+  const [totalRow] = await db
+    .select({ value: count() })
+    .from(circles)
+    .where(where)
+
+  const list: CircleDTO[] = rows.map(toCircleDTO)
+  const result: Paginated<CircleDTO> = {
+    list,
+    total: Number(totalRow?.value ?? 0),
+    page: pagination.page,
+    pageSize: pagination.pageSize,
+  }
+
+  return withCors(ok(result), req)
 }

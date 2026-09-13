@@ -17,10 +17,13 @@ const {
   mockDb,
   chainInsert,
   deleteWhereMock,
+  selectChains,
   setSelectResultsQueue,
   readUserFromTokenMock,
 } = vi.hoisted(() => {
   const selectResultsQueue: Record<string, unknown>[][] = []
+  /** 每次 db.select() 创建的查询链(供断言 where 条件) */
+  const selectChains: { where: ReturnType<typeof vi.fn> }[] = []
 
   function makeSelectChain(result: Record<string, unknown>[]) {
     const chain = {
@@ -34,6 +37,7 @@ const {
         reject?: (reason: unknown) => unknown
       ) => Promise.resolve(result).then(resolve, reject),
     }
+    selectChains.push(chain)
     return chain
   }
 
@@ -72,6 +76,7 @@ const {
     chainInsert,
     insertReturnMock,
     deleteWhereMock,
+    selectChains,
     setSelectResultsQueue: (results: Record<string, unknown>[][]) => {
       selectResultsQueue.length = 0
       selectResultsQueue.push(...results)
@@ -95,6 +100,7 @@ const {
   }
   insertReturnMock: ReturnType<typeof vi.fn>
   deleteWhereMock: ReturnType<typeof vi.fn>
+  selectChains: { where: ReturnType<typeof vi.fn> }[]
   setSelectResultsQueue: (results: Record<string, unknown>[][]) => void
   readUserFromTokenMock: ReturnType<typeof vi.fn>
 }
@@ -107,11 +113,12 @@ vi.mock("@/lib/auth/session-token", () => ({
 
 vi.mock("@/lib/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-  LOG_PREFIX: { CIRCLE: "CIRCLE", NOTIFICATION: "NOTIFICATION" },
+  LOG_PREFIX: { CIRCLE: "CIRCLE", NOTIFICATION: "NOTIFICATION", CONTACT: "CONTACT" },
 }))
 
 import { POST, DELETE } from "@/app/api/circles/[id]/follow/route"
 import { GET as getFollowedCircles } from "@/app/api/circles/followed/route"
+import { extractSqlParamValues } from "@/tests/helpers/sql-params"
 import type { IResponse, Paginated, FollowedCircleDTO } from "@/types/api"
 
 const USER = {
@@ -138,6 +145,7 @@ beforeEach(() => {
   chainInsert.onConflictDoNothing.mockClear()
   deleteWhereMock.mockClear()
   readUserFromTokenMock.mockReset()
+  selectChains.length = 0
   setSelectResultsQueue([])
 })
 
@@ -346,5 +354,44 @@ describe("GET /api/circles/followed", () => {
     const body = (await res.json()) as IResponse<Paginated<FollowedCircleDTO>>
     expect(body.data.list).toEqual([])
     expect(body.data.total).toBe(0)
+  })
+
+  it("lists another user's followed circles when userId is provided", async () => {
+    readUserFromTokenMock.mockResolvedValue(USER)
+    const targetId = "33333333-3333-3333-3333-333333333333"
+    setSelectResultsQueue([
+      [
+        { id: "f1", circleId: "c1", userId: targetId, createdAt: new Date("2026-08-01T00:00:00Z") },
+      ],
+      [makeCircleRow({ id: "c1" })],
+    ])
+    const res = await getFollowedCircles(
+      new Request(
+        `http://localhost/api/circles/followed?userId=${targetId}&page=1&pageSize=20`
+      )
+    )
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as IResponse<Paginated<FollowedCircleDTO>>
+    expect(body.data.list).toHaveLength(1)
+    expect(body.data.list[0]!.id).toBe("c1")
+    // 过滤条件必须落在 userId 上(公开主页查看 TA 关注的圈子)
+    expect(
+      extractSqlParamValues(selectChains[0]!.where.mock.calls[0]?.[0])
+    ).toContain(targetId)
+    expect(
+      extractSqlParamValues(selectChains[0]!.where.mock.calls[0]?.[0])
+    ).not.toContain(USER.id)
+  })
+
+  it("returns 400 when userId is not a uuid", async () => {
+    readUserFromTokenMock.mockResolvedValue(USER)
+    const res = await getFollowedCircles(
+      new Request("http://localhost/api/circles/followed?userId=not-a-uuid")
+    )
+    expect(res.status).toBe(400)
+    const body = (await res.json()) as IResponse<null>
+    expect(body.message).toContain("userId")
+    // 非法 id 不应打到数据库(否则 Postgres 会抛 22P02 → 500)
+    expect(mockDb.select).not.toHaveBeenCalled()
   })
 })

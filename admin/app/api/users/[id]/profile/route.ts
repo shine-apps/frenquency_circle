@@ -7,7 +7,7 @@ import { requireSession } from "@/lib/auth-utils"
 import { fetchUserTags } from "@/lib/user-tags"
 import { resolveUserContact } from "@/lib/contacts"
 import { logger, LOG_PREFIX } from "@/lib/logger"
-import type { ActivityLevel, PublicUserProfileDTO } from "@/types/api"
+import type { ActivityLevel, PublicUserProfileDTO, UserRole } from "@/types/api"
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -50,6 +50,7 @@ export async function GET(req: Request, context: RouteContext) {
     id: row.id,
     name: row.name,
     avatarUrl: row.avatarUrl ?? null,
+    role: row.role as UserRole,
     tags,
     activityLevel: row.activityLevel as ActivityLevel,
     practiceYears: row.practiceYears ?? null,

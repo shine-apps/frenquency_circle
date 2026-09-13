@@ -1,4 +1,4 @@
-import { and, eq, ne, desc } from "drizzle-orm"
+import { and, count, eq, ne, desc } from "drizzle-orm"
 
 import { db } from "@/lib/db"
 import { circles } from "@/db/schema"
@@ -10,6 +10,7 @@ import {
   parsePagination,
 } from "@/lib/api"
 import { requireSession } from "@/lib/auth-utils"
+import { toCircleDTO } from "@/lib/circles"
 import type { CircleDTO, Paginated } from "@/types/api"
 
 /**
@@ -45,36 +46,19 @@ export async function GET(req: Request) {
     .limit(pagination.pageSize)
     .offset((pagination.page - 1) * pagination.pageSize)
 
-  // 4. 查询总数
-  const allRows = await db
-    .select({ id: circles.id })
+  // 4. 查询总数(与列表同口径,交给数据库 count)
+  const [totalRow] = await db
+    .select({ value: count() })
     .from(circles)
     .where(
       and(eq(circles.creatorId, userId), ne(circles.status, "deleted"))
     )
 
-  const list: CircleDTO[] = rows.map((row) => ({
-    id: row.id,
-    title: row.title,
-    description: row.description,
-    creatorId: row.creatorId,
-    latitude: row.latitude,
-    longitude: row.longitude,
-    address: row.address,
-    contactPhone: row.contactPhone,
-    wechat: row.wechat,
-    activityTime: row.activityTime,
-    maxMembers: row.maxMembers,
-    memberCount: row.memberCount,
-    status: row.status,
-    coverImages: row.coverImages ?? [],
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  }))
+  const list: CircleDTO[] = rows.map(toCircleDTO)
 
   const result: Paginated<CircleDTO> = {
     list,
-    total: allRows.length,
+    total: Number(totalRow?.value ?? 0),
     page: pagination.page,
     pageSize: pagination.pageSize,
   }

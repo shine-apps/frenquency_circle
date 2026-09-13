@@ -244,6 +244,8 @@ export type PublicUserProfileDTO = {
   id: string
   name: string
   avatarUrl: string | null
+  /** 角色:主页据此决定是否展示「TA 发布的圈子 / 活动」板块 */
+  role: UserRole
   tags: string[]
   activityLevel: ActivityLevel
   practiceYears: number | null

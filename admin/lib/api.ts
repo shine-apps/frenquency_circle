@@ -89,3 +89,18 @@ export function parsePagination(
   const parsed = paginationSchema.safeParse(raw)
   return parsed.success ? parsed.data : null
 }
+
+/** uuid 账号/资源 id 格式 */
+export const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * 校验资源 id 是否为合法 uuid。
+ *
+ * 路由里的 :id / userId / creatorId 最终都会与 Postgres 的 uuid 列比较,
+ * 非法文本会触发 `22P02 invalid input syntax for type uuid`(500)并刷错误日志。
+ * 统一在各入口用它拦成 400,保证"非法入参 = 客户端错误"的语义。
+ */
+export function isUuid(value: string | null | undefined): value is string {
+  return !!(value && UUID_RE.test(value))
+}

@@ -4,6 +4,7 @@ import { onShareAppMessage, onShareTimeline, onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
 import { useMatchStore } from '@/store/match'
 import { useSettingsStore } from '@/store/settings'
+import { getMyProfile, updateMyTags, updateProfile } from '@/api/auth'
 import { matchCircles, matchPeople } from '@/api/locations'
 import { getUnreadNotificationCount } from '@/api/notifications'
 import { LOGIN_PAGE } from '@/router/config'
@@ -17,6 +18,7 @@ import { canCreateCircle } from '@/utils/role'
 import { useShare } from '@/composables/useShare'
 import MatchFilterBar from '@/components/MatchFilterBar/MatchFilterBar.vue'
 import ProfileSetupPopup from '@/components/ProfileSetupPopup/ProfileSetupPopup.vue'
+import type { UpdateProfileInput } from '@/api/types/login'
 import type { MatchCircleDTO, MatchPersonDTO } from '@/types'
 
 definePage({
@@ -64,11 +66,12 @@ const user = computed(() => userStore.userInfo)
 /** 账号兴趣标签(用户资料中的标签,首页未手动筛选时作为默认筛选条件) */
 const accountTags = computed(() => user.value?.tags || [])
 
-// ====== 首页筛选条件(仅用于本次匹配,不写入用户账号资料) ======
+// ====== 首页筛选条件(仅用于本次匹配;账号资料为空时会被回填,见 fillAccountProfileFromMatch) ======
 /**
  * 首页手动选择的兴趣标签:
  * - null:尚未在首页选择,跟随账号标签展示与匹配;
- * - string[]:已在首页选择,仅作为本次匹配的筛选条件,不写入账号资料。
+ * - string[]:已在首页选择,仅作为本次匹配的筛选条件;
+ *   账号标签为空时由 fillAccountProfileFromMatch 回填到账号。
  */
 const filterTags = ref<string[] | null>(null)
 
@@ -169,6 +172,66 @@ const ready = computed(() => locationReady.value)
 /** 匹配请求序号,丢弃过期请求结果 */
 let loadSeq = 0
 
+// ====== 账号资料补全(用当前匹配回填为空字段) ======
+/** 位置占位文案:未拿到真实地址时不作为账号地址写入 */
+const ADDRESS_PLACEHOLDER = '已定位'
+
+/** 是否正在回填账号资料(避免并发重复提交) */
+let profileFilling = false
+
+/**
+ * 已登录时,把当前匹配使用的兴趣标签 / 地址回填到账号资料。
+ * - 逐字段独立判断:兴趣标签、地址、坐标任一为空且当前匹配侧有值时补全该字段,
+ *   已有值的字段绝不覆盖(地址与坐标由后端分别更新,缺哪个补哪个);
+ * - 是否为空以服务端资料为准(getMyProfile),避免本地缓存陈旧导致误覆盖;
+ * - 兴趣:账号无标签且本次匹配带了标签时写入(接口限制 1-10 项,超出截断);
+ * - 地址:账号无地址时写入首页展示的真实地址;账号无坐标时写入本次匹配坐标;
+ * - 失败静默:资料补全失败不影响首页匹配主流程。
+ */
+async function fillAccountProfileFromMatch(): Promise<void> {
+  if (!userStore.isLoggedIn || profileFilling)
+    return
+  const matchTags = matchStore.tags
+  const loc = matchStore.location
+  const matchAddress = address.value.trim()
+  const hasRealAddress = matchAddress !== '' && matchAddress !== ADDRESS_PLACEHOLDER
+  // 本地预判:仅当账号侧字段为空且当前匹配侧有值时才需要请求服务端确认
+  const canFillTags = accountTags.value.length === 0 && matchTags.length > 0
+  const canFillAddress = !user.value?.address && hasRealAddress
+  const canFillCoords = !user.value?.location && loc != null
+  if (!canFillTags && !canFillAddress && !canFillCoords)
+    return
+
+  profileFilling = true
+  try {
+    const profile = await getMyProfile()
+    userStore.setProfile(profile)
+
+    // 兴趣:仅当服务端也未设置且本次匹配带了标签时写入
+    if (canFillTags && !(Array.isArray(profile.tags) && profile.tags.length > 0)) {
+      const saved = await updateMyTags(matchTags.slice(0, 10))
+      userStore.setTags(saved)
+    }
+
+    // 地址 / 坐标:服务端侧为空的字段才写入,已有值的字段保留
+    const patch: UpdateProfileInput = {}
+    if (canFillAddress && !profile.address)
+      patch.address = matchAddress
+    if (canFillCoords && loc && !profile.location) {
+      patch.latitude = loc.latitude
+      patch.longitude = loc.longitude
+    }
+    if (Object.keys(patch).length > 0)
+      userStore.setProfile(await updateProfile(patch))
+  }
+  catch (e) {
+    console.warn('[index] fill account profile from match failed:', e)
+  }
+  finally {
+    profileFilling = false
+  }
+}
+
 /** 获取位置并拉取匹配 */
 async function loadAll(lat: number, lng: number, range: number): Promise<void> {
   const seq = ++loadSeq
@@ -218,6 +281,8 @@ async function loadAll(lat: number, lng: number, range: number): Promise<void> {
       totalPeople: peopleRes.total,
       totalCircles: circlesRes.total,
     })
+    // 已登录且账号资料为空时,用本次匹配的兴趣 / 位置回填账号(不覆盖已有数据)
+    void fillAccountProfileFromMatch()
   }
   catch (e) {
     if (seq !== loadSeq)
@@ -266,7 +331,10 @@ onShow(() => {
         // getCurrentLocation 仅返回坐标,地址由各端逆地理编码补全
         // (H5 走高德 JS API,小程序/其他端走后端 /api/geo/reverse)
         reverseGeocode(res.latitude, res.longitude).then((addr) => {
-          address.value = addr || '已定位'
+          address.value = addr || ADDRESS_PLACEHOLDER
+          // 拿到真实地址后再尝试回填账号资料(占位文案不写入)
+          if (addr)
+            void fillAccountProfileFromMatch()
         })
       })
       .catch((err) => {
@@ -284,8 +352,8 @@ onShow(() => {
 })
 
 /**
- * 兴趣标签确认:仅作为本次匹配的筛选条件。
- * - 已登录:不写入账号标签(用户资料不被首页操作修改),下次进入以账号标签为默认值;
+ * 兴趣标签确认:作为本次匹配的筛选条件。
+ * - 已登录:账号标签为空时由 fillAccountProfileFromMatch 回填到账号,已有标签则不写入;
  * - 未登录:更新本地状态并暂存 storage,登录成功后由 restoreGuestProfile 回填到账号。
  */
 function handleTagsConfirmed(tags: string[]): void {
@@ -302,7 +370,7 @@ function handleTagsConfirmed(tags: string[]): void {
 /**
  * 清除首页全部兴趣标签:仅清空本次匹配的筛选条件。
  * - 不调用 saveGuestTags:清除结果不写入本地暂存,不参与登录后回填;
- * - 不写入账号标签/用户资料(与其他首页筛选操作一致);
+ * - 清除后当前匹配标签为空,fillAccountProfileFromMatch 不会回填账号(空值不写入);
  * - 清空后按距离展示附近的人与圈子(匹配请求不带 tags)。
  */
 function handleClearTags(): void {
@@ -388,8 +456,8 @@ function handleRangeChange(range: number): void {
 }
 
 /**
- * LocationSetter 选点完成:仅作为本次匹配的筛选条件。
- * - 已登录:不写入账号地址/坐标(用户资料不被首页操作修改),本次会话内以手动选择优先;
+ * LocationSetter 选点完成:作为本次匹配的筛选条件,本次会话内以手动选择优先。
+ * - 已登录:账号未设置位置/地址时由 fillAccountProfileFromMatch 回填到账号,已有则不写入;
  * - 未登录:更新本地状态并暂存 storage,登录成功后由 restoreGuestProfile 回填到账号。
  */
 function handleLocationUpdated(loc: { latitude: number, longitude: number, address: string }): void {

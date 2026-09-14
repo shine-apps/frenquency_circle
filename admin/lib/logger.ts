@@ -46,4 +46,5 @@ export const LOG_PREFIX = {
   INTEREST: "INTEREST",
   CONTACT: "CONTACT",
   MBTI: "MBTI",
+  CHECKIN: "CHECKIN",
 } as const

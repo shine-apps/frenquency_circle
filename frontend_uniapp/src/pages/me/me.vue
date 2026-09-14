@@ -232,6 +232,20 @@ function handleMyActivities() {
   })
 }
 
+/** 跳活动广场(原底部 Tab 入口,改为「我的」页入口) */
+function handleActivityPlaza() {
+  uni.navigateTo({ url: '/pages/activity-list/activity-list' })
+}
+
+/** 跳我的打卡页(含删除) */
+function handleMyCheckins() {
+  if (!isLoggedIn.value) {
+    toLoginWithRedirect('navigateTo')
+    return
+  }
+  uni.navigateTo({ url: '/pages/my-checkins/my-checkins' })
+}
+
 /** 跳教师认证页(非 TEACHER / ADMIN 角色) */
 function handleTeacherCert() {
   uni.navigateTo({ url: '/pages/teacher-certification/teacher-certification' })
@@ -351,6 +365,20 @@ const roleChipClass = computed(() => {
         </view>
       </view>
 
+      <view class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4" @click="handleMyCheckins">
+        <view class="flex flex-col">
+          <text class="text-sm text-[#333] font-medium">
+            我的打卡
+          </text>
+          <text class="mt-0.5 text-xs text-[#999]">
+            查看与管理发布的打卡
+          </text>
+        </view>
+        <text class="text-sm text-[#ccc]">
+          ›
+        </text>
+      </view>
+
       <view class="flex flex-col border-[#f5f5f5] border-b-inset px-4 py-4" @click="handleTags">
         <view class="flex items-center justify-between">
           <text class="text-sm text-[#333] font-medium">
@@ -465,6 +493,23 @@ const roleChipClass = computed(() => {
           </text>
           <text class="mt-0.5 text-xs text-[#999]">
             发布与维护活动
+          </text>
+        </view>
+        <text class="text-sm text-[#ccc]">
+          ›
+        </text>
+      </view>
+
+      <view
+        class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4"
+        @click="handleActivityPlaza"
+      >
+        <view class="flex flex-col">
+          <text class="text-sm text-[#333] font-medium">
+            活动广场
+          </text>
+          <text class="mt-0.5 text-xs text-[#999]">
+            浏览全部线下活动
           </text>
         </view>
         <text class="text-sm text-[#ccc]">

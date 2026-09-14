@@ -3,11 +3,14 @@ import {
   users,
   accounts,
   circles,
+  checkins,
   smsVerificationCodes,
   notifications,
   interestEvents,
+  CHECKIN_STATUSES,
   INTEREST_EVENT_TYPES,
   type UserRole,
+  type CheckinStatus,
   type NotificationType,
   type NotificationLinkTarget,
   type NotificationEntityType,
@@ -182,5 +185,38 @@ describe("db/schema", () => {
       "tag_search",
       "circle_tag_create",
     ])
+  })
+
+  it("exports checkins table", () => {
+    expect(checkins).toBeDefined()
+  })
+
+  it("checkins table has the expected columns", () => {
+    const cols = Object.keys(checkins)
+    expect(cols).toEqual(
+      expect.arrayContaining([
+        "id",
+        "userId",
+        "content",
+        "circleId",
+        "tags",
+        "images",
+        "videoUrl",
+        "status",
+        "createdAt",
+        "updatedAt",
+      ])
+    )
+  })
+
+  it("CheckinStatus covers active and deleted", () => {
+    const s: CheckinStatus = "active"
+    expect(s).toBe("active")
+    const s2: CheckinStatus = "deleted"
+    expect(s2).toBe("deleted")
+  })
+
+  it("CHECKIN_STATUSES contains exactly two statuses", () => {
+    expect(CHECKIN_STATUSES).toEqual(["active", "deleted"])
   })
 })

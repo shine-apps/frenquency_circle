@@ -2,10 +2,12 @@
 import { computed, ref } from 'vue'
 import { onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { contactCircle, followCircle, getCircle, unfollowCircle } from '@/api/circles'
+import { getCircleCheckins } from '@/api/checkins'
 import { useUserStore } from '@/store/user'
 import { useShare } from '@/composables/useShare'
-import { formatDate, formatDateTime } from '@/utils/format'
-import type { CircleDetailDTO } from '@/types'
+import { formatDate } from '@/utils/format'
+import CheckinCard from '@/components/CheckinCard/CheckinCard.vue'
+import type { CheckinDTO, CircleDetailDTO } from '@/types'
 
 definePage({
   layout: 'default',
@@ -30,6 +32,14 @@ const contactLoading = ref(false)
 // 关注状态与操作
 const followed = ref(false)
 const followLoading = ref(false)
+
+// 圈子打卡(详情页内嵌区块:首屏 5 条,滚动触底自动加载下一页)
+const CHECKIN_PAGE_SIZE = 5
+const checkins = ref<CheckinDTO[]>([])
+const checkinsTotal = ref(0)
+const checkinsLoading = ref(false)
+const checkinsFinished = ref(false)
+const checkinsPage = ref(1)
 
 /** 分享:小程序(好友/朋友圈) + H5 微信浏览器 JSSDK。内容在触发/配置时实时读取,兼容详情异步加载 */
 const { share, shareAppMessage, shareTimeline } = useShare({
@@ -79,7 +89,71 @@ onShow(() => {
   const id = current?.options?.id || current?.$page?.options?.id || ''
   circleId.value = id
   void fetchCircle(id)
+  void fetchCheckins(true)
 })
+
+/**
+ * 拉取圈子打卡列表。
+ * @param reset 是否重置到第一页(进入页面 / 打卡返回时重置)
+ */
+async function fetchCheckins(reset = false) {
+  const id = circleId.value
+  if (!id || checkinsLoading.value)
+    return
+  if (reset) {
+    checkinsPage.value = 1
+    checkinsFinished.value = false
+  }
+  checkinsLoading.value = true
+  try {
+    const res = await getCircleCheckins(id, {
+      page: checkinsPage.value,
+      pageSize: CHECKIN_PAGE_SIZE,
+    })
+    checkins.value = reset ? res.list : [...checkins.value, ...res.list]
+    checkinsTotal.value = res.total
+    if (checkins.value.length >= res.total || res.list.length < CHECKIN_PAGE_SIZE)
+      checkinsFinished.value = true
+  }
+  catch (e) {
+    console.warn('[Circle] fetch checkins error:', (e as Error)?.message)
+  }
+  finally {
+    checkinsLoading.value = false
+  }
+}
+
+/** 加载更多打卡(幂等:已加载完/加载中直接返回,滚动与触底事件重复触发无副作用) */
+function handleLoadMoreCheckins() {
+  if (checkinsFinished.value || checkinsLoading.value)
+    return
+  checkinsPage.value += 1
+  void fetchCheckins()
+}
+
+/**
+ * 滚动触底加载下一页。
+ *
+ * 本页滚动主体不确定:外层 `scroll-view` 未被约束高度时由页面滚动,
+ * 因此把「scroll-view 触底」与「页面触底」都挂上同一处理器,两种情形都能自动加载。
+ */
+onReachBottom(() => {
+  handleLoadMoreCheckins()
+})
+
+/** 跳打卡详情(分享落地页) */
+function handleCheckinTap(checkin: CheckinDTO) {
+  uni.navigateTo({ url: `/pages/checkin-detail/checkin-detail?id=${checkin.id}` })
+}
+
+/** 去打卡(预选当前圈子;仅关注了该圈子才会真正关联) */
+function handleGoCheckin() {
+  if (!circle.value)
+    return
+  uni.navigateTo({
+    url: `/pages/create-checkin/create-checkin?circleId=${circle.value.id}`,
+  })
+}
 
 /** 是否为创建者 */
 const isCreator = computed(() => {
@@ -198,7 +272,12 @@ function handleBack() {
     </view>
 
     <template v-else>
-      <scroll-view scroll-y class="flex-1">
+      <scroll-view
+        scroll-y
+        class="flex-1"
+        :lower-threshold="120"
+        @scrolltolower="handleLoadMoreCheckins"
+      >
         <!-- ====== 0. 轮播 Swiper(coverImages.length > 0 才渲染) ====== -->
         <wd-swiper
           v-if="circle.coverImages.length > 0"
@@ -308,6 +387,53 @@ function handleBack() {
             被联系 {{ circle.contactCount }} 次
           </text>
         </view>
+
+        <!-- ====== 8. 圈子打卡 ====== -->
+        <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
+          <view class="flex items-center justify-between">
+            <text class="text-sm text-[#333] font-medium">
+              圈子打卡
+            </text>
+            <view class="flex items-center gap-2">
+              <text class="text-xs text-[#999]">共 {{ checkinsTotal }} 条</text>
+              <text class="text-xs text-[#018d71] font-medium" @click="handleGoCheckin">
+                去打卡 ›
+              </text>
+            </view>
+          </view>
+
+          <view v-if="checkinsLoading && checkins.length === 0" class="flex flex-col items-center py-6">
+            <text class="text-xs text-[#999]">
+              加载中...
+            </text>
+          </view>
+
+          <view v-else-if="checkins.length === 0" class="flex flex-col items-center py-6">
+            <text class="text-xs text-[#999]">
+              这个圈子还没有打卡,来发布第一条
+            </text>
+          </view>
+
+          <view v-else class="mt-3 flex flex-col gap-3">
+            <CheckinCard
+              v-for="item in checkins"
+              :key="item.id"
+              :checkin="item"
+              clickable
+              :show-circle="false"
+              @tap="handleCheckinTap"
+            />
+            <text v-if="checkinsLoading" class="py-2 text-center text-xs text-[#999]">
+              加载中...
+            </text>
+            <text v-else-if="checkinsFinished" class="py-2 text-center text-xs text-[#999]">
+              没有更多了
+            </text>
+          </view>
+        </view>
+
+        <!-- 底部占位:避免内容被固定按钮栏遮挡 -->
+        <view class="h-4" />
       </scroll-view>
 
       <!-- ====== 底部固定按钮(横排:主按钮 + 分享) ====== -->

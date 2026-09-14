@@ -148,10 +148,11 @@ export default defineConfig(({ command, mode }) => {
             ? VITE_APP_PUBLIC_BASE
             : `${VITE_APP_PUBLIC_BASE}/`
           const ogImageUrl = `${ogImageBaseUrl}${h5PublicBase}static/app/icons/192x192.png`
+          // 注意：%OG_IMAGE% 不带 VITE_ 前缀，避免被 Vite 内置 htmlEnvHook 视为未定义 env 变量而告警
           return html
             .replace('%BUILD_TIME%', dayjs().format('YYYY-MM-DD HH:mm:ss'))
             .replace('%VITE_APP_TITLE%', VITE_APP_TITLE)
-            .replace('%VITE_APP_OG_IMAGE%', ogImageUrl)
+            .replace('%OG_IMAGE%', ogImageUrl)
         },
       },
       // 打包分析插件，h5 + 生产环境才启用

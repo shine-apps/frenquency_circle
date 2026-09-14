@@ -539,3 +539,39 @@ export type MbtiTestRecordDTO = {
 export type MbtiTypeDetailDTO = MbtiTypeDTO & {
   recommendations: MbtiHobbyRecommendationDTO[]
 }
+
+// ---- 个人打卡（checkins） ----
+
+/** 打卡状态:active 正常 / deleted 作者软删除 */
+export type CheckinStatus = "active" | "deleted"
+
+/**
+ * 打卡 DTO(checkins 表对外的投影)。
+ *
+ * - `content` 可空:允许纯媒体打卡;
+ * - `images` 与 `videoUrl` 互斥(最多 9 张图 或 1 个视频);
+ * - `circleId` 可空:圈子被删除后为 null,`circleTitle` 同步为 null;
+ * - `tags` 为 `hobby_tags.name` 名称快照。
+ */
+export type CheckinDTO = {
+  id: string
+  userId: string
+  /** 作者信息(批量补全,避免 N+1) */
+  author: { id: string; name: string; avatarUrl: string | null }
+  /** 打卡正文(可空) */
+  content: string | null
+  /** 关联圈子 id(可空) */
+  circleId: string | null
+  /** 关联圈子标题(可空) */
+  circleTitle: string | null
+  /** 兴趣标签名称快照(存 hobby_tags.name) */
+  tags: string[]
+  /** 图片 URL 列表(0-9 张) */
+  images: string[]
+  /** 视频 URL(与 images 互斥) */
+  videoUrl: string | null
+  createdAt: string
+}
+
+/** 打卡列表分页响应 */
+export type CheckinListDTO = Paginated<CheckinDTO>

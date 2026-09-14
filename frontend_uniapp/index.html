@@ -20,7 +20,10 @@
     <meta property="og:title" content="%VITE_APP_TITLE%" />
     <meta property="og:description" content="发现身边的兴趣圈子、同好与线下活动" />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="%VITE_APP_OG_IMAGE%" />
+    <!-- 占位符刻意不使用 VITE_ 前缀：它由 vite.config.ts 的 html-transform 插件构建期注入，
+         若命名为 VITE_ 开头的 env 变量形式，会被 Vite 内置 htmlEnvHook 当作未定义变量而告警。
+         注意：本文件注释里也不要再写出百分号包裹的占位符字面量，同样会被它匹配到。 -->
+    <meta property="og:image" content="%OG_IMAGE%" />
     <!--preload-links-->
     <!--app-context-->
   </head>

@@ -1146,3 +1146,85 @@ export const mbtiTestRecords = pgTable(
 
 export type MbtiTestRecord = typeof mbtiTestRecords.$inferSelect
 export type NewMbtiTestRecord = typeof mbtiTestRecords.$inferInsert
+
+// ============================================================================
+// 个人打卡模块
+// ============================================================================
+
+/**
+ * 打卡状态字面量联合:
+ * - `active`  正常(出现在打卡广场 / 我的打卡 / 圈子打卡)
+ * - `deleted` 作者软删除(不再出现在任何列表;与 activities 的状态惯例一致)
+ */
+export const CHECKIN_STATUSES = ["active", "deleted"] as const
+export type CheckinStatus = (typeof CHECKIN_STATUSES)[number]
+
+/**
+ * 个人打卡表(单表承载文字 + 媒体 + 兴趣标签 + 可选圈子归属)。
+ *
+ * 设计要点:
+ * - `content` 可空:允许纯媒体打卡(如图配文留空);
+ * - 媒体二选一:要么 1 个视频(`videoUrl`),要么 0-9 张图片(`images`),
+ *   由 CHECK 约束与接口校验双重保证互斥;
+ * - `circleId` 可空:打卡可关联到「我关注的圈子」,圈子删除后置 null
+ *   (`onDelete: 'set null'`)而不影响打卡历史;
+ * - `tags` 存 `hobby_tags.name` 名称快照(与 users.tags / circles.tags 惯例一致,不设外键);
+ * - 媒体类型不落库,由 `videoUrl ? 'video' : images.length > 0 ? 'image' : 'none'` 派生,
+ *   避免冗余字段不一致;广场过滤直接用 SQL 条件表达。
+ */
+export const checkins = pgTable(
+  "checkins",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** 打卡作者 */
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** 打卡正文(可空;纯媒体打卡允许无文字) */
+    content: text("content"),
+    /** 关联圈子(可空;圈子删除后置 null,打卡历史保留) */
+    circleId: uuid("circle_id").references(() => circles.id, {
+      onDelete: "set null",
+    }),
+    /** 兴趣标签名称数组(存 hobby_tags.name 快照,0-10 个) */
+    tags: text("tags")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    /** 图片 URL 数组(0-9 张,与 videoUrl 互斥) */
+    images: text("images")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    /** 视频 URL(可空,与 images 互斥) */
+    videoUrl: text("video_url"),
+    status: text("status")
+      .$type<CheckinStatus>()
+      .notNull()
+      .default("active"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // 读路径:"我的打卡"按用户 + 时间倒序
+    index("checkins_user_created_idx").on(table.userId, table.createdAt),
+    // 读路径:"圈子打卡"按圈子 + 时间倒序
+    index("checkins_circle_created_idx").on(table.circleId, table.createdAt),
+    // 读路径:打卡广场按状态过滤 + 时间倒序分页
+    index("checkins_status_created_idx").on(table.status, table.createdAt),
+    // 约束:视频与图片不能同时存在(媒体二选一)
+    check(
+      "checkins_media_exclusive_check",
+      sql`"video_url" is null or cardinality("images") = 0`
+    ),
+    // 约束:图片最多 9 张
+    check("checkins_images_max_check", sql`cardinality("images") <= 9`),
+  ]
+)
+
+export type Checkin = typeof checkins.$inferSelect
+export type NewCheckin = typeof checkins.$inferInsert

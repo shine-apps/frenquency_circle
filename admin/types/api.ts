@@ -575,3 +575,18 @@ export type CheckinDTO = {
 
 /** 打卡列表分页响应 */
 export type CheckinListDTO = Paginated<CheckinDTO>
+
+/**
+ * 后台打卡管理列表项。
+ *
+ * 在 C 端 `CheckinDTO` 基础上补充管理端专用字段:
+ * - `status`:软删状态(后台需要看到并恢复已删除记录,对外接口一律过滤);
+ * - `updatedAt`:最近一次状态变更时间(下架 / 恢复审计用)。
+ */
+export type AdminCheckinItem = CheckinDTO & {
+  status: CheckinStatus
+  updatedAt: string
+}
+
+/** 后台打卡管理列表分页响应 */
+export type AdminCheckinListDTO = Paginated<AdminCheckinItem>

@@ -268,7 +268,7 @@ async function handleSubmit() {
     <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
       <view class="flex items-center justify-between">
         <text class="text-sm text-[#333] font-medium">
-          图片 / 视频
+          图片 / 视频 (可选)
         </text>
         <text class="text-xs text-[#999]">
           {{ videoUrl ? '视频 1/1' : `图片 ${images.length}/${IMAGES_MAX}` }}
@@ -339,7 +339,7 @@ async function handleSubmit() {
     <view class="mx-4 mt-3 rounded-2xl bg-white p-4">
       <view class="flex items-center justify-between">
         <text class="text-sm text-[#333] font-medium">
-          关联圈子
+          关联圈子(可选)
         </text>
         <text class="text-xs text-[#999]">选填</text>
       </view>

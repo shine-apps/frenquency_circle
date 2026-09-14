@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import { PRIVACY_POLICY_PAGE, USER_AGREEMENT_PAGE } from '@/router/config'
+
 definePage({
   layout: 'default',
   style: {
@@ -6,6 +8,17 @@ definePage({
   },
   excludeLoginPath: true,
 })
+
+/** 协议与政策入口(登录页协议勾选区之外的常驻入口) */
+const AGREEMENT_ENTRIES = [
+  { title: '用户协议', path: USER_AGREEMENT_PAGE },
+  { title: '隐私政策', path: PRIVACY_POLICY_PAGE },
+]
+
+/** 打开协议正文页 */
+function goAgreement(path: string) {
+  uni.navigateTo({ url: path })
+}
 
 /** 应用版本号(与 manifest.config.ts 中 versionName 保持一致) */
 const APP_VERSION = '1.0.0'
@@ -116,6 +129,27 @@ function handleCopy() {
             </text>
           </view>
         </view>
+      </view>
+    </view>
+
+    <!-- ====== 协议与政策 ====== -->
+    <view class="mx-4 mt-3 rounded-2xl bg-white px-4 py-5">
+      <text class="block text-sm text-[#018d71] font-semibold">
+        协议与政策
+      </text>
+      <view
+        v-for="(entry, idx) in AGREEMENT_ENTRIES"
+        :key="entry.path"
+        class="flex items-center justify-between py-3"
+        :class="idx !== AGREEMENT_ENTRIES.length - 1 ? 'border-[#f5f5f5] border-b-inset' : ''"
+        @click="goAgreement(entry.path)"
+      >
+        <text class="text-sm text-[#333]">
+          {{ entry.title }}
+        </text>
+        <text class="text-sm text-[#ccc]">
+          ›
+        </text>
       </view>
     </view>
 

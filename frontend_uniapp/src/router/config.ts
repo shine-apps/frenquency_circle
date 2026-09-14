@@ -15,6 +15,11 @@ export const HOME_PAGE_PATH = '/pages/index/index'
 
 export const LOGIN_PAGE_LIST = [LOGIN_PAGE, REGISTER_PAGE]
 
+/** 《用户协议》正文页(登录页协议勾选区与「关于我们」协议入口共用) */
+export const USER_AGREEMENT_PAGE = '/pages/agreement/user-agreement'
+/** 《隐私政策》正文页 */
+export const PRIVACY_POLICY_PAGE = '/pages/agreement/privacy-policy'
+
 // 在 definePage 里面配置了 excludeLoginPath 的页面，功能与 EXCLUDE_LOGIN_PATH_LIST 相同
 export const excludeLoginPathList = getAllPages('excludeLoginPath').map(page => page.path)
 

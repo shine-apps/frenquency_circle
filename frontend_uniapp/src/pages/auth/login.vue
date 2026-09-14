@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { ref, watch } from 'vue'
 import { useTokenStore } from '@/store/token'
-import { HOME_PAGE_PATH } from '@/router/config'
+import { HOME_PAGE_PATH, PRIVACY_POLICY_PAGE, USER_AGREEMENT_PAGE } from '@/router/config'
 import { currRoute } from '@/utils'
 import { acceptAgreement, isAgreementAccepted } from '@/utils/agreement'
 
@@ -47,6 +47,11 @@ let timer: ReturnType<typeof setInterval> | null = null
 /** 轻量提示,使用 uni 原生 showToast,跨端一致 */
 function tip(msg: string) {
   uni.showToast({ title: msg, icon: 'none', duration: 2000 })
+}
+
+/** 打开《用户协议》/《隐私政策》正文页(两页都在登录白名单内,未登录也可查看) */
+function goAgreement(path: string) {
+  uni.navigateTo({ url: path })
 }
 
 /** 页面卸载时清理倒计时 */
@@ -104,7 +109,7 @@ async function handleSendCode() {
     return
   }
   if (!agreed.value) {
-    tip('请先阅读并同意协议')
+    tip('请先阅读并勾选同意协议')
     return
   }
   sendingCode.value = true
@@ -194,7 +199,7 @@ async function handleGetPhoneNumber(e: any) {
     return
   }
   if (!agreed.value) {
-    tip('请先阅读并同意协议')
+    tip('请先阅读并勾选同意协议(请滑到页面底部查看)')
     return
   }
   submitting.value = true
@@ -215,7 +220,7 @@ async function handleGetPhoneNumber(e: any) {
 <template>
   <view class="flex flex-col">
     <!-- 1. Logo 区 -->
-    <view class="flex flex-col items-center py-12">
+    <view class="flex flex-col items-center py-8">
       <image src="/static/images/logo.png" class="h-[152px] w-[152px]" />
       <view class="mt-4 text-2xl text-[#1a1a1a] font-semibold">
         趣邻圈
@@ -227,7 +232,7 @@ async function handleGetPhoneNumber(e: any) {
 
     <!-- 2. 微信快捷登录(仅微信小程序) -->
     <!-- #ifdef MP-WEIXIN -->
-    <view class="mt-8 px-8">
+    <view class="px-8">
       <wd-button
         block
         size="large"
@@ -351,10 +356,10 @@ async function handleGetPhoneNumber(e: any) {
         <text class="text-xs text-[#999]">
           已阅读并同意
         </text>
-        <text class="text-xs text-[#018d71]">
+        <text class="text-xs text-[#018d71]" @click.stop="goAgreement(USER_AGREEMENT_PAGE)">
           《用户协议》
         </text>
-        <text class="text-xs text-[#018d71]">
+        <text class="text-xs text-[#018d71]" @click.stop="goAgreement(PRIVACY_POLICY_PAGE)">
           《隐私政策》
         </text>
       </view>

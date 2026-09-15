@@ -32,6 +32,13 @@ onLaunch((options) => {
 })
 onShow((options) => {
   console.log('App.vue onShow', options)
+  // 回到前台时强制刷新一次系统设置:
+  // 内容审核开关等合规配置此前只依赖启动时的一次拉取(10 分钟 TTL),
+  // 后台切换后最长要等 10 分钟才生效,这里把生效窗口收敛到"下次回到前台"。
+  // 失败静默沿用旧值,不打断用户。
+  void useSettingsStore().getSettings(true).catch((e) => {
+    console.error('App onShow 刷新系统设置失败:', e)
+  })
   // 处理直接进入页面路由的情况：如h5直接输入路由、微信小程序分享后进入等
   // https://github.com/unibest-tech/unibest/issues/192
   if (options?.path) {

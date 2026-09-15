@@ -18,6 +18,7 @@ import { uploadFileToCos } from '@/api/upload'
 import { chooseImages } from '@/utils/chooseImage'
 import { chooseVideo } from '@/utils/chooseVideo'
 import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue'
+import { ensureTextSafe, showModerationFailureToast } from '@/utils/content-moderation'
 import type { FollowedCircleDTO } from '@/types'
 
 definePage({
@@ -220,6 +221,12 @@ async function handleSubmit() {
   }
   submitting.value = true
   try {
+    // 先审后发:提交前对打卡正文做内容安全审核(正文选填,空文本直接放行)
+    const gate = await ensureTextSafe(content.value)
+    if (gate !== 'pass') {
+      showModerationFailureToast(gate)
+      return
+    }
     await createCheckin({
       content: content.value.trim() || undefined,
       circleId: circleId.value || undefined,

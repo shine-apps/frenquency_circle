@@ -60,11 +60,23 @@ export const useSettingsStore = defineStore('settings', () => {
     // #endif
   })
 
+  /**
+   * 提交前 UGC 文本安全审核(先审后发)是否启用。
+   *
+   * 由后端系统设置项 `contentModerationEnabled` 控制,默认不开启:
+   * - key 缺失 / 值非 true / 尚未拉取到,一律按不开启处理,直接放行不阻塞发布;
+   * - 仅当后端显式设为 true 时,前端才在发布前调用审核接口拦截违规文本。
+   */
+  const contentModerationEnabled = computed(
+    () => settings.value.find(s => s.key === 'contentModerationEnabled')?.value === true,
+  )
+
   return {
     settings,
     fetchedAt,
     getSettings,
     getSetting,
     isAppDeploying,
+    contentModerationEnabled,
   }
 })

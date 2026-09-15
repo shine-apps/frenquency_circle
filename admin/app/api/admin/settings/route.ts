@@ -9,10 +9,10 @@ import { logger, LOG_PREFIX } from "@/lib/logger"
 /**
  * 更新系统设置请求体 schema。
  * - key: 设置项主键,白名单枚举(新增设置项时在此扩展)
- * - value: 按 key 约束类型(isAppDeploying 为 boolean)
+ * - value: 按 key 约束类型(当前各设置项均为 boolean)
  */
 const updateSettingSchema = z.object({
-  key: z.enum(["isAppDeploying"]),
+  key: z.enum(["isAppDeploying", "contentModerationEnabled"]),
   value: z.boolean(),
 })
 
@@ -20,7 +20,8 @@ const updateSettingSchema = z.object({
  * PATCH /api/admin/settings
  *
  * 管理员更新(或新增)系统设置项,upsert 语义。
- * 例如 isAppDeploying:管理员切换后,小程序端在下次拉取 /api/settings 时生效。
+ * 例如 isAppDeploying / contentModerationEnabled:管理员切换后,
+ * 小程序端在下次拉取 /api/settings 时生效。
  *
  * 响应:`SystemSettingDTO`(更新后的设置项)
  */

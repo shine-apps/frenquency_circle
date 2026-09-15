@@ -804,6 +804,8 @@ async function main() {
       value: { version: "1.0.0", forceUpdate: false },
     },
     { key: "isAppDeploying", value: false },
+    // 内容安全审核(先审后发)开关,默认不开启
+    { key: "contentModerationEnabled", value: false },
   ]
   await db
     .insert(systemSettings)

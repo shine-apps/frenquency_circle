@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm"
+import { inArray } from "drizzle-orm"
 
 import { db } from "@/lib/db"
 import { systemSettings } from "@/db/schema"
@@ -6,12 +6,19 @@ import { SettingsForm } from "./_components/settings-form"
 
 export const dynamic = "force-dynamic"
 
+/** 本页展示的设置项 key 列表(新增设置项时在此扩展) */
+const SETTING_KEYS = ["isAppDeploying", "contentModerationEnabled"]
+
 export default async function AdminSettingsPage() {
-  const [setting] = await db
+  const rows = await db
     .select()
     .from(systemSettings)
-    .where(eq(systemSettings.key, "isAppDeploying"))
-    .limit(1)
+    .where(inArray(systemSettings.key, SETTING_KEYS))
+
+  const isAppDeploying =
+    rows.find((row) => row.key === "isAppDeploying")?.value === true
+  const contentModerationEnabled =
+    rows.find((row) => row.key === "contentModerationEnabled")?.value === true
 
   return (
     <main className="p-6">
@@ -21,7 +28,10 @@ export default async function AdminSettingsPage() {
           管理小程序端运行时读取的系统设置项,保存后小程序端在下次拉取设置时生效。
         </p>
       </div>
-      <SettingsForm initialIsAppDeploying={setting?.value === true} />
+      <SettingsForm
+        initialIsAppDeploying={isAppDeploying}
+        initialContentModerationEnabled={contentModerationEnabled}
+      />
     </main>
   )
 }

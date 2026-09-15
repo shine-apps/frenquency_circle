@@ -21,6 +21,7 @@ import { stripHtmlTags } from '@/utils/format'
 import { toLoginWithRedirect } from '@/utils/toLoginPage'
 import { useDialog } from '@wot-ui/ui/components/wd-dialog'
 import { useUserStore } from '@/store/user'
+import { ensureTextSafe, showModerationFailureToast } from '@/utils/content-moderation'
 import { shouldBlockForAppDeploying } from '@/composables/useAppDeployingGuard'
 import type { ActivityDTO } from '@/types'
 
@@ -198,6 +199,13 @@ async function handleSubmit() {
     return
   }
   submitting.value = true
+  // 先审后发:提交前对文本 UGC(标题 + 介绍)做内容安全审核
+  const gate = await ensureTextSafe(`${title.value.trim()}\n${description.value}`)
+  if (gate !== 'pass') {
+    showModerationFailureToast(gate)
+    submitting.value = false
+    return
+  }
   const payload = {
     title: title.value.trim(),
     description: description.value,

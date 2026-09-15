@@ -9,6 +9,7 @@ import { uploadFileToCos } from '@/api/upload'
 import { chooseImages } from '@/utils/chooseImage'
 import { toLoginWithRedirect } from '@/utils/toLoginPage'
 import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue'
+import { ensureTextSafe, showModerationFailureToast } from '@/utils/content-moderation'
 import type { CircleDetailDTO, UpdateCircleInput } from '@/types'
 
 definePage({
@@ -349,6 +350,12 @@ async function handleSubmit() {
     return
   submitting.value = true
   try {
+    // 先审后发:提交前对文本 UGC(标题 + 介绍)做内容安全审核
+    const gate = await ensureTextSafe(`${trimmedTitle.value}\n${description.value.trim()}`)
+    if (gate !== 'pass') {
+      showModerationFailureToast(gate)
+      return
+    }
     const lat = latitude.value as number
     const lng = longitude.value as number
 

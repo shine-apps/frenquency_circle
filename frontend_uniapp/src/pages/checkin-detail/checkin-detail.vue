@@ -13,6 +13,7 @@ import { onLoad, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { getCheckin } from '@/api/checkins'
 import { useShare } from '@/composables/useShare'
 import { formatDateTime } from '@/utils/format'
+import ReportContentDialog from '@/components/ReportContentDialog/ReportContentDialog.vue'
 import type { CheckinDTO } from '@/types'
 
 definePage({
@@ -27,6 +28,8 @@ const checkinId = ref('')
 const detail = ref<CheckinDTO | null>(null)
 const loading = ref(true)
 const notFound = ref(false)
+/** 举报弹窗显隐 */
+const reportVisible = ref(false)
 
 /** 分享图:优先首张图片(视频打卡无法取封面,回退 useShare 默认图) */
 const shareImage = computed(() => detail.value?.images?.[0] ?? '')
@@ -250,19 +253,28 @@ function handleBack() {
 
       <!-- ====== 底部固定分享栏 ====== -->
       <view class="fixed bottom-0 left-0 right-0 border-t border-[#f0f0f0] bg-white px-4 py-3 pb-safe">
-        <!-- 小程序:原生转发按钮(点按唤起微信转发面板) -->
-        <!-- #ifndef H5 -->
-        <wd-button plain block open-type="share">
-          分享这条打卡
-        </wd-button>
-        <!-- #endif -->
-        <!-- H5 微信浏览器:点击引导右上角分享 -->
-        <!-- #ifdef H5 -->
-        <wd-button plain block @click="share">
-          分享这条打卡
-        </wd-button>
-        <!-- #endif -->
+        <view class="flex items-center gap-3">
+          <!-- 小程序:原生转发按钮(点按唤起微信转发面板) -->
+          <!-- #ifndef H5 -->
+          <wd-button plain class="flex-1" open-type="share">
+            分享这条打卡
+          </wd-button>
+          <!-- #endif -->
+          <!-- H5 微信浏览器:点击引导右上角分享 -->
+          <!-- #ifdef H5 -->
+          <wd-button plain class="flex-1" @click="share">
+            分享这条打卡
+          </wd-button>
+          <!-- #endif -->
+          <!-- 举报 -->
+          <wd-button plain class="shrink-0" @click="reportVisible = true">
+            举报
+          </wd-button>
+        </view>
       </view>
+
+      <!-- 举报内容弹窗 -->
+      <ReportContentDialog v-model="reportVisible" target-type="checkin" :target-id="checkinId" />
     </template>
   </view>
 </template>

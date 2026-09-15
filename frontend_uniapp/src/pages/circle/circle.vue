@@ -7,6 +7,7 @@ import { useUserStore } from '@/store/user'
 import { useShare } from '@/composables/useShare'
 import { formatDate } from '@/utils/format'
 import CheckinCard from '@/components/CheckinCard/CheckinCard.vue'
+import ReportContentDialog from '@/components/ReportContentDialog/ReportContentDialog.vue'
 import type { CheckinDTO, CircleDetailDTO } from '@/types'
 
 definePage({
@@ -21,6 +22,8 @@ const userStore = useUserStore()
 
 // 路由参数 id(通过 getCurrentInstance 获取,兼容各种平台)
 const circleId = ref('')
+/** 举报弹窗显隐 */
+const reportVisible = ref(false)
 
 const circle = ref<CircleDetailDTO | null>(null)
 const loading = ref(true)
@@ -468,8 +471,15 @@ function handleBack() {
             分享
           </wd-button>
           <!-- #endif -->
+          <!-- 举报 -->
+          <wd-button plain custom-class="shrink-0" @click="reportVisible = true">
+            举报
+          </wd-button>
         </view>
       </view>
+
+      <!-- ====== 举报内容弹窗 ====== -->
+      <ReportContentDialog v-model="reportVisible" target-type="circle" :target-id="circleId" />
 
       <!-- ====== 联系方式底部弹层 ====== -->
       <wd-popup v-model="contactOpen" position="bottom" round>

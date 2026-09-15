@@ -10,6 +10,7 @@ import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getActivity } from '@/api/activities'
 import { stripHtmlTags } from '@/utils/format'
+import ReportContentDialog from '@/components/ReportContentDialog/ReportContentDialog.vue'
 import type { ActivityDTO } from '@/types'
 
 const activityId = ref('')
@@ -17,6 +18,8 @@ const activityId = ref('')
 const loading = ref(true)
 const notFound = ref(false)
 const activity = ref<ActivityDTO | null>(null)
+/** 举报弹窗显隐 */
+const reportVisible = ref(false)
 
 /** 纯文本介绍(兼容历史富文本 HTML 数据,去除标签后展示) */
 const plainDescription = computed(() => stripHtmlTags(activity.value?.description || ''))
@@ -127,6 +130,16 @@ async function load() {
           class="w-full bg-transparent text-sm leading-6 text-[#666]"
         />
       </view>
+
+      <!-- 举报入口 -->
+      <view class="flex justify-end px-1 py-1">
+        <text class="text-xs text-[#999]" @click="reportVisible = true">
+          举报该内容 ›
+        </text>
+      </view>
     </view>
+
+    <!-- 举报内容弹窗 -->
+    <ReportContentDialog v-model="reportVisible" target-type="activity" :target-id="activityId" />
   </view>
 </template>

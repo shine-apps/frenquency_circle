@@ -12,7 +12,9 @@ import { Label } from "@/components/ui/label"
 export function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const callbackUrl = searchParams.get("callbackUrl") || "/admin"
+  // 默认回首页由服务端按角色分流(ADMIN → /admin,TEACHER → /teacher),
+  // 不再硬编码 /admin,否则老师登录后会先被弹回首页再跳一次
+  const callbackUrl = searchParams.get("callbackUrl") || "/"
 
   // 仅开发环境预填默认管理员凭据，生产环境留空避免泄露
   const [email, setEmail] = useState(

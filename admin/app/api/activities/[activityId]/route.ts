@@ -5,30 +5,18 @@ import { activities } from "@/db/schema"
 import { corsOptions, fail, ok, withCors } from "@/lib/api"
 import { requireSession } from "@/lib/auth-utils"
 import { logger, LOG_PREFIX } from "@/lib/logger"
-import { updateActivitySchema, type UpdateActivityInput } from "@/lib/activities"
-import type { ActivityDTO } from "@/types/api"
+import {
+  buildActivityUpdatePatch,
+  cancelActivity,
+  toActivityDTO,
+  updateActivitySchema,
+  type UpdateActivityInput,
+} from "@/lib/activities"
 
 type RouteContext = {
   params: Promise<{
     activityId: string
   }>
-}
-
-/** 活动行 → ActivityDTO 投影(与列表路由保持一致) */
-function toActivityDTO(row: typeof activities.$inferSelect): ActivityDTO {
-  return {
-    id: row.id,
-    creatorId: row.creatorId,
-    title: row.title,
-    description: row.description,
-    startTime: row.startTime.toISOString(),
-    registrationDeadline: row.registrationDeadline.toISOString(),
-    contactPhone: row.contactPhone ?? null,
-    coverImages: row.coverImages ?? [],
-    status: row.status,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  }
 }
 
 /**
@@ -96,23 +84,7 @@ export async function PATCH(req: Request, context: RouteContext) {
 
   const [updated] = await db
     .update(activities)
-    .set({
-      ...(input.title !== undefined ? { title: input.title } : {}),
-      ...(input.description !== undefined ? { description: input.description } : {}),
-      ...(input.startTime !== undefined
-        ? { startTime: new Date(input.startTime) }
-        : {}),
-      ...(input.registrationDeadline !== undefined
-        ? { registrationDeadline: new Date(input.registrationDeadline) }
-        : {}),
-      ...(input.contactPhone !== undefined
-        ? { contactPhone: input.contactPhone ?? null }
-        : {}),
-      ...(input.coverImages !== undefined
-        ? { coverImages: input.coverImages }
-        : {}),
-      updatedAt: new Date(),
-    })
+    .set(buildActivityUpdatePatch(input))
     .where(eq(activities.id, activityId))
     .returning()
 
@@ -147,10 +119,7 @@ export async function DELETE(req: Request, context: RouteContext) {
     return withCors(fail(403, "只有活动发布者可以取消活动"), req)
   }
 
-  await db
-    .update(activities)
-    .set({ status: "cancelled", updatedAt: new Date() })
-    .where(eq(activities.id, activityId))
+  await cancelActivity(activityId)
 
   logger.info(LOG_PREFIX.CIRCLE, "Activity cancelled", {
     activityId,

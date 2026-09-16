@@ -19,6 +19,15 @@ export const USER_ROLE_LABEL: Record<UserRole, string> = {
 }
 
 /**
+ * 可访问 `/teacher/*` 教师后台的角色。
+ *
+ * 单一事实来源:被 `proxy.ts`、`auth.config.ts` 的 authorized 回调、
+ * `app/teacher/layout.tsx` 与 `requireTeacher()` 共用,
+ * 避免魔法数组散落四处导致口径漂移。ADMIN 一并放行以支持代管。
+ */
+export const TEACHER_AREA_ROLES: UserRole[] = ["TEACHER", "ADMIN"]
+
+/**
  * 解析角色过滤参数（URL / query 传入）。
  *
  * @param raw 原始参数值

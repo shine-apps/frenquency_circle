@@ -1,47 +1,15 @@
 import { z } from "zod"
-import { and, count, eq, inArray } from "drizzle-orm"
+import { and, count, eq } from "drizzle-orm"
 
 import { db } from "@/lib/db"
-import {
-  circles,
-  circleFollows,
-  hobbyTags,
-  contactLogs,
-  users,
-} from "@/db/schema"
+import { circles, circleFollows, contactLogs, users } from "@/db/schema"
 import { corsOptions, fail, ok, withCors } from "@/lib/api"
 import { requireSession } from "@/lib/auth-utils"
+import { findUnapprovedTags, toCircleDTO, PHONE_RE, WECHAT_RE } from "@/lib/circles"
 import { logger, LOG_PREFIX } from "@/lib/logger"
-import type { CircleDTO, CircleDetailDTO } from "@/types/api"
-
-/** 手机号格式 */
-const PHONE_RE = /^1[3-9]\d{9}$/
-/** 微信号格式 */
-const WECHAT_RE = /^[a-zA-Z][-_a-zA-Z0-9]{5,19}$/
+import type { CircleDetailDTO } from "@/types/api"
 
 type RouteContext = { params: Promise<{ id: string }> }
-
-/** 将 circles 表行转换为 CircleDTO */
-function toCircleDTO(row: typeof circles.$inferSelect): CircleDTO {
-  return {
-    id: row.id,
-    title: row.title,
-    description: row.description,
-    creatorId: row.creatorId,
-    latitude: row.latitude,
-    longitude: row.longitude,
-    address: row.address,
-    contactPhone: row.contactPhone,
-    wechat: row.wechat,
-    activityTime: row.activityTime,
-    maxMembers: row.maxMembers,
-    memberCount: row.memberCount,
-    status: row.status,
-    coverImages: row.coverImages ?? [],
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  }
-}
 
 /** 查询圈子详情并组装 CircleDetailDTO(tags 直接取 circles.tags 数组) */
 async function fetchCircleDetail(
@@ -206,21 +174,11 @@ export async function PUT(req: Request, context: RouteContext) {
     coverImages,
   } = parsed.data
 
-  // 3.1 若提供 tags,校验名称存在且通过审核(去重)
+  // 3.1 若提供 tags,校验名称存在且通过审核(去重;与建圈共用同一份白名单逻辑)
   let uniqueTags: string[] | undefined
   if (newTags) {
     uniqueTags = Array.from(new Set(newTags))
-    const existingTags = await db
-      .select({ name: hobbyTags.name })
-      .from(hobbyTags)
-      .where(
-        and(
-          inArray(hobbyTags.name, uniqueTags),
-          eq(hobbyTags.status, "approved")
-        )
-      )
-    const existingNames = new Set(existingTags.map((t) => t.name))
-    const missing = uniqueTags.filter((name) => !existingNames.has(name))
+    const missing = await findUnapprovedTags(uniqueTags)
     if (missing.length > 0) {
       return withCors(
         fail(400, "部分标签不存在或未通过审核", { missingTags: missing }),

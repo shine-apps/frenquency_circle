@@ -5,28 +5,16 @@ import { activities } from "@/db/schema"
 import { corsOptions, fail, isUuid, ok, parsePagination, withCors } from "@/lib/api"
 import { requireSession } from "@/lib/auth-utils"
 import { logger, LOG_PREFIX } from "@/lib/logger"
-import { createActivitySchema, type CreateActivityInput } from "@/lib/activities"
+import {
+  createActivity,
+  createActivitySchema,
+  toActivityDTO,
+  type CreateActivityInput,
+} from "@/lib/activities"
 import type { ActivityDTO, ActivityListDTO, Paginated, UserRole } from "@/types/api"
 
 /** 可发布活动的角色 */
 const PUBLISH_ROLES: UserRole[] = ["TEACHER", "ADMIN"]
-
-/** 活动行 → ActivityDTO 投影 */
-function toActivityDTO(row: typeof activities.$inferSelect): ActivityDTO {
-  return {
-    id: row.id,
-    creatorId: row.creatorId,
-    title: row.title,
-    description: row.description,
-    startTime: row.startTime.toISOString(),
-    registrationDeadline: row.registrationDeadline.toISOString(),
-    contactPhone: row.contactPhone ?? null,
-    coverImages: row.coverImages ?? [],
-    status: row.status,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  }
-}
 
 /**
  * POST /api/activities
@@ -56,19 +44,8 @@ export async function POST(req: Request) {
   }
   const input = parsed.data as CreateActivityInput
 
-  // 3. 写入活动
-  const [inserted] = await db
-    .insert(activities)
-    .values({
-      creatorId: userId,
-      title: input.title,
-      description: input.description,
-      startTime: new Date(input.startTime),
-      registrationDeadline: new Date(input.registrationDeadline),
-      contactPhone: input.contactPhone ?? null,
-      coverImages: input.coverImages ?? [],
-    })
-    .returning()
+  // 3. 写入活动(与教师后台共用 lib/activities 的 createActivity)
+  const inserted = await createActivity({ creatorId: userId, input })
 
   logger.info(LOG_PREFIX.CIRCLE, "Activity created", {
     activityId: inserted.id,

@@ -1,6 +1,7 @@
 import type { NextAuthConfig } from "next-auth"
 import { NextResponse } from "next/server"
 import { SESSION_MAX_AGE_SECONDS } from "@/lib/auth/session-config"
+import { TEACHER_AREA_ROLES } from "@/lib/user-role"
 
 export const authConfig = {
   pages: {
@@ -11,6 +12,8 @@ export const authConfig = {
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user
       const isOnAdmin = nextUrl.pathname.startsWith("/admin")
+      const isOnTeacher = nextUrl.pathname.startsWith("/teacher")
+
       if (isOnAdmin) {
         if (!isLoggedIn) return false
         // 角色校验下沉到路由层:非管理员直接回首页,而不是先渲染后台再被 layout 重定向。
@@ -20,6 +23,18 @@ export const authConfig = {
         }
         return true
       }
+
+      if (isOnTeacher) {
+        // 未登录 → 返回 false,Auth.js 按 pages.signIn 跳转 /login
+        if (!isLoggedIn) return false
+        // 角色校验同样下沉到路由层,与 app/teacher/layout.tsx 互为双保险。
+        // 角色集合唯一来源:lib/user-role.ts 的 TEACHER_AREA_ROLES(TEACHER / ADMIN)。
+        if (!TEACHER_AREA_ROLES.includes(auth.user.role)) {
+          return NextResponse.redirect(new URL("/", nextUrl))
+        }
+        return true
+      }
+
       return true
     },
     async jwt({ token, user, account }) {

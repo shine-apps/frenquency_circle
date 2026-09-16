@@ -8,6 +8,9 @@ export default async function Home() {
     // 未登录 → 跳登录页
     if (!session?.user) redirect("/login");
 
+    // 老师 → 教师后台（/teacher 有自己的 layout 守卫，不会形成重定向死循环）
+    if (session.user.role === "TEACHER") redirect("/teacher");
+
     // 仅管理员可进入后台；已登录非管理员展示无权限提示，
     // 避免与 admin/layout.tsx 的 role 守卫形成 / ↔ /admin 重定向死循环
     if (session.user.role !== "ADMIN") {

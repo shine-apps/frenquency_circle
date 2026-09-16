@@ -47,6 +47,15 @@ describe("app/page (Home)", () => {
     expect(redirectMock).toHaveBeenCalledWith("/admin")
   })
 
+  it("redirects teachers to /teacher", async () => {
+    authMock.mockResolvedValue({
+      user: { id: "u3", role: "TEACHER", email: "t@e.com", name: "T" },
+      expires: "2099-01-01",
+    })
+    await expect(Home()).rejects.toMatchObject({ path: "/teacher" })
+    expect(redirectMock).toHaveBeenCalledWith("/teacher")
+  })
+
   it("renders a no-access page for logged-in non-admins (no redirect, breaks the loop)", async () => {
     authMock.mockResolvedValue({
       user: { id: "u2", role: "USER", email: "c@d.com", name: "C" },

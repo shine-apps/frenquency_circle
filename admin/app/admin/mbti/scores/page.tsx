@@ -16,7 +16,12 @@ export default function AdminMbtiScoresPage() {
             支持「按类型」或「按标签」两种视角配置。
           </p>
         </div>
-        <Button variant="outline" render={<Link href="/admin/mbti/questions" />}>
+        {/* 渲染成 <a> 而非 <button>,必须显式告知 Base UI,否则丢按钮语义并告警 */}
+        <Button
+          variant="outline"
+          render={<Link href="/admin/mbti/questions" />}
+          nativeButton={false}
+        >
           题库管理
         </Button>
       </div>

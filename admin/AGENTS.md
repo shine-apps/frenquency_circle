@@ -71,6 +71,11 @@ All commands run from the project root with no `cd` needed.
 │   │   └── users/                    # User list
 │   │       ├── page.tsx              # Server: fetch → DTO
 │   │       └── _components/users-table.tsx
+│   ├── teacher/                      # 教师后台(TEACHER / ADMIN,见 requireTeacher)
+│   │   ├── layout.tsx                # 守卫(TEACHER_AREA_ROLES)+ TeacherSidebar
+│   │   ├── page.tsx                  # 概览:我的圈子 / 活动统计
+│   │   ├── circles/                  # 我的圈子(SSR 列表 + 桌面表格/移动卡片 + 表单弹窗)
+│   │   └── activities/               # 我的活动(同上)
 │   ├── api/                          # Route handlers
 │   │   ├── auth/[...nextauth]/route.ts
 │   │   ├── auth/sms/send/route.ts    # POST: issue+send SMS code (rate-limited)
@@ -81,6 +86,8 @@ All commands run from the project root with no `cd` needed.
 ├── components/
 │   ├── ui/                           # shadcn primitives (do not edit semantics)
 │   ├── app-sidebar.tsx               # Admin sidebar
+│   ├── teacher-sidebar.tsx           # 教师后台侧边栏(小屏自动 Sheet 抽屉)
+│   ├── location-picker.tsx           # 高德地图选点(受控组件,admin 改地址与教师圈子表单共用)
 │   ├── sign-out-button.tsx           # signOut() trigger
 │   └── stat-card.tsx                 # Dashboard card
 ├── db/
@@ -89,7 +96,11 @@ All commands run from the project root with no `cd` needed.
 ├── lib/
 │   ├── db.ts                         # Drizzle singleton (dev globalThis cache)
 │   ├── api.ts                        # ok() / fail() / parsePagination()
-│   ├── auth-utils.ts                 # requireAdmin() / requireSession()
+│   ├── auth-utils.ts                 # requireAdmin() / requireTeacher() / requireSession()
+│   ├── user-role.ts                  # USER_ROLE_OPTIONS / USER_ROLE_LABEL / TEACHER_AREA_ROLES
+│   ├── circles.ts                    # toCircleDTO / createCircleSchema / findUnapprovedTags / createCircle
+│   ├── activities.ts                 # toActivityDTO / createActivitySchema / createActivity / buildActivityUpdatePatch / cancelActivity
+│   ├── circle-status.ts              # 圈子状态文案与徽章映射(admin / teacher 共用)
 │   ├── logger.ts                     # Structured logger (info/warn/error + LOG_PREFIX)
 │   ├── utils.ts                      # cn() and other shadcn helpers
 │   ├── auth/
@@ -174,6 +185,17 @@ All commands run from the project root with no `cd` needed.
 
 - **Response helpers** from `@/lib/api`: `ok(data, init?)` for success, `fail(status, message, details?)` for errors. Both produce `IResponse<T>` envelopes with `code` / `data` / `message` / optional `details`.
 - **Auth:** every mutating handler must call `requireAdmin()` first; return `guard.response` on failure. Reads under `/api/users` require admin.
+- **教师后台 API (`/api/teacher/*`)**:走 cookie session + `requireTeacher()`(TEACHER / ADMIN),同源请求,**不设 CORS 头**(与 `/api/admin/*` 一致)。现有端点:
+
+  | 方法 | 路径 | 说明 |
+  |---|---|---|
+  | `POST` | `/api/teacher/circles` | 新建圈子(`status=pending`) |
+  | `PATCH` | `/api/teacher/circles/[circleId]` | 编辑圈子字段 + `status: "active" \| "offline"` |
+  | `POST` | `/api/teacher/activities` | 发布活动 |
+  | `PATCH` | `/api/teacher/activities/[activityId]` | 编辑活动 |
+  | `DELETE` | `/api/teacher/activities/[activityId]` | 软取消活动 |
+
+  写权限口径:**创建者本人 或 `role === "ADMIN"`(代管)**。圈子创建/标签白名单/配额/通知等业务规则集中在 `lib/circles.ts`,活动落库与更新补丁集中在 `lib/activities.ts`,C 端路由与教师后台路由**共用同一份实现** —— 新增规则一律改 lib,不要在两处路由里各写一遍。
 - **Validation:** parse request bodies with zod's `safeParse`. On failure return `fail(400, "Invalid request body", parsed.error.flatten())`.
 - **Pagination:** use `parsePagination(req.nextUrl.searchParams)` from `@/lib/api`. Defaults to `{ page: 1, pageSize: 20 }`; `pageSize` capped at 100.
 - **Route params:** in Next.js 16, `params` is a `Promise`. Always `await context.params`:
@@ -215,7 +237,7 @@ All commands run from the project root with no `cd` needed.
 
 ### Phase 4: 圈子 CRUD 与联系 API
 
-- **`POST /api/circles`**:登录用户,校验 `role === 'TEACHER'`(否则 403)→ zod 校验完整圈子 schema → 插入 `circles` + `circleTags` + `circleMembers(role=creator)` → 24h 配额校验(超 5 个 429)→ 返回 `{ circleId, status: 'active' }`。
+- **`POST /api/circles`**:登录用户,校验 `role === 'TEACHER'`(否则 403)→ zod 校验完整圈子 schema → **24h 配额校验(超 5 个 429)** → 标签必须存在且 `status='approved'`(否则 400 + `{ missingTags }`)→ 插入 `circles`(含 `tags` text[] 名称数组)+ `circleMembers(role=creator)` → `notifyAdmins` 扇出 + 记录兴趣事件 → 返回 `201 { circleId, status: 'pending' }`(**需管理员审核后才会变成 `active`**)。业务规则集中在 `lib/circles.ts` 的 `createCircle`,与 `POST /api/teacher/circles` 共用。
 - **`GET /api/circles/:id`**:返回 `CircleDetailDTO`(含 creator 信息、tags、memberCount、被联系次数)。非创建者访问 `pending` 圈子返回 404。
 - **`PUT /api/circles/:id`**:校验 `creatorId === 当前用户`(否则 403)→ 更新可变字段(title/description/contactPhone/wechat/activityTime/maxMembers/tagIds)。
 - **`DELETE /api/circles/:id`**:校验创建者 → 软删除(`status='deleted'`),不再被匹配。
@@ -244,6 +266,7 @@ All commands run from the project root with no `cd` needed.
 - **`lib/match/precision.ts`**:`locationPrecision` 隐私脱敏,在 DTO 转换层对 `distanceKm` 四舍五入(`community` → 0.5km,`region` → 5km)。
 - **`lib/search/tag-search.ts`**:`searchTags(query, limit)` 多策略搜索;`lib/search/pinyin.ts` 封装 `pinyin-pro` 提供 `toPinyin` / `toPinyinInitials`。
 - **`lib/auth-utils.ts`**:`requireSession(req)` 返回 `{ user: AuthUser } | { response: NextResponse }`,供非 admin 业务接口复用(基于 `readUserFromToken`)。
+- **`lib/auth-utils.ts`**:`requireTeacher()` 与 `requireAdmin()` 同构(走 cookie session,返回 `{ ok: true, userId, role } | { ok: false, response }`),放行角色取 `lib/user-role.ts` 的 `TEACHER_AREA_ROLES`(`TEACHER` / `ADMIN`)。`/api/teacher/*` 一律用它守卫。<br>注意:`@auth/core` 的 `getToken` **先读 cookie 再读 Bearer**(`node_modules/@auth/core/jwt.js`),所以 `requireSession(req)` 对浏览器同源 cookie 请求同样有效 —— 教师后台因此可以直接复用 `POST /api/upload` 上传图片,无需新增上传端点。
 
 ## Authentication
 
@@ -256,7 +279,8 @@ All commands run from the project root with no `cd` needed.
 - **`lib/auth/account-service.ts`** centralizes user/account lifecycle: `findUserByAccount`, `findUserByAccountOrEmail`(accounts 绑定优先、email 兜底), `linkAccount` (idempotent upsert), `findOrCreateUserAndLinkAccount`(仅按 email 查,建号场景用), `findOrCreateUserByProvider`(**登录入口用**), `hasBoundProvider`(是否已绑定某 provider,如微信)、`hasOtherLoginMethod`(解绑守卫)、`unlinkAccount`(带 `EXISTS` 守卫的原子解绑)。All providers should go through these helpers — do not write raw `db.insert(users)` / `db.insert(accounts)` in `authorize`.
 - **`lib/auth/token-login.ts`** — Token 模式登录的唯一实现:`signInAndIssueToken({ req, provider, credentials, label, invalidCredentialsMessage, mapError })` 负责 `signIn(..., { redirect: false })` → 提取 JWT(Set-Cookie,失败再读 `cookies()`)→ 解析用户 → 返回 `{ token, user, expiresIn }`。**新增/修改登录入口一律复用它,不要复制粘贴路由骨架**:`authorize` 返回 null 时 Auth.js 抛 `CredentialsSignin`,漏映射会把「凭据错误」报成 500(`phone` 路由曾如此)。
 - **身份锚点是 `accounts` 绑定关系,不是 `users.email`**:`email` 可被用户修改(`PATCH /api/auth/me` 会同步 `(credentials, 旧email)` → `(credentials, 新email)`,并对 `users.email` 与 accounts 双向做占用校验);手机号用户的 email 由 `phoneToEmail` 派生。改邮箱/改手机号后必须仍登录到**同一个** user,因此登录解析一律走 `findUserByAccountOrEmail` / `findOrCreateUserByProvider`,不要直接用 email 查 `users`。
-- **`proxy.ts`** exports `auth as proxy`. Do not create a `middleware.ts` — it is removed in Next.js 16. The `authorized` callback in `auth.config.ts` gates `/admin/:path*`.
+- **`proxy.ts`** exports `auth as proxy`. Do not create a `middleware.ts` — it is removed in Next.js 16. The `authorized` callback in `auth.config.ts` gates `/admin/:path*` and `/teacher/:path*`(matcher 必须同步维护,漏加会让页面完全失去路由层守卫)。
+- **页面守卫三重保险**:`proxy.ts` matcher + `auth.config.ts` 的 `authorized` 回调 + 对应 `app/<area>/layout.tsx` 的 session 校验。新增后台区域时三处都要改,并同步 `app/page.tsx` 的角色分流(`ADMIN → /admin`,`TEACHER → /teacher`,其余展示无权限页)。
 - **Type augmentations** live in `types/next-auth.d.ts`. When adding a new session field, update the `jwt` and `session` callbacks in `auth.config.ts` in the same change.
 - **`PROVIDER_CREDENTIALS` / `PROVIDER_PHONE` / `PROVIDER_WECHAT_MP`** constants live in `auth.ts`. Use these instead of string literals when calling `signIn("phone", ...)` etc.
 
@@ -366,6 +390,15 @@ All commands run from the project root with no `cd` needed.
 3. For statistics, reuse `components/stat-card.tsx`.
 4. Add a nav entry in `components/app-sidebar.tsx`.
 
+### Add a page under `/teacher` (教师后台)
+
+1. Create `app/teacher/<feature>/page.tsx` (server component)，数据 SSR 直查库(与 `/admin/*` 一致)，**不要**为了列表再写一个 GET 接口。
+2. 写操作调用 `/api/teacher/*`(client 组件 `fetch` 后 `router.refresh()`)，新增端点时守卫用 `requireTeacher()`。
+3. 数据范围默认 `creatorId = 当前用户`;需要「ADMIN 查看全部」时用 `?scope=all`(必须在 SSR 里再次校验 `role === "ADMIN"`,不能只信任 query)。
+4. **响应式是硬要求**:列表页同时提供桌面表格(`hidden md:block` + `components/ui/table`)与移动卡片(`md:hidden`)，两者共享同一份筛选/弹窗状态;筛选 Tab 外层包 `-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0`;表单弹窗加 `max-h-[calc(100dvh-2rem)] overflow-y-auto` 并把字段栅格设成 `grid-cols-1 sm:grid-cols-2`。
+5. 表单需要地图选点时复用 `components/location-picker.tsx`，需要图片上传时复用 `POST /api/upload`(cookie session 已被 `getToken` 支持)。
+6. Add a nav entry in `components/teacher-sidebar.tsx`.
+
 ### Modify a schema
 
 1. Edit `db/schema.ts`.
@@ -386,6 +419,8 @@ All commands run from the project root with no `cd` needed.
 - **shadcn/ui is on `@base-ui/react`, not Radix.** When adding components via `pnpm dlx shadcn@latest add <name>`, the project uses the `base-nova` style. The `Tabs` primitive uses `@base-ui/react/tabs`.
 - **`next build` may fail offline** if Google Fonts (Geist / Geist Mono) cannot be fetched. This is an environment issue, not a code issue — `tsc --noEmit` + `vitest run` + `eslint .` are the offline-verifiable quality gates.
 - **`accounts` table is manually managed.** This project does not use `@auth/drizzle-adapter`. User creation and account linking go through `lib/auth/account-service.ts`. Future OAuth providers will need manual handling in NextAuth `events` callbacks.
+- **教师不能自主把圈子从 `pending` 改成 `active`。** `PATCH /api/teacher/circles/[circleId]` 只接受 `status: "active" | "offline"`，且当前状态必须已是 `active`/`offline`，否则 403 —— 这是「防绕过管理员审核」的硬约束，改 schema 或放宽状态机前请先确认不是安全回退。
+- **`components/ui/dialog.tsx` 的 `DialogContent` 默认没有 max-height。** 字段多的表单弹窗必须自己加 `max-h-[calc(100dvh-2rem)] overflow-y-auto`，否则移动端会被视口裁掉且无法滚动。
 
 ## Quality gate
 

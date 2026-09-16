@@ -38,6 +38,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { circleStatusBadgeVariant, circleStatusLabel } from "@/lib/circle-status"
 import type { CircleDTO, CertificationFile, IResponse } from "@/types/api"
 
 /** 圈子列表项(含创建者名称和认证材料) */
@@ -49,25 +50,9 @@ type CircleListItem = CircleDTO & {
 /** 状态筛选 Tab 值 */
 type StatusFilter = "all" | "active" | "offline" | "violated" | "deleted" | "pending" | "rejected"
 
-/** 状态 Badge variant 映射 */
-function statusBadgeVariant(
-  status: string
-): "default" | "secondary" | "destructive" {
-  if (status === "active") return "default"
-  if (status === "deleted" || status === "pending") return "secondary"
-  return "destructive"
-}
-
-/** 状态中文标签 */
-function statusLabel(status: string): string {
-  if (status === "active") return "活跃"
-  if (status === "offline") return "已下线"
-  if (status === "deleted") return "已删除"
-  if (status === "violated") return "违规"
-  if (status === "pending") return "待审核"
-  if (status === "rejected") return "未通过"
-  return status
-}
+// 状态文案 / 徽章样式统一由 lib/circle-status 提供(与教师后台共用)
+const statusBadgeVariant = circleStatusBadgeVariant
+const statusLabel = circleStatusLabel
 
 /**
  * 调用 PATCH /api/admin/circles/:id 更新圈子状态。

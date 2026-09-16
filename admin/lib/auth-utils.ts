@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { fail, withCors } from "@/lib/api"
 import { readUserFromToken } from "@/lib/auth/session-token"
+import { TEACHER_AREA_ROLES } from "@/lib/user-role"
 import type { AuthUser } from "@/types/api"
 
 export type AuthGuardResult =
@@ -21,6 +22,41 @@ export async function requireAdmin(): Promise<AuthGuardResult> {
     return {
       ok: false,
       response: fail(403, "Forbidden: admin role required"),
+    }
+  }
+  return {
+    ok: true,
+    userId: session.user.id,
+    role: session.user.role,
+  }
+}
+
+/**
+ * 教师后台守卫(走 NextAuth cookie session,适用于 `/api/teacher/*`)。
+ *
+ * 放行角色见 {@link TEACHER_AREA_ROLES}(TEACHER 与 ADMIN)。
+ * 与页面侧守卫互为一体:proxy.ts matcher + auth.config 的 authorized 回调
+ * + app/teacher/layout.tsx 的 session 校验。
+ *
+ * 调用方式:
+ * ```ts
+ * const guard = await requireTeacher()
+ * if (!guard.ok) return guard.response
+ * const userId = guard.userId
+ * ```
+ */
+export async function requireTeacher(): Promise<AuthGuardResult> {
+  const session = await auth()
+  if (!session?.user?.id) {
+    return {
+      ok: false,
+      response: fail(401, "Unauthorized"),
+    }
+  }
+  if (!TEACHER_AREA_ROLES.includes(session.user.role)) {
+    return {
+      ok: false,
+      response: fail(403, "Forbidden: teacher role required"),
     }
   }
   return {

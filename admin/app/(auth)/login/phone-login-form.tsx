@@ -15,7 +15,8 @@ const COUNTDOWN_SECONDS = 60
 export function PhoneLoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const callbackUrl = searchParams.get("callbackUrl") || "/admin"
+  // 默认回首页由服务端按角色分流(ADMIN → /admin,TEACHER → /teacher)
+  const callbackUrl = searchParams.get("callbackUrl") || "/"
 
   const [phone, setPhone] = useState("")
   const [code, setCode] = useState("")

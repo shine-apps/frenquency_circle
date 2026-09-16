@@ -2,6 +2,7 @@ import { desc, eq, sql } from "drizzle-orm"
 
 import { db } from "@/lib/db"
 import { circles, users, teacherApplications } from "@/db/schema"
+import { toCircleDTO } from "@/lib/circles"
 import { CirclesTable } from "./_components/circles-table"
 import type { CircleDTO, CertificationFile } from "@/types/api"
 
@@ -40,22 +41,8 @@ export default async function AdminCirclesPage() {
   ])
 
   const items: CircleListItem[] = rows.map((r) => ({
-    id: r.circle.id,
-    title: r.circle.title,
-    description: r.circle.description,
-    creatorId: r.circle.creatorId,
-    latitude: r.circle.latitude,
-    longitude: r.circle.longitude,
-    address: r.circle.address,
-    contactPhone: r.circle.contactPhone,
-    wechat: r.circle.wechat,
-    activityTime: r.circle.activityTime,
-    maxMembers: r.circle.maxMembers,
-    memberCount: r.circle.memberCount,
-    status: r.circle.status,
-    coverImages: r.circle.coverImages ?? [],
-    createdAt: r.circle.createdAt.toISOString(),
-    updatedAt: r.circle.updatedAt.toISOString(),
+    // 复用 lib/circles 的投影,避免 circles 加字段时此处漏改
+    ...toCircleDTO(r.circle),
     creatorName: r.creatorName,
     certificationFiles:
       r.appFiles && Array.isArray(r.appFiles)

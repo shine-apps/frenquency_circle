@@ -2,9 +2,29 @@ import { describe, expect, it } from "vitest"
 import { authConfig } from "@/auth.config"
 
 /**
- * 直接测试 authConfig.callbacks 的 jwt 与 session 回调行为。
+ * 直接测试 authConfig.callbacks 的 jwt / session / authorized 回调行为。
  * 这些回调是纯函数，可直接调用，无需启动 NextAuth。
  */
+
+/**
+ * 以 `new URL` 充当 NextURL(pathname 语义一致,且可作为 `new URL("/", nextUrl)` 的 base)。
+ * 回调为同步函数,直接返回 `boolean | NextResponse`。
+ */
+function callAuthorized(
+  pathname: string,
+  role: "ADMIN" | "TEACHER" | "USER" | null
+): boolean | Response {
+  return authConfig.callbacks.authorized!({
+    auth: role
+      ? ({ user: { id: "u1", role }, expires: "2099-01-01" } as never)
+      : (null as never),
+    request: { nextUrl: new URL(`http://localhost${pathname}`) } as never,
+  }) as unknown as boolean | Response
+}
+
+function redirectLocation(result: boolean | Response): string | null {
+  return result instanceof Response ? result.headers.get("location") : null
+}
 
 describe("auth.config callbacks", () => {
   describe("jwt", () => {
@@ -111,6 +131,56 @@ describe("auth.config callbacks", () => {
       expect(result.user.id).toBe("u1")
       expect(result.user.role).toBe("USER")
       expect(result.user.provider).toBeUndefined()
+    })
+  })
+
+  describe("authorized", () => {
+    describe("/admin (回归)", () => {
+      it("requires login", async () => {
+        expect(callAuthorized("/admin", null)).toBe(false)
+      })
+
+      it("redirects non-admins to /", async () => {
+        const result = callAuthorized("/admin", "TEACHER")
+        expect(result).not.toBe(true)
+        expect(redirectLocation(result)).toBe("http://localhost/")
+      })
+
+      it("allows admins", async () => {
+        expect(callAuthorized("/admin", "ADMIN")).toBe(true)
+      })
+    })
+
+    describe("/teacher (教师后台)", () => {
+      it("requires login", async () => {
+        // 未登录 → 返回 false,Auth.js 会自动跳转 pages.signIn (/login)
+        expect(callAuthorized("/teacher", null)).toBe(false)
+      })
+
+      it("redirects USER to /", async () => {
+        const result = callAuthorized("/teacher", "USER")
+        expect(result).not.toBe(true)
+        expect(redirectLocation(result)).toBe("http://localhost/")
+      })
+
+      it("allows TEACHER", async () => {
+        expect(callAuthorized("/teacher", "TEACHER")).toBe(true)
+      })
+
+      it("allows ADMIN (可代管)", async () => {
+        expect(callAuthorized("/teacher", "ADMIN")).toBe(true)
+      })
+
+      it("covers nested teacher routes", async () => {
+        expect(callAuthorized("/teacher/circles", "TEACHER")).toBe(true)
+        const blocked = callAuthorized("/teacher/activities", "USER")
+        expect(redirectLocation(blocked)).toBe("http://localhost/")
+      })
+
+      it("does not affect unrelated routes", async () => {
+        expect(callAuthorized("/", "USER")).toBe(true)
+        expect(callAuthorized("/login", null)).toBe(true)
+      })
     })
   })
 })

@@ -1228,3 +1228,111 @@ export const checkins = pgTable(
 
 export type Checkin = typeof checkins.$inferSelect
 export type NewCheckin = typeof checkins.$inferInsert
+
+// ============================================================================
+// 视频课程模块(courses / course_lessons)
+// ============================================================================
+
+/**
+ * 课程状态字面量联合:
+ * - `pending`  待审核(新建默认,管理员审核通过前不可见)
+ * - `active`   已上线(审核通过,或教师 / 管理员恢复上线)
+ * - `offline`  已下线(教师自主下线,或管理员下线 —— 两种来源共用同一状态)
+ * - `rejected` 审核驳回(教师可修改内容,重新上线需管理员放行)
+ * - `deleted`  创建者软删除(终态)
+ *
+ * 与 CIRCLE_STATUSES 同构,但不含 `violated`:对课程而言"管理员下线"与
+ * `offline` 是同一可观察状态,不引入语义重叠。沿用项目 `text + TS 联合` 惯例。
+ */
+export const COURSE_STATUSES = ["pending", "active", "offline", "rejected", "deleted"] as const
+export type CourseStatus = (typeof COURSE_STATUSES)[number]
+
+/**
+ * 视频课程(主表,由 TEACHER / ADMIN 创建)。
+ *
+ * - `tags` 存 hobby_tags.name 名称快照(与 circles / checkins 惯例一致,不设外键);
+ * - `coverImages` 为 COS 直传后的公网 URL 数组(0-9 张);
+ * - 审核字段(reviewerId / reviewedAt / reviewNote)由管理员 PATCH 时写入。
+ */
+export const courses = pgTable(
+  "courses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    creatorId: uuid("creator_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** 课程标题(2-100 字) */
+    title: text("title").notNull(),
+    /** 课程简介(纯文本,10-5000 字,落库前过危险片段守卫) */
+    description: text("description").notNull(),
+    /** 封面 / 轮播图 URL 数组(0-9 张,默认空数组) */
+    coverImages: text("cover_images")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    /** 兴趣标签名称数组(存 hobby_tags.name,0-5 个) */
+    tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
+    status: text("status").$type<CourseStatus>().notNull().default("pending"),
+    /** 审核人(可空,管理员操作时写入) */
+    reviewerId: uuid("reviewer_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    /** 审核时间(可空) */
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    /** 审核备注 / 驳回原因(可空,≤500) */
+    reviewNote: text("review_note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // 教师后台主路径:按创建者 + 状态过滤
+    index("courses_creator_status_idx").on(table.creatorId, table.status),
+    // 管理后台按状态筛选 + 时间倒序
+    index("courses_status_created_idx").on(table.status, table.createdAt),
+    // 数组包含查询 "标签 X ∈ courses.tags" 走 GIN 索引
+    index("courses_tags_gin_idx").using("gin", table.tags),
+  ]
+)
+
+export type Course = typeof courses.$inferSelect
+export type NewCourse = typeof courses.$inferInsert
+
+/**
+ * 课程课时(从表,一个课程 1-30 个,数量约束在应用层)。
+ * 课程删除时级联删除课时(`onDelete: cascade`)。
+ */
+export const courseLessons = pgTable(
+  "course_lessons",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    courseId: uuid("course_id")
+      .notNull()
+      .references(() => courses.id, { onDelete: "cascade" }),
+    /** 课时标题(1-100 字) */
+    title: text("title").notNull(),
+    /** 课时简介(可选填,≤500 字,默认空串) */
+    description: text("description").notNull().default(""),
+    /** 课时视频 COS 公网 URL */
+    videoUrl: text("video_url").notNull(),
+    /** 视频时长(秒,可空;浏览器 onLoadedMetadata 探测后写入) */
+    durationSeconds: integer("duration_seconds"),
+    /** 排序(由提交顺序派生,0 起) */
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // 读路径:课程详情 / 编辑按课程 + 排序取课时
+    index("course_lessons_course_sort_idx").on(table.courseId, table.sortOrder),
+    // 约束:时长非负
+    check(
+      "course_lessons_duration_check",
+      sql`"duration_seconds" is null or "duration_seconds" >= 0`
+    ),
+    // 约束:排序非负
+    check("course_lessons_sort_order_check", sql`"sort_order" >= 0`),
+  ]
+)
+
+export type CourseLesson = typeof courseLessons.$inferSelect
+export type NewCourseLesson = typeof courseLessons.$inferInsert

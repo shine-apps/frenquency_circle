@@ -7,10 +7,14 @@ import {
   smsVerificationCodes,
   notifications,
   interestEvents,
+  courses,
+  courseLessons,
   CHECKIN_STATUSES,
+  COURSE_STATUSES,
   INTEREST_EVENT_TYPES,
   type UserRole,
   type CheckinStatus,
+  type CourseStatus,
   type NotificationType,
   type NotificationLinkTarget,
   type NotificationEntityType,
@@ -218,5 +222,54 @@ describe("db/schema", () => {
 
   it("CHECKIN_STATUSES contains exactly two statuses", () => {
     expect(CHECKIN_STATUSES).toEqual(["active", "deleted"])
+  })
+
+  it("exports courses table with expected columns", () => {
+    const cols = Object.keys(courses)
+    expect(cols).toEqual(
+      expect.arrayContaining([
+        "id",
+        "creatorId",
+        "title",
+        "description",
+        "coverImages",
+        "tags",
+        "status",
+        "reviewerId",
+        "reviewedAt",
+        "reviewNote",
+        "createdAt",
+        "updatedAt",
+      ])
+    )
+  })
+
+  it("exports courseLessons table with description", () => {
+    const cols = Object.keys(courseLessons)
+    expect(cols).toEqual(
+      expect.arrayContaining([
+        "id",
+        "courseId",
+        "title",
+        "description",
+        "videoUrl",
+        "durationSeconds",
+        "sortOrder",
+        "createdAt",
+        "updatedAt",
+      ])
+    )
+  })
+
+  it("COURSE_STATUSES has exactly five statuses", () => {
+    expect(COURSE_STATUSES).toEqual([
+      "pending",
+      "active",
+      "offline",
+      "rejected",
+      "deleted",
+    ])
+    const s: CourseStatus = "pending"
+    expect(s).toBe("pending")
   })
 })

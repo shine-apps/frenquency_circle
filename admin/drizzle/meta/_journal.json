@@ -78,6 +78,13 @@
       "when": 1789358718590,
       "tag": "0010_lumpy_night_thrasher",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1789549991472,
+      "tag": "0011_glorious_surge",
+      "breakpoints": true
     }
   ]
 }

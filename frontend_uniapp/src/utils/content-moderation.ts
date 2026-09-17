@@ -1,4 +1,4 @@
-import type { CheckTextResponse } from '@/api/content-moderation'
+import type { CheckTextResponse, ModerationScene } from '@/api/content-moderation'
 import { checkText } from '@/api/content-moderation'
 import { useSettingsStore } from '@/store/settings'
 
@@ -8,6 +8,9 @@ import { useSettingsStore } from '@/store/settings'
  * 仅作用于文本 UGC;图片 / 音视频本次不在范围内。后端接口
  * `/api/content/check` 内部对接微信 msgSecCheck,前端不直接接触任何密钥。
  *
+ * 平台范围:内容审核是**微信小程序**的 UGC 合规要求,仅在 MP-WEIXIN 端执行
+ * (编译期条件编译判定);H5 / App 端没有该平台约束,直接放行不请求审核接口。
+ *
  * 开关:由后端系统设置项 `contentModerationEnabled` 控制
  * (见 GET /api/settings,管理后台「系统设置」中切换,默认不开启)。
  * - 未开启(默认)/ 开关状态未知(设置拉取失败):直接放行,不阻塞发布;
@@ -15,6 +18,19 @@ import { useSettingsStore } from '@/store/settings'
  *   接口异常按 fail-closed 处理(拦截、不发布),保证合规不漏发;
  * - 空文本直接放行(如打卡正文选填)。
  */
+
+/**
+ * 是否在微信小程序端运行(编译期常量,条件编译按目标平台裁剪)。
+ * 写法沿用 `utils/systemInfo.ts` 的惯例:声明一次,两个编译分支各赋值一次,
+ * 避免 `return true` / `return false` 相邻触发 no-unreachable。
+ */
+let isMpWeixin: boolean
+// #ifdef MP-WEIXIN
+isMpWeixin = true
+// #endif
+// #ifndef MP-WEIXIN
+isMpWeixin = false
+// #endif
 
 /** 关闭状态仅在首次告警,避免刷屏 */
 let warnedDisabled = false
@@ -56,9 +72,19 @@ export function showModerationFailureToast(result: Exclude<ModerationGateResult,
  * 否则调用 showModerationFailureToast(result) 并 return。
  * 多段文本(如标题 + 描述)由调用方自行拼接。
  *
- * @param text 待审核文本(可含多段)
+ * 仅微信小程序端生效:其他平台直接返回 'pass',不拉取设置、不请求审核接口。
+ *
+ * @param text  待审核文本(可含多段)
+ * @param scene 业务场景标识(可选,便于后端映射微信 scene 值并排障)
  */
-export async function ensureTextSafe(text: string): Promise<ModerationGateResult> {
+export async function ensureTextSafe(
+  text: string,
+  scene?: ModerationScene,
+): Promise<ModerationGateResult> {
+  // 内容审核是微信小程序平台合规要求;H5 / App 端直接放行
+  if (!isMpWeixin)
+    return 'pass'
+
   // 空文本直接放行,保持现有选填逻辑
   if (!text.trim())
     return 'pass'
@@ -90,7 +116,7 @@ export async function ensureTextSafe(text: string): Promise<ModerationGateResult
   }
 
   try {
-    const res = await checkText(text)
+    const res = await checkText(text, scene)
     // 任意非 pass 结果(含 risky / block / review)均视为不通过
     return (res?.result ?? 'review') === 'pass' ? 'pass' : 'blocked'
   }

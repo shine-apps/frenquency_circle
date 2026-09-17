@@ -13,6 +13,9 @@ import { http } from '@/http/http'
  * 开关:前端是否执行"先审后发"由后端系统设置项 `contentModerationEnabled` 控制
  * (见 GET /api/settings,管理后台「系统设置」中切换,默认不开启)。
  *
+ * 平台范围:先审后发是微信小程序平台的 UGC 合规要求,前端门禁仅在 MP-WEIXIN
+ * 端执行(条件编译,见 utils/content-moderation.ts);H5 / App 端不调用本模块接口。
+ *
  * 约定(与后端对齐):
  * - 审核接口为「业务成功」语义:HTTP 200 + 业务码 0/2xx 表示"审核已执行";
  *   是否通过以 data.result 为准(block/risky 均视为不通过),而非用错误码表示。
@@ -37,6 +40,12 @@ export interface CheckTextResponse {
 /** 可举报的 UGC 内容类型 */
 export type ReportTargetType = 'circle' | 'checkin' | 'activity' | 'comment'
 
+/**
+ * 审核业务场景标识(后端据此映射微信 msg_sec_check v2 的 scene 值:
+ * profile=1 资料 / comment=2 评论 / circle、activity=3 论坛 / checkin=4 社交日志)。
+ */
+export type ModerationScene = 'circle' | 'checkin' | 'activity' | 'comment' | 'profile'
+
 /** 举报提交入参 */
 export interface ReportContentInput {
   targetType: ReportTargetType
@@ -54,9 +63,9 @@ export interface ReportContentResult {
  * 仅作用于文本;图片 / 音视频本次不在范围内。
  *
  * @param content 待审核文本(建议先 trim)
- * @param scene   业务场景标识,便于后端区分(如 'circle' | 'checkin' | 'activity' | 'comment')
+ * @param scene   业务场景标识,便于后端映射微信 scene 值并排障
  */
-export function checkText(content: string, scene?: string) {
+export function checkText(content: string, scene?: ModerationScene) {
   return http.post<CheckTextResponse>('/api/content/check', {
     type: 'text',
     content,

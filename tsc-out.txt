@@ -1,0 +1,17 @@
+✓ Lockfile passes supply-chain policies (verified 19h ago)
+Lockfile is up to date, resolution step is skipped
+[WARN] Failed to remove "D:\projects\qulinquan\qulinquan-code\admin\node_modules\.pnpm\@alicloud+dysmsapi20170525@4.5.1"
+[WARN] Failed to remove "D:\projects\qulinquan\qulinquan-code\admin\node_modules\.pnpm\@modelcontextprotocol+sdk@1.29.0_zod@3.25.76"
+[WARN] Failed to remove "D:\projects\qulinquan\qulinquan-code\admin\node_modules\.pnpm\eslint-plugin-react@7.37.5_eslint@9.39.4_jiti@2.7.0_"
+[WARN] Failed to remove "D:\projects\qulinquan\qulinquan-code\admin\node_modules\.pnpm\eslint@9.39.4_jiti@2.7.0"
+[WARN] Failed to remove "D:\projects\qulinquan\qulinquan-code\admin\node_modules\.pnpm\next-auth@5.0.0-beta.31_nex_1e6365c122a24cd1762a8a6d8f008b29"
+[WARN] Failed to remove "D:\projects\qulinquan\qulinquan-code\admin\node_modules\.pnpm\next@16.2.9_@babel+core@7.2_8253e5d70d3a9ac5d1afc2860b57af27"
+[WARN] Failed to remove "D:\projects\qulinquan\qulinquan-code\admin\node_modules\.pnpm\send@1.2.1"
+[WARN] Failed to remove "D:\projects\qulinquan\qulinquan-code\admin\node_modules\.pnpm\serve-static@2.2.1"
+[WARN] Failed to remove "D:\projects\qulinquan\qulinquan-code\admin\node_modules\.pnpm\shadcn@4.11.0_typescript@5.9.3"
+[WARN] Failed to remove "D:\projects\qulinquan\qulinquan-code\admin\node_modules\.pnpm\styled-jsx@5.1.6_@babel+core@7.29.7_react@19.2.4"
+[WARN] Failed to remove "D:\projects\qulinquan\qulinquan-code\admin\node_modules\.pnpm\typescript-eslint@8.62.0_es_01450590ffb64c565404cc55791410f2"
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Packages: +768
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Progress: resolved 768, reused 768, downloaded 0, added 0

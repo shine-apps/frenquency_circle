@@ -12,7 +12,7 @@ import { logger, LOG_PREFIX } from "@/lib/logger"
  * 配置从环境变量 WECHAT_MP_APP_ID / WECHAT_MP_APP_SECRET / WECHAT_MP_API_BASE 读取。
  */
 
-export type Stage = "code2session" | "token" | "phone" | "ticket"
+export type Stage = "code2session" | "token" | "phone" | "ticket" | "sec-check"
 
 /** 序列化原始响应到 errmsg 时最多保留的字符数，防止日志爆炸 */
 const RAW_PAYLOAD_LOG_LIMIT = 500
@@ -286,6 +286,57 @@ export async function getPhoneNumber(params: {
     throw new WechatMpError(-4, "missing purePhoneNumber", "phone")
   }
   return { phoneNumber, purePhoneNumber, countryCode }
+}
+
+export type MsgSecCheckResult = {
+  /** 审核建议:pass=通过;risky=不通过;review=转人工(透传微信值) */
+  suggest: string
+  /** 命中标签码(100=正常,见微信文档) */
+  label: number
+  /** 微信 trace_id(可选,便于向微信侧反馈排障) */
+  traceId?: string
+}
+
+/**
+ * 文本内容安全审核(msg_sec_check v2)。
+ *
+ * - 必传 `openid`:当前用户的微信 openid(v2 强制要求,且要求用户近两小时访问过小程序);
+ *   从 `accounts` 绑定关系解析,见 `lib/content-moderation.ts`;
+ * - `scene`:微信场景值(1=资料 2=评论 3=论坛 4=社交日志),由调用方映射;
+ * - `content`:单段文本,必须 ≤ 2500 字节(UTF-8);超长文本由调用方分段后逐段调用
+ *   (见 `splitTextByUtf8Bytes`),避免触发 47001 类错误导致漏审;
+ * - 响应中的 `detail` 数组可能含命中关键词,属敏感合规信息,本函数**不返回**,
+ *   仅返回顶层 `result.suggest / result.label / trace_id`。
+ *
+ * @see https://developers.weixin.qq.com/miniprogram/dev/OpenApiDoc/sec-center/security-check/msgSecCheck.html
+ */
+export async function msgSecCheck(params: {
+  accessToken: string
+  openid: string
+  scene: number
+  content: string
+  apiBase?: string
+}): Promise<MsgSecCheckResult> {
+  const { accessToken, openid, scene, content, apiBase } = params
+  const base = apiBase || DEFAULT_API_BASE
+  const url =
+    `${base}/wxa/security/msg_sec_check?access_token=${encodeURIComponent(accessToken)}`
+  const payload = (await wechatFetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ version: 2, scene, openid, content }),
+  }, "sec-check")) as Record<string, unknown>
+  assertNoWechatError(payload, "sec-check")
+
+  const result = (payload.result ?? {}) as Record<string, unknown>
+  const suggest = typeof result.suggest === "string" ? result.suggest : ""
+  const label = typeof result.label === "number" ? result.label : 100
+  if (!suggest) {
+    throw new WechatMpError(-5, "missing result.suggest in response", "sec-check", payload)
+  }
+  const traceId =
+    typeof payload.trace_id === "string" && payload.trace_id ? payload.trace_id : undefined
+  return { suggest, label, traceId }
 }
 
 /**

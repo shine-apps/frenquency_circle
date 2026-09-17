@@ -1,0 +1,4 @@
+admin/tests/integration/api/notification-triggers.test.ts(160,21): error TS2348: Value of type 'Mock<Procedure | Constructable>' is not callable. Did you mean to include 'new'?
+admin/tests/integration/api/notifications-api.test.ts(204,39): error TS2322: Type '{ id: string; }' is not assignable to type 'never'.
+admin/tests/integration/api/notifications-api.test.ts(239,39): error TS2322: Type '{ id: string; }' is not assignable to type 'never'.
+admin/tests/integration/api/notifications-api.test.ts(239,53): error TS2322: Type '{ id: string; }' is not assignable to type 'never'.

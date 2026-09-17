@@ -1,0 +1,57 @@
+[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+[@antfu/eslint-config] Detected running in editor, some rules are disabled.
+
+[1m[46m RUN [49m[22m [36mv3.2.4 [39m[90md:/projects/qulinquan/qulinquan-code/frontend_uniapp[39m
+
+[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Suites 9 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/api/cos-credentials.test.ts[2m [ src/api/cos-credentials.test.ts ][22m
+[41m[1m FAIL [22m[49m src/api/notifications.test.ts[2m [ src/api/notifications.test.ts ][22m
+[41m[1m FAIL [22m[49m src/api/upload-cos.test.ts[2m [ src/api/upload-cos.test.ts ][22m
+[41m[1m FAIL [22m[49m src/tabbar/TabbarItem.test.ts[2m [ src/tabbar/TabbarItem.test.ts ][22m
+[41m[1m FAIL [22m[49m src/utils/guest-profile.test.ts[2m [ src/utils/guest-profile.test.ts ][22m
+[41m[1m FAIL [22m[49m src/components/LocationSetter/LocationSetter.test.ts[2m [ src/components/LocationSetter/LocationSetter.test.ts ][22m
+[41m[1m FAIL [22m[49m src/components/MatchFilterBar/MatchFilterBar.test.ts[2m [ src/components/MatchFilterBar/MatchFilterBar.test.ts ][22m
+[31m[1mError[22m: Failed to parse JSON file.[39m
+  Plugin: [35mvite:json[39m
+  File: [36md:/projects/qulinquan/qulinquan-code/frontend_uniapp/src/pages.json[39m
+[90m [2m❯[22m formatError node_modules/.pnpm/vite@5.2.8_@types+node@20.1_bef83caec11c45248f87cbd2a57274e5/node_modules/vite/dist/node/chunks/dep-whKeNLxG.js:[2m50863:46[22m[39m
+[90m [2m❯[22m TransformContext.error node_modules/.pnpm/vite@5.2.8_@types+node@20.1_bef83caec11c45248f87cbd2a57274e5/node_modules/vite/dist/node/chunks/dep-whKeNLxG.js:[2m50857:19[22m[39m
+[90m [2m❯[22m TransformContext.transform node_modules/.pnpm/vite@5.2.8_@types+node@20.1_bef83caec11c45248f87cbd2a57274e5/node_modules/vite/dist/node/chunks/dep-whKeNLxG.js:[2m48880:22[22m[39m
+[90m [2m❯[22m Object.transform node_modules/.pnpm/vite@5.2.8_@types+node@20.1_bef83caec11c45248f87cbd2a57274e5/node_modules/vite/dist/node/chunks/dep-whKeNLxG.js:[2m51172:62[22m[39m
+[90m [2m❯[22m loadAndTransform node_modules/.pnpm/vite@5.2.8_@types+node@20.1_bef83caec11c45248f87cbd2a57274e5/node_modules/vite/dist/node/chunks/dep-whKeNLxG.js:[2m53923:29[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/store/user.test.ts[2m [ src/store/user.test.ts ][22m
+[31m[1mError[22m: Failed to parse JSON file.[39m
+  Plugin: [35mvite:json[39m
+  File: [36md:/projects/qulinquan/qulinquan-code/frontend_uniapp/src/pages.json[39m
+[90m [2m❯[22m formatError node_modules/.pnpm/vite@5.2.8_@types+node@20.1_bef83caec11c45248f87cbd2a57274e5/node_modules/vite/dist/node/chunks/dep-whKeNLxG.js:[2m50863:46[22m[39m
+[90m [2m❯[22m TransformContext.error node_modules/.pnpm/vite@5.2.8_@types+node@20.1_bef83caec11c45248f87cbd2a57274e5/node_modules/vite/dist/node/chunks/dep-whKeNLxG.js:[2m50857:19[22m[39m
+[90m [2m❯[22m TransformContext.transform node_modules/.pnpm/vite@5.2.8_@types+node@20.1_bef83caec11c45248f87cbd2a57274e5/node_modules/vite/dist/node/chunks/dep-whKeNLxG.js:[2m48880:22[22m[39m
+[90m [2m❯[22m Object.transform node_modules/.pnpm/vite@5.2.8_@types+node@20.1_bef83caec11c45248f87cbd2a57274e5/node_modules/vite/dist/node/chunks/dep-whKeNLxG.js:[2m51172:62[22m[39m
+[90m [2m❯[22m loadAndTransform node_modules/.pnpm/vite@5.2.8_@types+node@20.1_bef83caec11c45248f87cbd2a57274e5/node_modules/vite/dist/node/chunks/dep-whKeNLxG.js:[2m53923:29[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/9]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/utils/matchLink.test.ts[2m [ src/utils/matchLink.test.ts ][22m
+[31m[1mError[22m: Failed to parse JSON file.[39m
+  Plugin: [35mvite:json[39m
+  File: [36md:/projects/qulinquan/qulinquan-code/frontend_uniapp/src/pages.json[39m
+[90m [2m❯[22m formatError node_modules/.pnpm/vite@5.2.8_@types+node@20.1_bef83caec11c45248f87cbd2a57274e5/node_modules/vite/dist/node/chunks/dep-whKeNLxG.js:[2m50863:46[22m[39m
+[90m [2m❯[22m TransformContext.error node_modules/.pnpm/vite@5.2.8_@types+node@20.1_bef83caec11c45248f87cbd2a57274e5/node_modules/vite/dist/node/chunks/dep-whKeNLxG.js:[2m50857:19[22m[39m
+[90m [2m❯[22m TransformContext.transform node_modules/.pnpm/vite@5.2.8_@types+node@20.1_bef83caec11c45248f87cbd2a57274e5/node_modules/vite/dist/node/chunks/dep-whKeNLxG.js:[2m48880:22[22m[39m
+[90m [2m❯[22m Object.transform node_modules/.pnpm/vite@5.2.8_@types+node@20.1_bef83caec11c45248f87cbd2a57274e5/node_modules/vite/dist/node/chunks/dep-whKeNLxG.js:[2m51172:62[22m[39m
+[90m [2m❯[22m loadAndTransform node_modules/.pnpm/vite@5.2.8_@types+node@20.1_bef83caec11c45248f87cbd2a57274e5/node_modules/vite/dist/node/chunks/dep-whKeNLxG.js:[2m53923:29[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/9]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m9 failed[39m[22m[2m | [22m[1m[32m8 passed[39m[22m[90m (17)[39m
+[2m      Tests [22m [1m[32m45 passed[39m[22m[90m (45)[39m
+[2m   Start at [22m 10:03:04
+[2m   Duration [22m 38.95s[2m (transform 7.87s, setup 11.48s, collect 4.07s, tests 129ms, environment 475.91s, prepare 17.96s)[22m
+

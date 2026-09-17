@@ -222,7 +222,7 @@ async function handleSubmit() {
   submitting.value = true
   try {
     // 先审后发:提交前对打卡正文做内容安全审核(正文选填,空文本直接放行)
-    const gate = await ensureTextSafe(content.value)
+    const gate = await ensureTextSafe(content.value, 'checkin')
     if (gate !== 'pass') {
       showModerationFailureToast(gate)
       return

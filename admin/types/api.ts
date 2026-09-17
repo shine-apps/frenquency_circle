@@ -158,6 +158,25 @@ export type WechatBindStateDTO = {
 }
 
 /**
+ * 内容安全审核结果(对齐微信 msg_sec_check v2 的 suggest 语义,
+ * 与前端 `frontend_uniapp/src/api/content-moderation.ts` 的 CheckTextResponse 契约一致:
+ * 任意非 pass 结果前端均视为不通过)。
+ */
+export type ModerationVerdict = "pass" | "risky" | "block" | "review"
+
+/** POST /api/content/check 响应 data(文本安全审核) */
+export type ContentCheckDTO = {
+  /** 审核结果:pass=通过;risky/block=不通过;review=转人工 */
+  result: ModerationVerdict
+  /** 命中标签码(微信 label,后端排查用,前端不回显) */
+  label?: number
+  /** 命中标签名称(后端排查用,前端不回显) */
+  labelName?: string
+  /** 微信 trace_id(后端排障/向微信反馈用) */
+  traceId?: string
+}
+
+/**
  * 同趣的人匹配结果项。
  */
 export type MatchPersonDTO = {
@@ -393,6 +412,58 @@ export type ActivityDTO = {
 
 /** 活动列表分页响应 */
 export type ActivityListDTO = Paginated<ActivityDTO>
+
+// ---- 视频课程（courses / course_lessons） ----
+
+/**
+ * 课程状态:
+ * - `pending`  待审核(新建默认)
+ * - `active`   已上线(审核通过,或教师 / 管理员恢复上线)
+ * - `offline`  已下线(教师自主下线,或管理员下线)
+ * - `rejected` 审核驳回
+ * - `deleted`  创建者软删除(终态)
+ */
+export type CourseStatus = "pending" | "active" | "offline" | "rejected" | "deleted"
+
+/** 课时 DTO */
+export type CourseLessonDTO = {
+  id: string
+  title: string
+  /** 课时简介(可选填,默认空串) */
+  description: string
+  /** 课时视频 COS 公网 URL */
+  videoUrl: string
+  /** 视频时长(秒,可空) */
+  durationSeconds: number | null
+  /** 展示顺序(0 起,由提交顺序派生) */
+  sortOrder: number
+}
+
+/**
+ * 视频课程 DTO(教师 / 管理后台共用)。
+ * `lessons` 在列表 / 编辑 / 详情场景均已加载(按 sortOrder 升序),
+ * `lessonCount` 与 `lessons.length` 一致。
+ */
+export type CourseDTO = {
+  id: string
+  creatorId: string
+  title: string
+  description: string
+  /** 封面 / 轮播图 URL 数组(0-9 张) */
+  coverImages: string[]
+  /** 兴趣标签名称快照(存 hobby_tags.name) */
+  tags: string[]
+  status: CourseStatus
+  lessons: CourseLessonDTO[]
+  /** 课时数 */
+  lessonCount: number
+  /** 审核备注 / 驳回原因(可空) */
+  reviewNote: string | null
+  /** 审核时间(可空,ISO) */
+  reviewedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
 
 // ---- 分类（categories） ----
 

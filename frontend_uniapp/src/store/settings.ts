@@ -65,7 +65,9 @@ export const useSettingsStore = defineStore('settings', () => {
    *
    * 由后端系统设置项 `contentModerationEnabled` 控制,默认不开启:
    * - key 缺失 / 值非 true / 尚未拉取到,一律按不开启处理,直接放行不阻塞发布;
-   * - 仅当后端显式设为 true 时,前端才在发布前调用审核接口拦截违规文本。
+   * - 仅当后端显式设为 true 时,前端才在发布前调用审核接口拦截违规文本;
+   * - 实际执行与否还受平台门禁约束:内容审核是微信小程序平台合规要求,
+   *   仅 MP-WEIXIN 端生效(见 utils/content-moderation.ts 的 isMpWeixin)。
    */
   const contentModerationEnabled = computed(
     () => settings.value.find(s => s.key === 'contentModerationEnabled')?.value === true,

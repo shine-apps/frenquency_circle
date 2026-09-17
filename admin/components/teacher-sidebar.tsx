@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { CircleIcon, CalendarCheckIcon, LayoutDashboardIcon, AudioWaveformIcon } from "lucide-react"
+import { CircleIcon, CalendarCheckIcon, LayoutDashboardIcon, AudioWaveformIcon, GraduationCapIcon } from "lucide-react"
 
 import {
   Sidebar,
@@ -28,6 +28,7 @@ const navItems = [
   { href: "/teacher", label: "概览", icon: LayoutDashboardIcon, exact: true },
   { href: "/teacher/circles", label: "我的圈子", icon: CircleIcon },
   { href: "/teacher/activities", label: "我的活动", icon: CalendarCheckIcon },
+  { href: "/teacher/courses", label: "我的课程", icon: GraduationCapIcon },
 ]
 
 export function TeacherSidebar() {

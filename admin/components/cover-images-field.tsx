@@ -6,14 +6,14 @@ import { Loader2Icon, Trash2Icon, UploadIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { COVER_IMAGES_MAX } from "@/lib/form-limits"
-import type { IResponse } from "@/types/api"
+import { uploadFileToCos } from "@/lib/cos/upload"
 
 /**
- * 图片上传字段(受控,圈子与活动表单共用)。
+ * 图片上传字段(受控,圈子 / 活动 / 课程表单共用)。
  *
- * 上传走既有的 `POST /api/upload`:该端点的 `readUserFromToken` 底层是
- * `@auth/core` 的 `getToken`,**先读 cookie 再读 Bearer**,因此教师后台的
- * 浏览器同源请求无需换 token 即可直接复用。
+ * 统一走 COS 直传(`lib/cos/upload.ts`):文件字节不进 Next.js 进程,
+ * 与小程序端共用同一存储桶与 STS scope(`uploads/<userId>/*`)。
+ * `POST /api/upload` 本地通道保留作兜底,后台 UI 已不再调用。
  */
 export function CoverImagesField({
   value,
@@ -39,17 +39,11 @@ export function CoverImagesField({
 
     const uploaded: string[] = []
     for (const file of Array.from(files)) {
-      const fd = new FormData()
-      fd.append("file", file)
-      fd.append("purpose", "generic")
-      const res = await fetch("/api/upload", { method: "POST", body: fd })
-      const data = (await res.json().catch(() => null)) as
-        | IResponse<{ url: string }>
-        | null
-      if (res.ok && data?.data?.url) {
-        uploaded.push(data.data.url)
-      } else {
-        setUploadError(data?.message || "图片上传失败")
+      try {
+        const result = await uploadFileToCos({ file })
+        uploaded.push(result.url)
+      } catch (e) {
+        setUploadError(e instanceof Error ? e.message : "图片上传失败")
         break
       }
     }
@@ -76,7 +70,7 @@ export function CoverImagesField({
               key={`${url}-${index}`}
               className="relative overflow-hidden rounded-lg border"
             >
-              {/* 用户上传的图片走 /uploads 静态目录,这里用原生 img 即可 */}
+              {/* 图片为 COS 公网 URL,直接用原生 img 即可 */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={url}

@@ -351,7 +351,7 @@ async function handleSubmit() {
   submitting.value = true
   try {
     // 先审后发:提交前对文本 UGC(标题 + 介绍)做内容安全审核
-    const gate = await ensureTextSafe(`${trimmedTitle.value}\n${description.value.trim()}`)
+    const gate = await ensureTextSafe(`${trimmedTitle.value}\n${description.value.trim()}`, 'circle')
     if (gate !== 'pass') {
       showModerationFailureToast(gate)
       return

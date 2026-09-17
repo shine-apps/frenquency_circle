@@ -5,6 +5,9 @@
 allowBuilds:
   "@alicloud/openapi-core": true
   "@parcel/watcher": true
+  # postinstall 仅为 patch-check(patch-package 的补丁检查),1.10.1 包内无 patches 目录,
+  # 实为空操作;按最小权限不放行第三方安装脚本,同时消除 ERR_PNPM_IGNORED_BUILDS 报错
+  cos-js-sdk-v5: false
   esbuild: true
   msw: true
   sharp: true

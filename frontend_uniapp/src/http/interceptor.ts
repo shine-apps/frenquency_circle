@@ -61,9 +61,7 @@ const httpInterceptor = {
 
 export const requestInterceptor = {
   install() {
-    // 拦截 request 请求
+    // 拦截 request 请求(文件上传走 COS 直传,不再有 uni.uploadFile 通道)
     uni.addInterceptor('request', httpInterceptor)
-    // 拦截 uploadFile 文件上传
-    uni.addInterceptor('uploadFile', httpInterceptor)
   },
 }

@@ -116,9 +116,13 @@ All commands run from the project root with no `cd` needed.
 │   │   └── aliyun-sms.ts             # AliyunSmsSender (lazy client)
 │   │   └── wechat/
 │   │       └── miniprogram.ts            # 微信小程序 code2Session / access_token / getPhoneNumber
-│   └── storage/
-│       ├── types.ts                      # StorageDriver 抽象接口
-│       └── local.ts                      # 本地文件系统驱动(public/uploads/<yyyy>/<mm>/<uuid>.<ext>)
+│   └── cos/                              # COS 直传子系统(文件上传唯一通道)
+│       ├── config.ts                     # 读 + 校验 COS env(COS_SECRET_ID/KEY/BUCKET/REGION/...)
+│       ├── sts.ts                        # issueScopedCredentials(userId) 签发 scoped STS 临时凭证
+│       ├── credentials.ts                # 浏览器侧凭证拉取 + 内存缓存(到期前 5 分钟刷新)
+│       ├── cos-client.ts                 # cos-js-sdk-v5 懒加载单例 + 错误归一化
+│       ├── object-key.ts                 # buildCosObjectKey / buildCosPublicUrl(key 规范)
+│       └── upload.ts                     # uploadFileToCos(后台 UI 统一上传入口)
 ├── types/
 │   ├── api.ts                        # DTOs and Paginated<T>
 │   └── next-auth.d.ts                # Session/User/JWT augmentation (id, role, provider)
@@ -216,7 +220,7 @@ All commands run from the project root with no `cd` needed.
   内部调用 `signIn("wechat-miniprogram", { ..., redirect: false })`,Auth.js 自动写 session cookie。成功响应 `IResponse<AuthLoginResponse>`(含 `{ token, user }`) HTTP 200;失败 400 (参数缺失 / 微信侧错误 / 未绑定) / 401 (登录失败) / 500 (内部异常)。
 - **WeChat bind endpoints** (`GET / POST / DELETE /api/users/me/wechat`): 登录用户可调(走 `requireSession`)。`GET` 返回 `IResponse<WechatBindStateDTO>`(`{ bound: boolean }`);`POST` body `{ code }` 绑定微信(openid 已被他人绑定时 409);`DELETE` 解绑,但要求账号仍有非 `wechat-miniprogram` 的登录方式(否则 400),守卫用 SQL `EXISTS` 子查询与删除原子完成。绑定关系存 `accounts(provider='wechat-miniprogram', providerAccountId=openid)`,**不写 `users.wechatOpenid`**(该列已删除)。
 - **Content moderation endpoint** (`POST /api/content/check`): 登录用户可调(走 `requireSession`),文本 UGC「先审后发」门禁,契约见 `frontend_uniapp/src/api/content-moderation.ts`。body `{ type: 'text', content(1-5000 字符), scene?('circle'|'checkin'|'activity'|'comment'|'profile') }`。流程:服务端权威读取 `contentModerationEnabled` 开关(**未开启直接放行**,不产生微信调用)→ 从 accounts 绑定解析 openid(`msg_sec_check` v2 必填,**未绑定微信 → 503 拦截**,合规优先)→ 超长文本按 UTF-8 字节安全分段(`splitTextByUtf8Bytes`,单段 ≤ 2400 字节,拼接后与原文一致不漏审)→ 逐段送审取最严重结果合并。微信侧任何异常(WECHAT_MP_* 配置缺失 / 上游错误 / 响应缺 suggest)统一 **503 fail-closed**,前端提示「内容审核服务暂时不可用」并拦截发布。响应 `IResponse<ContentCheckDTO>`(`{ result: 'pass'|'risky'|'block'|'review', label?, labelName?, traceId? }`);微信 `detail` 中的命中关键词属合规敏感信息,**不入响应**,仅 label/labelName/traceId 供后端排障。领域逻辑在 `lib/content-moderation.ts`,微信客户端新增 `msgSecCheck`(`lib/wechat/miniprogram.ts`,stage=`sec-check`)。举报接口 `/api/content/report` 前端已定义、后端尚未实现。
-- **File upload endpoint** (`POST /api/upload`): 登录用户可调,接收 `multipart/form-data`,字段 `file` (必填) 与 `purpose` (可选,`'avatar' | 'generic'`,默认 `generic`)。鉴权用 `readUserFromToken`(同 `/api/auth/me`)。MIME 与大小限制走 env:`UPLOAD_MAX_BYTES`(默认 5 MiB) / `UPLOAD_ALLOWED_MIME`(默认 `image/jpeg,image/png,image/webp,image/gif`)。文件落到 `public/uploads/<yyyy>/<mm>/<uuid>.<ext>`,Next.js 自动以 `/uploads/...` 暴露,公开 URL 用 env `NEXT_PUBLIC_APP_URL` 拼接。失败 400 (无 file / purpose 非法) / 401 (未登录) / 413 (超限) / 415 (MIME 非法) / 500 (落盘失败)。响应体 `IResponse<UploadResult>`,其中 `key` 为相对路径(用于将来切换 OSS 驱动时做删除)。
+- **文件上传**:无 `POST /api/upload` 本地上传端点(已删除)。所有文件(头像 / 封面 / 认证材料 / 打卡媒体 / 课程视频)一律由客户端直传 COS。
 - **COS STS 凭证端点** (`GET /api/upload/cos-credentials`):登录用户可调,返回 `IResponse<CosCredentials>`(含临时 SecretId/Key/Token + bucket/region/prefix/publicBaseUrl)。客户端拿到后用 `cos-js-sdk-v5` 直传 COS,文件字节不经后端。失败 401(未登录)/ 500(STS 失败)。scope 按 userId 隔离,scope prefix = `<COS_KEY_PREFIX>/<userId>/*`。
 
 ### Phase 2-3: 标签子系统与匹配引擎 API
@@ -267,7 +271,7 @@ All commands run from the project root with no `cd` needed.
 - **`lib/match/precision.ts`**:`locationPrecision` 隐私脱敏,在 DTO 转换层对 `distanceKm` 四舍五入(`community` → 0.5km,`region` → 5km)。
 - **`lib/search/tag-search.ts`**:`searchTags(query, limit)` 多策略搜索;`lib/search/pinyin.ts` 封装 `pinyin-pro` 提供 `toPinyin` / `toPinyinInitials`。
 - **`lib/auth-utils.ts`**:`requireSession(req)` 返回 `{ user: AuthUser } | { response: NextResponse }`,供非 admin 业务接口复用(基于 `readUserFromToken`)。
-- **`lib/auth-utils.ts`**:`requireTeacher()` 与 `requireAdmin()` 同构(走 cookie session,返回 `{ ok: true, userId, role } | { ok: false, response }`),放行角色取 `lib/user-role.ts` 的 `TEACHER_AREA_ROLES`(`TEACHER` / `ADMIN`)。`/api/teacher/*` 一律用它守卫。<br>注意:`@auth/core` 的 `getToken` **先读 cookie 再读 Bearer**(`node_modules/@auth/core/jwt.js`),所以 `requireSession(req)` 对浏览器同源 cookie 请求同样有效 —— 教师后台因此可以直接复用 `POST /api/upload` 上传图片,无需新增上传端点。
+- **`lib/auth-utils.ts`**:`requireTeacher()` 与 `requireAdmin()` 同构(走 cookie session,返回 `{ ok: true, userId, role } | { ok: false, response }`),放行角色取 `lib/user-role.ts` 的 `TEACHER_AREA_ROLES`(`TEACHER` / `ADMIN`)。`/api/teacher/*` 一律用它守卫。<br>注意:`@auth/core` 的 `getToken` **先读 cookie 再读 Bearer**(`node_modules/@auth/core/jwt.js`),所以 `requireSession(req)` 对浏览器同源 cookie 请求同样有效 —— 教师后台因此可以直接复用 `GET /api/upload/cos-credentials` 拿凭证后 COS 直传,无需新增上传端点。
 
 ## Authentication
 
@@ -295,24 +299,16 @@ All commands run from the project root with no `cd` needed.
 - **`lib/sms/sms-sender.ts`** — `SmsSender` interface + `ConsoleSmsSender` (dev fallback) + `createSmsSender()` factory. Cached singleton.
 - **`lib/sms/aliyun-sms.ts`** — `AliyunSmsSender` with lazy client init. Sends via `client.sendSms(req)` with `templateParam: JSON.stringify({ code })`.
 
-### Storage subsystem
+### COS direct upload subsystem(文件上传唯一通道)
 
-- **`lib/storage/types.ts`** — `StorageDriver` 抽象接口(未来可加 `AliyunOssDriver`、`S3Driver`),`UploadInput` / `UploadResult` DTO。本地实现见 `lib/storage/local.ts`。
-- **`lib/storage/local.ts`** — `LocalDriver`(`__setRootDirForTest` 暴露给测试切到 `mkdtempSync` 临时目录)。文件落 `<rootDir>/<yyyy>/<mm>/<uuid>.<ext>`,`<rootDir>` 默认 `<cwd>/public/uploads`,可由 env `UPLOAD_ROOT_DIR` 覆盖(绝对路径直接用,相对路径以 `process.cwd()` 为基准),Next.js 自动以 `/uploads/...` 暴露。公开 URL 通过 env `NEXT_PUBLIC_APP_URL` 拼接,缺省 `http://localhost:${PORT ?? 3000}`。`remove(key)` 用 `path.relative(rootDir, target)` 防越权,绝对路径与含 `..` 的相对路径都拒绝。
-- **`getUploadLimits(purpose?)`** — 按 `purpose` 分级解析上传限制:
-  - `purpose=avatar`(默认 5 MiB / 仅图片 4 种 MIME)→ env `UPLOAD_MAX_BYTES_AVATAR` / `UPLOAD_ALLOWED_MIME_AVATAR` 可覆盖
-  - `purpose=generic`(默认 100 MiB / 20 种 MIME:图片 + 文档 + 压缩包 + 视频 + 音频)→ env `UPLOAD_MAX_BYTES` / `UPLOAD_ALLOWED_MIME` 可覆盖
-  - **env 优先级**:`UPLOAD_MAX_BYTES_<PURPOSE>` > `UPLOAD_MAX_BYTES` > 内置默认
-  - env 缺失/非法时回退到内置默认值,不抛错
-- **不要**在路由处理器里直接 `fs.writeFile`,全部走 `localDriver.put`;后续切到 OSS 时无需改路由。
+**本地 / 中转上传通道已彻底删除**(`POST /api/upload` 路由、`lib/storage/*` 驱动及其 env 均不存在)。所有上传(小程序端 / H5 / 管理后台 / 教师后台)一律客户端直传 COS,后端只签发 scoped STS 临时凭证,文件字节不进 Next.js 进程。
 
-### Client-side direct COS upload (parallel channel)
-
-- **`lib/cos/config.ts`** — 从 env 读 COS 配置(`COS_SECRET_ID` / `COS_SECRET_KEY` / `COS_BUCKET` / `COS_REGION` / `COS_PUBLIC_BASE_URL` / `COS_KEY_PREFIX` / `COS_STS_DURATION_SECONDS`),必填项缺失抛错,`stsDurationSeconds` 夹紧到 [60, 7200]。
-- **`lib/cos/sts.ts`** — `issueScopedCredentials(userId): Promise<CosCredentials>`,调 `qcloud-cos-sts` 签发 scoped STS 凭证。scope=`<keyPrefix>/<userId>/*`(只允许 `PutObject`)。`userId` 必须匹配 `[A-Za-z0-9_-]+`(防 `../` 注入扩大 scope)。返回字段含 `bucket/region/keyPrefix/publicBaseUrl`,客户端拿到即可构造 `cos-js-sdk-v5` 直传,无需再请求其他配置。
+- **`lib/cos/config.ts`** — 从 env 读 COS 配置(`COS_SECRET_ID` / `COS_SECRET_KEY` / `COS_BUCKET` / `COS_REGION` / `COS_PUBLIC_BASE_URL` / `COS_KEY_PREFIX` / `COS_STS_DURATION_SECONDS`),必填项缺失抛错,`stsDurationSeconds` 夹紧到 [60, 7200]。`COS_PUBLIC_BASE_URL` 可选,缺省回退 `<bucket>.cos.<region>.myqcloud.com`。
+- **`lib/cos/sts.ts`** — `issueScopedCredentials(userId): Promise<CosCredentials>`,调 `qcloud-cos-sts` 签发 scoped STS 凭证。scope=`<keyPrefix>/<userId>/*`,动作含 PutObject / PostObject(小程序 `uploadFile` 小文件走 POST Object)与分片上传系列(>1MB 走 sliceUploadFile)。`userId` 必须匹配 `[A-Za-z0-9_-]+`(防 `../` 注入扩大 scope)。返回字段含 `bucket/region/keyPrefix/publicBaseUrl`,客户端拿到即可构造 COS SDK 直传,无需再请求其他配置。
 - **`GET /api/upload/cos-credentials`** — 登录用户可调(走 `readUserFromToken`)。响应 `IResponse<CosCredentials>`,失败 401(未登录)/ 500(STS 签发失败)。**不参与文件传输**,文件字节不进 Next.js 进程内存。
-- **客户端**:`frontend_uniapp` 用 `cos-js-sdk-v5` 直传到 `<Bucket>`,key 形如 `<keyPrefix>/<userId>/<yyyy>/<mm>/<uuid>.<ext>`,公开 URL 用 `COS_PUBLIC_BASE_URL` 拼接。详见 `frontend_uniapp/src/api/upload.ts` 的 `uploadFileToCos`。
-- **与本地上传的关系**:`POST /api/upload`(本地上传)与本 STS 端点并存,互不影响。客户端默认走直传,本地端点保留为回退/管理后台用。
+- **`lib/cos/upload.ts`** — 后台 UI 统一入口 `uploadFileToCos({ file, onProgress })`,返回 `{ url, key, size, mimeType, originalName }`;带 `CacheControl: public, max-age=31536000, immutable`(key 含 uuid,永不复用)。
+- **`frontend_uniapp/src/api/upload.ts`** — 客户端统一入口 `uploadFileToCos(input)`:H5(`File` 或 `blob:` / `data:` 临时 URL)走 `putObject`,小程序 / App(tempFilePath 字符串)走 `uploadFile`。key 形如 `<keyPrefix>/<userId>/<yyyy>/<mm>/<uuid>.<ext>`,公开 URL 用 `COS_PUBLIC_BASE_URL` 拼接。
+- **不要**新增任何接收文件字节的 API 路由(`req.formData()` / `fs.writeFile` 都禁止);新上传场景一律复用上述 `uploadFileToCos`。
 - **微信小程序域名白名单**:发布前需在 `mp.weixin.qq.com` → 开发管理 → 服务器域名,把 `COS_PUBLIC_BASE_URL` 域名 + 后端 API 域名加入 `request` / `uploadFile` 合法域名。
 
 ### WeChat Mini-Program provider
@@ -397,7 +393,7 @@ All commands run from the project root with no `cd` needed.
 2. 写操作调用 `/api/teacher/*`(client 组件 `fetch` 后 `router.refresh()`)，新增端点时守卫用 `requireTeacher()`。
 3. 数据范围默认 `creatorId = 当前用户`;需要「ADMIN 查看全部」时用 `?scope=all`(必须在 SSR 里再次校验 `role === "ADMIN"`,不能只信任 query)。
 4. **响应式是硬要求**:列表页同时提供桌面表格(`hidden md:block` + `components/ui/table`)与移动卡片(`md:hidden`)，两者共享同一份筛选/弹窗状态;筛选 Tab 外层包 `-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0`;表单弹窗加 `max-h-[calc(100dvh-2rem)] overflow-y-auto` 并把字段栅格设成 `grid-cols-1 sm:grid-cols-2`。
-5. 表单需要地图选点时复用 `components/location-picker.tsx`，需要图片上传时复用 `POST /api/upload`(cookie session 已被 `getToken` 支持)。
+5. 表单需要地图选点时复用 `components/location-picker.tsx`，需要图片上传时复用 `lib/cos/upload.ts` 的 `uploadFileToCos`(COS 直传,凭证走 `GET /api/upload/cos-credentials`,cookie session 已被 `getToken` 支持)。
 6. Add a nav entry in `components/teacher-sidebar.tsx`.
 
 ### Modify a schema

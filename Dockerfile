@@ -75,9 +75,8 @@ COPY --from=admin-builder /build/db/migrate.mjs ./db/migrate.mjs
 COPY --from=admin-builder /build/node_modules/drizzle-orm ./node_modules/drizzle-orm
 COPY --from=admin-builder /build/node_modules/postgres ./node_modules/postgres
 
-# ---- 5) 上传目录(可写,供 LocalDriver 落盘) + 权限 ----
-RUN mkdir -p ./public/uploads \
-    && chown -R nodejs:nodejs /app
+# ---- 5) 目录权限(文件上传走 COS 直传,无需可写上传目录) ----
+RUN chown -R nodejs:nodejs /app
 
 # ---- 6) 启动入口脚本:先迁移,再启动 Next.js ----
 RUN printf '%s\n' \

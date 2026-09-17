@@ -42,8 +42,8 @@ export interface CosUploadParams {
 
 /** 平台无关的 COS 客户端最小接口(Promise 化;失败 reject Error) */
 export interface CosClientLike {
-  putObject(params: CosUploadParams): Promise<void>
-  uploadFile(params: CosUploadParams): Promise<void>
+  putObject: (params: CosUploadParams) => Promise<void>
+  uploadFile: (params: CosUploadParams) => Promise<void>
 }
 
 /** SDK 回调签名 */
@@ -51,8 +51,8 @@ type CosSdkCallback = (err: unknown, data?: unknown) => void
 
 /** 两个 SDK 共有的最小调用面(方法名一致,参数结构不同) */
 interface CosSdkLike {
-  putObject(params: Record<string, unknown>, callback?: CosSdkCallback): unknown
-  uploadFile(params: Record<string, unknown>, callback?: CosSdkCallback): unknown
+  putObject: (params: Record<string, unknown>, callback?: CosSdkCallback) => unknown
+  uploadFile: (params: Record<string, unknown>, callback?: CosSdkCallback) => unknown
 }
 
 interface CachedClient {

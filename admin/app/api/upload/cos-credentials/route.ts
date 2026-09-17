@@ -12,7 +12,7 @@ function errMessage(e: unknown): string {
 /**
  * 签发 scoped COS STS 凭证(供客户端直传)。
  *
- * - 鉴权:任意登录用户(`readUserFromToken`,与 /api/upload 一致)
+ * - 鉴权:任意登录用户(`readUserFromToken`,与 /api/auth/me 一致)
  * - scope:`uploads/<userId>/*`(由 issueScopedCredentials 强制隔离)
  * - TTL:由 `COS_STS_DURATION_SECONDS` 控制(默认 1800s)
  * - 返回 `IResponse<CosCredentials>`,客户端拿到后构造 cos-js-sdk-v5 直传

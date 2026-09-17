@@ -94,7 +94,7 @@ export interface BuildKeyInput {
 
 /**
  * 构造对象 key:`<keyPrefix>/<userId>/<yyyy>/<mm>/<uuid>.<ext>`
- * - yyyy/mm 用 UTC(与后端 LocalDriver 对齐)
+ * - yyyy/mm 用 UTC(与后台其他上传入口对齐)
  * - keyPrefix 为空时不带前缀段
  */
 export function buildCosObjectKey(input: BuildKeyInput): string {

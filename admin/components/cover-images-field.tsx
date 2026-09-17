@@ -13,7 +13,7 @@ import { uploadFileToCos } from "@/lib/cos/upload"
  *
  * 统一走 COS 直传(`lib/cos/upload.ts`):文件字节不进 Next.js 进程,
  * 与小程序端共用同一存储桶与 STS scope(`uploads/<userId>/*`)。
- * `POST /api/upload` 本地通道保留作兜底,后台 UI 已不再调用。
+ * 项目无本地上传通道,所有上传均走 COS 直传。
  */
 export function CoverImagesField({
   value,

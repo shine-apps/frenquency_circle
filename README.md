@@ -53,8 +53,8 @@ root/
 ## 主要特性
 
 - **多端登录** — 邮箱+密码、手机号+短信验证码、微信小程序一键登录(基于 Auth.js v5,统一 `accounts` 表管理用户-登录方式绑定)
-- **个人资料管理** — 登录用户可改昵称/邮箱/头像(头像走本地文件上传,落 `admin/public/uploads/<yyyy>/<mm>/<uuid>.<ext>`)
-- **通用文件上传** — `POST /api/upload`(本地存储,可换 OSS 驱动),支持 MIME/大小限制
+- **个人资料管理** — 登录用户可改昵称/邮箱/头像(头像走 COS 直传)
+- **文件上传(全链路 COS 直传)** — 客户端通过 `GET /api/upload/cos-credentials` 获取 scoped STS 临时凭证后直传腾讯云 COS,后端不接收文件字节、不落本地磁盘
 - **统一 API 信封** — 后端 `IResponse<T>` + 前端 `request<T>()` 自动解析,业务码非 2xx 统一抛错
 - **测试基线** — Vitest + happy-dom + MSW(单元/集成) + Playwright(E2E,后端)
 - **结构化日志** — `admin/lib/logger.ts` 统一 info/warn/error 事件记录
@@ -88,7 +88,7 @@ root/
 
 ### 数据持久化
 
-`admin/public/uploads/` 目录承载用户上传文件,部署到生产时需要单独持久化(挂载 volume / 绑定宿主机目录 / 切换到 OSS 驱动)。
+所有用户上传文件(头像 / 封面 / 认证材料 / 打卡媒体 / 课程视频)均存储在腾讯云 COS,后端进程与容器不落任何上传文件;持久化只需 PostgreSQL 数据库,无需为上传目录挂载 volume。
 
 ### 部署验证清单(同源部署场景)
 

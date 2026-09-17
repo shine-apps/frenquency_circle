@@ -17,8 +17,8 @@ const TAGS_MAX = 10
 const IMAGES_MAX = 9
 
 /**
- * 允许的媒体 URL 前缀(本应用 COS 公网基址)。
- * COS 未配置时返回 null,此时跳过前缀校验(本地 / 未接入对象存储的降级场景)。
+ * 允许的媒体 URL 前缀(本应用 COS 公网基址,上传唯一通道)。
+ * COS 未配置时返回 null,此时跳过前缀校验(配置缺失的降级场景)。
  */
 function allowedMediaPrefix(): string | null {
   try {

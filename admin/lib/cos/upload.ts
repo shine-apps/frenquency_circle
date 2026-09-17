@@ -5,8 +5,7 @@ import { buildCosObjectKey, buildCosPublicUrl } from "@/lib/cos/object-key"
 /**
  * 后台统一上传通道:COS 直传(与小程序端同一存储桶 / key 规范 / STS scope)。
  *
- * 文件字节不进 Next.js 进程;`POST /api/upload` 本地通道保留作兜底,
- * 后台 UI 已不再调用。
+ * 文件字节不进 Next.js 进程;项目无本地上传通道,后台所有上传都走这里。
  */
 
 /** 与后端 STS scope / 小程序端一致的返回结构 */

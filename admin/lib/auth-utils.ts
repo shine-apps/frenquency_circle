@@ -72,7 +72,7 @@ export async function requireTeacher(): Promise<AuthGuardResult> {
  * - 失败:`{ response: NextResponse }`(已带 CORS 头,可直接 return)
  *
  * 用于非 admin 业务接口(普通登录用户即可访问),
- * 与 `/api/auth/me`、`/api/upload` 一致地走 `readUserFromToken(req)`。
+ * 与 `/api/auth/me`、`/api/upload/cos-credentials` 一致地走 `readUserFromToken(req)`。
  */
 export type SessionGuardResult =
   | { user: AuthUser }

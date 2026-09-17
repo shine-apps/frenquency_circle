@@ -13,6 +13,7 @@ import {
   code2Session,
   getAccessToken,
   getPhoneNumber,
+  msgSecCheck,
   readWechatMpConfig,
   WechatMpError,
   __resetWechatMpForTest,
@@ -450,6 +451,103 @@ describe("lib/wechat/miniprogram", () => {
       await expect(
         getPhoneNumber({ accessToken: "tok-x", phoneCode: "x" })
       ).rejects.toMatchObject({ stage: "phone" })
+    })
+  })
+
+  describe("msgSecCheck", () => {
+    it("posts to /wxa/msg_sec_check with v2 body and maps result", async () => {
+      const fetchMock = makeFetchMock(async (url, init) => {
+        // 守护路径:必须是无 security 段的 /wxa/msg_sec_check,
+        // 写成 /wxa/security/msg_sec_check 微信会返回 40066 invalid url(曾踩坑)
+        expect(url).toContain("/wxa/msg_sec_check")
+        expect(url).not.toContain("/wxa/security/")
+        expect(url).toContain("access_token=tok-x")
+        expect(init.method).toBe("POST")
+        expect(JSON.parse(String(init.body))).toEqual({
+          version: 2,
+          scene: 4,
+          openid: "o-user-1",
+          content: "待审核文本",
+        })
+        return makeJsonResponse({
+          errcode: 0,
+          errmsg: "ok",
+          result: { suggest: "risky", label: 20006 },
+          // detail 含命中关键词,库不应把它透出
+          detail: [{ strategy: "keyword", errcode: 0, suggest: "risky", keyword: "敏感词" }],
+          trace_id: "tr-1",
+        })
+      })
+      vi.stubGlobal("fetch", fetchMock)
+
+      const r = await msgSecCheck({
+        accessToken: "tok-x",
+        openid: "o-user-1",
+        scene: 4,
+        content: "待审核文本",
+      })
+      expect(r).toEqual({ suggest: "risky", label: 20006, traceId: "tr-1" })
+      // 确认没有把 detail / keyword 透出
+      expect(JSON.stringify(r)).not.toContain("keyword")
+      expect(JSON.stringify(r)).not.toContain("敏感词")
+    })
+
+    it("omits traceId when wechat does not return one", async () => {
+      vi.stubGlobal(
+        "fetch",
+        makeFetchMock(async () =>
+          makeJsonResponse({ errcode: 0, result: { suggest: "pass", label: 100 } })
+        )
+      )
+      const r = await msgSecCheck({
+        accessToken: "tok-x",
+        openid: "o-1",
+        scene: 3,
+        content: "ok",
+      })
+      expect(r).toEqual({ suggest: "pass", label: 100 })
+      expect(r.traceId).toBeUndefined()
+    })
+
+    it("throws on errcode != 0 with stage='sec-check' (e.g. 40066 invalid url)", async () => {
+      vi.stubGlobal(
+        "fetch",
+        makeFetchMock(async () =>
+          makeJsonResponse({ errcode: 40066, errmsg: "invalid url rid: xxx" })
+        )
+      )
+      await expect(
+        msgSecCheck({ accessToken: "tok-x", openid: "o-1", scene: 3, content: "x" })
+      ).rejects.toMatchObject({
+        errcode: 40066,
+        stage: "sec-check",
+      })
+    })
+
+    it("throws when result.suggest is missing (fail closed for caller)", async () => {
+      vi.stubGlobal(
+        "fetch",
+        makeFetchMock(async () => makeJsonResponse({ errcode: 0, result: { label: 100 } }))
+      )
+      await expect(
+        msgSecCheck({ accessToken: "tok-x", openid: "o-1", scene: 3, content: "x" })
+      ).rejects.toBeInstanceOf(WechatMpError)
+    })
+
+    it("honours custom apiBase (WECHAT_MP_API_BASE)", async () => {
+      const fetchMock = makeFetchMock(async (url) => {
+        expect(url.startsWith("https://example.test/wxa/msg_sec_check")).toBe(true)
+        return makeJsonResponse({ errcode: 0, result: { suggest: "pass", label: 100 } })
+      })
+      vi.stubGlobal("fetch", fetchMock)
+
+      await msgSecCheck({
+        accessToken: "tok-x",
+        openid: "o-1",
+        scene: 3,
+        content: "x",
+        apiBase: "https://example.test",
+      })
     })
   })
 })

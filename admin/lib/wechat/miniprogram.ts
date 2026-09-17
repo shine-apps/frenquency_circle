@@ -303,10 +303,13 @@ export type MsgSecCheckResult = {
  * - 必传 `openid`:当前用户的微信 openid(v2 强制要求,且要求用户近两小时访问过小程序);
  *   从 `accounts` 绑定关系解析,见 `lib/content-moderation.ts`;
  * - `scene`:微信场景值(1=资料 2=评论 3=论坛 4=社交日志),由调用方映射;
- * - `content`:单段文本,必须 ≤ 2500 字节(UTF-8);超长文本由调用方分段后逐段调用
- *   (见 `splitTextByUtf8Bytes`),避免触发 47001 类错误导致漏审;
+ * - `content`:单段文本,官方上限 2500 字;本实现按更保守的 UTF-8 字节口径切分
+ *   (见 `splitTextByUtf8Bytes`),超长文本由调用方分段后逐段调用,避免请求超限漏审;
  * - 响应中的 `detail` 数组可能含命中关键词,属敏感合规信息,本函数**不返回**,
  *   仅返回顶层 `result.suggest / result.label / trace_id`。
+ *
+ * 注意调用路径为 `/wxa/msg_sec_check`(**无 `security` 段**)——写成
+ * `/wxa/security/msg_sec_check` 等不存在的路径时,微信返回 40066 invalid url。
  *
  * @see https://developers.weixin.qq.com/miniprogram/dev/OpenApiDoc/sec-center/security-check/msgSecCheck.html
  */
@@ -320,7 +323,7 @@ export async function msgSecCheck(params: {
   const { accessToken, openid, scene, content, apiBase } = params
   const base = apiBase || DEFAULT_API_BASE
   const url =
-    `${base}/wxa/security/msg_sec_check?access_token=${encodeURIComponent(accessToken)}`
+    `${base}/wxa/msg_sec_check?access_token=${encodeURIComponent(accessToken)}`
   const payload = (await wechatFetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

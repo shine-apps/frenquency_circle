@@ -29,7 +29,9 @@ export const PROVIDER_WECHAT_MP = "wechat-miniprogram"
 
 /**
  * 单段文本送审的最大 UTF-8 字节数。
- * 微信 msg_sec_check v2 的 content 上限为 2500 字节,预留 100 字节余量。
+ * 微信 msg_sec_check v2 官方文档的 content 上限为 2500 字;为规避字节/字符口径
+ * 差异(汉字 UTF-8 占 3 字节),这里按更保守的**字节**口径切分,任何口径下都不会
+ * 超限;代价是长中文文本会多切几段(每段一次 API 调用,配额 4000 次/分钟足够)。
  */
 export const MODERATION_MAX_CHUNK_BYTES = 2400
 
@@ -142,7 +144,9 @@ const MODERATION_LABEL_NAMES: Record<number, string> = {
   20003: "辱骂",
   20006: "违法犯罪",
   20008: "欺诈",
-  20012: "平权",
+  20012: "低俗",
+  20013: "版权",
+  21000: "其他",
 }
 
 export function labelNameOf(label: number): string | undefined {

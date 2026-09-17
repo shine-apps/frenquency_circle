@@ -1,10 +1,10 @@
-import { buildCategoryTree } from "@/lib/categories"
+import { getCategoryTreeCached } from "@/lib/categories"
 import { TaxonomyManager } from "./_components/taxonomy-manager"
 
 export const dynamic = "force-dynamic"
 
 export default async function AdminTaxonomyPage() {
-  const tree = await buildCategoryTree()
+  const tree = await getCategoryTreeCached()
   return (
     <main className="p-6">
       <div className="mb-4">

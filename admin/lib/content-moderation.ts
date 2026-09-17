@@ -38,6 +38,10 @@ export const MODERATION_MAX_CHUNK_BYTES = 2400
 /**
  * 读取审核开关。未配置 / 值非 true 一律视为未开启(默认关闭,宽松放行)。
  * 开关判断以服务端为准:即使前端误调,关闭状态下本接口也直接放行。
+ *
+ * 合规门禁故意**不走缓存**:开关变更必须在下一次送审立即生效,
+ * 缓存会引入最长 60s 的「已开启仍放行」窗口(合规优先于这点点查开销);
+ * 公开 `/api/settings` 与设置页仍走缓存。
  */
 export async function isContentModerationEnabled(): Promise<boolean> {
   const [row] = await db

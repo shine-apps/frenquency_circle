@@ -54,11 +54,11 @@ const OFFICIAL_EXAMPLE = {
   signature: "0f9de62fce790f9a083d5c99e95740ceb90c27ed",
 } as const
 
-beforeEach(() => {
+beforeEach(async () => {
   process.env.WECHAT_OA_APP_ID = "wx-oa-test-app-id"
   process.env.WECHAT_OA_APP_SECRET = "wx-oa-test-app-secret"
-  __resetOaForTest()
-  __resetWechatMpForTest()
+  await __resetOaForTest()
+  await __resetWechatMpForTest()
 })
 
 afterEach(() => {

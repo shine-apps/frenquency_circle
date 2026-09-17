@@ -3,7 +3,7 @@ import { z } from "zod"
 import { eq } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { categories } from "@/db/schema"
-import { buildCategoryTree, slugify } from "@/lib/categories"
+import { getCategoryTreeCached, invalidateCategoryCaches, slugify } from "@/lib/categories"
 import { requireAdmin } from "@/lib/auth-utils"
 import { ok, fail } from "@/lib/api"
 import { LOG_PREFIX, logger } from "@/lib/logger"
@@ -23,7 +23,7 @@ export async function GET() {
   const guard = await requireAdmin()
   if (!guard.ok) return guard.response
   try {
-    const tree = await buildCategoryTree()
+    const tree = await getCategoryTreeCached()
     return NextResponse.json({ tree })
   } catch (err) {
     logger.error(LOG_PREFIX.CATEGORY, "读取分类树失败", { error: String(err) })
@@ -81,6 +81,7 @@ export async function POST(req: Request) {
       })
       .returning()
     logger.info(LOG_PREFIX.CATEGORY, "新建分类", { id: row.id, slug: row.slug, by: guard.userId })
+    await invalidateCategoryCaches()
     return ok({ category: row }, { status: 201 })
   } catch (err) {
     logger.error(LOG_PREFIX.CATEGORY, "新建分类失败", { error: String(err) })

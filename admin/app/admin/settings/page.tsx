@@ -1,7 +1,4 @@
-import { inArray } from "drizzle-orm"
-
-import { db } from "@/lib/db"
-import { systemSettings } from "@/db/schema"
+import { getSystemSettingsCached } from "@/lib/settings"
 import { SettingsForm } from "./_components/settings-form"
 
 export const dynamic = "force-dynamic"
@@ -10,10 +7,10 @@ export const dynamic = "force-dynamic"
 const SETTING_KEYS = ["isAppDeploying", "contentModerationEnabled"]
 
 export default async function AdminSettingsPage() {
-  const rows = await db
-    .select()
-    .from(systemSettings)
-    .where(inArray(systemSettings.key, SETTING_KEYS))
+  // 复用设置缓存(管理员保存后 PATCH 接口已失效缓存,刷新页面即为最新值)
+  const rows = (await getSystemSettingsCached()).filter((row) =>
+    SETTING_KEYS.includes(row.key)
+  )
 
   const isAppDeploying =
     rows.find((row) => row.key === "isAppDeploying")?.value === true

@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { systemSettings } from "@/db/schema"
 import { fail, ok } from "@/lib/api"
 import { requireAdmin } from "@/lib/auth-utils"
+import { invalidateSettingsCache } from "@/lib/settings"
 import { logger, LOG_PREFIX } from "@/lib/logger"
 
 /**
@@ -50,6 +51,9 @@ export async function PATCH(req: Request) {
     key,
     by: guard.userId,
   })
+
+  // 写后失效:全量列表 + 该项单项缓存,保证公开接口/审核开关立即生效
+  await invalidateSettingsCache(key)
 
   return ok({ key: updated.key, value: updated.value })
 }

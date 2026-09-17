@@ -1,8 +1,9 @@
-import { and, asc, eq } from "drizzle-orm"
+import { eq } from "drizzle-orm"
 
 import { db } from "@/lib/db"
-import { hobbyTags, categories } from "@/db/schema"
+import { hobbyTags } from "@/db/schema"
 import { buildCategoryTree } from "@/lib/categories"
+import { CACHE_TTL, cacheKeys, cacheWrap } from "@/lib/cache"
 import type { CategoryNode as ApiCategoryNode } from "@/types/api"
 import { corsOptions, ok, withCors } from "@/lib/api"
 
@@ -38,20 +39,13 @@ type CategoryNode = {
 }
 
 /**
- * GET /api/hobby-tags/categories
+ * 组装公开分类树:分类骨架(categories)+ approved 叶子标签(hobby_tags)。
  *
- * 返回兴趣标签的分类树(最多两级,用于兴趣选择页骨架)。
- *
- * 分类骨架由 `categories` 树表驱动(运营可动态维护),叶子标签从 `hobby_tags`
- * 按 `category_id` 关联填充,只返回 `status='approved'` 的标签。
- *
- * 响应:`IResponse<{ categories: CategoryNode[] }>`
+ * - 分类骨架由 `categories` 树表驱动(运营可动态维护);
+ * - 叶子标签从 `hobby_tags` 按 `category_id` 关联填充,只包含 `status='approved'`;
+ * - 分类灵活化:标签可直挂 level=1 叶子大类,此类大类以其自身同名节点呈现直挂标签。
  */
-export async function OPTIONS(req: Request) {
-  return corsOptions(req)
-}
-
-export async function GET(req: Request) {
+async function buildPublicCategoryTree(): Promise<CategoryNode[]> {
   // 1. 读取分类树骨架(复用共享 helper):一级大类 + 其下二级中类
   const tree = await buildCategoryTree()
   // 二级中类按 parentId 分组
@@ -93,7 +87,7 @@ export async function GET(req: Request) {
 
   // 3. 组装分类树(兼容旧 subCategory 为空的标签:归属到 category_id 对应中类)
   //    分类灵活化:标签可直挂 level=1 叶子大类;此类大类以其自身同名节点呈现直挂标签。
-  const categoriesNode: CategoryNode[] = tree.map((top) => {
+  return tree.map((top) => {
     const children = (subByParent.get(top.id) ?? []).sort(
       (a, b) => a.sortOrder - b.sortOrder
     )
@@ -119,6 +113,28 @@ export async function GET(req: Request) {
       subCategories: subNodes,
     }
   })
+}
 
-  return withCors(ok({ categories: categoriesNode }), req)
+/**
+ * GET /api/hobby-tags/categories
+ *
+ * 返回兴趣标签的分类树(最多两级,用于兴趣选择页骨架)。
+ *
+ * 组装结果按 `category:public` 缓存 10 分钟(公开端高频读、运营低频改);
+ * 分类 / 标签增删改后由 `invalidateCategoryCaches()` 立即失效,另有 TTL 兜底。
+ *
+ * 响应:`IResponse<{ categories: CategoryNode[] }>`
+ */
+export async function OPTIONS(req: Request) {
+  return corsOptions(req)
+}
+
+export async function GET(req: Request) {
+  const payload = await cacheWrap(
+    cacheKeys.categoryPublic(),
+    async () => ({ categories: await buildPublicCategoryTree() }),
+    CACHE_TTL.CATEGORY_TREE
+  )
+
+  return withCors(ok(payload), req)
 }

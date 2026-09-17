@@ -10,6 +10,7 @@ Next.js 16 后端 + 管理后台,为 `frenqency_circle` 仓库的 `frontend_unia
 - **Drizzle ORM 0.45.2** + PostgreSQL 16
 - **shadcn/ui 4.11.0** + **Tailwind v4** + **`@base-ui/react`**
 - **Zod 4.x** / **bcryptjs 3.x** / **Aliyun SMS**
+- **cache-manager 7**(默认进程内内存缓存,可选 `@keyv/redis`)
 - **Vitest 4** + Testing Library + happy-dom + **MSW 2**
 - **Playwright 1.61**(E2E)
 
@@ -55,6 +56,38 @@ pnpm dev
 | `pnpm db:seed` | 跑种子脚本 |
 | `pnpm db:reset` | 强制重置 + 重新种子 |
 
+## 缓存
+
+后端内置统一缓存层(`lib/cache/`),基于 **cache-manager 7**,业务代码只依赖 `CacheStore` 抽象,不直接依赖具体驱动。
+
+- **默认使用进程内内存缓存**:**无需任何配置、无需额外服务**,`pnpm dev` 即可生效;
+- **可选切换 Redis**:设置 `CACHE_DRIVER=redis` + `REDIS_URL` 即切换到 `@keyv/redis`;未配置 / 未安装 / 初始化失败时自动回退内存并输出 `[CACHE]` 告警,业务无感;
+- **fail-open**:缓存读写异常仅告警并回源数据库 / 外部接口,不影响接口可用性。
+
+| 环境变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `CACHE_DRIVER` | 按 `REDIS_URL` 自动推断,否则 `memory` | `memory` = 进程内内存;`redis` = 共享 Redis |
+| `REDIS_URL` | 空 | Redis 连接串,如 `redis://localhost:6379` |
+| `CACHE_KEY_PREFIX` | `qlq` | 缓存 key 统一前缀(多应用 / 多环境共用 Redis 时用于隔离) |
+| `CACHE_KEY_SALT` | 回退 `AUTH_SECRET` | 限流 key 中手机号 / IP 的加盐哈希(避免明文 PII 落入 Redis) |
+
+### 已接入的缓存点
+
+| 数据 | TTL | 失效策略 |
+| --- | --- | --- |
+| 分类树(`category:tree`) | 10 分钟 | 分类增删改后立即失效 |
+| 公开分类树(`category:public`,分类 + approved 标签) | 10 分钟 | 分类 / 标签增删改后立即失效 |
+| 标签搜索(`tagsearch:{query}:{limit}`) | 60 秒 | 短 TTL 自然过期(不做前缀删除) |
+| 系统设置全量(`settings:all`) | 60 秒 | 管理员 `PATCH /api/admin/settings` 后立即失效 |
+| 微信小程序 `access_token` / 公众号 `jsapi_ticket` | 微信返回有效期 − 5 分钟 | 到期自动过期 |
+| 短信验证码限流(`ratelimit:*`,内存原子原语 / Redis Lua) | 冷却 60s、小时窗口 1h | 到期自动 / 验证成功后清除 |
+
+> **注意**
+>
+> - 内存缓存是**进程本地**的:多实例部署时各实例各自缓存、各自限流;需要全局一致时把 `CACHE_DRIVER` 切到 `redis`。
+> - 内容审核开关(`contentModerationEnabled`)**故意不走缓存**,每次送审直读数据库,保证合规门禁立即生效。
+> - Redis 不可用时读 / 写走 30 秒降级窗口(跳过网络直接回源),失效操作仍会尝试,避免写后的旧数据滞留到 TTL 过期。
+
 ## 目录结构
 
 ```
@@ -65,7 +98,7 @@ admin/
 │   └── api/              # REST API 路由
 ├── components/           # UI 组件(shadcn + 业务组件)
 ├── db/                   # Drizzle schema + 种子 + 迁移脚本
-├── lib/                  # 业务工具 / Auth.js / SMS / Storage
+├── lib/                  # 业务工具 / Auth.js / SMS / 缓存(lib/cache)
 ├── tests/                # Vitest 单元/集成 + Playwright E2E
 ├── types/                # DTO / NextAuth 类型增强
 ├── auth.config.ts        # Auth.js 共享配置

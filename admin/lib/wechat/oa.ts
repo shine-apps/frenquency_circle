@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto"
+import { cacheGet, cacheKeys, cacheMdel, cacheSet } from "@/lib/cache"
 import { logger, LOG_PREFIX } from "@/lib/logger"
 import {
   assertNoWechatError,
@@ -26,8 +27,11 @@ const DEFAULT_API_BASE = "https://api.weixin.qq.com"
 /** jsapi_ticket 缓存安全余量: 提前 5 分钟视为过期 */
 const TICKET_SAFETY_MARGIN_MS = 5 * 60 * 1000
 
-type TicketCacheEntry = { ticket: string; expiresAt: number }
-const ticketCache = new Map<string, TicketCacheEntry>()
+/**
+ * 已获取过 ticket 的 appId 集合。
+ * 仅用于测试钩子批量清理缓存(实际部署固定一个 appId,规模有界)。
+ */
+const knownTicketAppIds = new Set<string>()
 
 function readOaConfig() {
   const appId = process.env.WECHAT_OA_APP_ID ?? ""
@@ -37,7 +41,8 @@ function readOaConfig() {
 }
 
 /**
- * 拉 jsapi_ticket，进程内按 OA appId 缓存，提前 5 分钟视为过期。
+ * 拉 jsapi_ticket，按 OA appId 走统一缓存层(默认内存,可切 Redis),
+ * TTL 取微信返回的有效期减 5 分钟安全余量。
  * @see https://developers.weixin.qq.com/doc/offiaccount/OA_Web_Apps/JS-SDK.html
  */
 export async function getJsapiTicket(params: {
@@ -47,11 +52,11 @@ export async function getJsapiTicket(params: {
 }): Promise<string> {
   const { accessToken, appId, apiBase } = params
   const base = apiBase || DEFAULT_API_BASE
-  const cached = ticketCache.get(appId)
-  const now = Date.now()
-  if (cached && cached.expiresAt > now) {
-    return cached.ticket
-  }
+  const cacheKey = cacheKeys.wechatOaTicket(appId)
+  knownTicketAppIds.add(appId)
+
+  const cached = await cacheGet<string>(cacheKey)
+  if (cached) return cached
 
   const url = `${base}/cgi-bin/ticket/getticket?access_token=${encodeURIComponent(accessToken)}&type=jsapi`
   const payload = (await wechatFetch(url, { method: "GET" }, "ticket")) as Record<
@@ -66,8 +71,15 @@ export async function getJsapiTicket(params: {
     throw new WechatMpError(-5, "invalid jsapi_ticket response", "ticket", payload)
   }
 
-  const expiresAt = now + (expiresIn * 1000 - TICKET_SAFETY_MARGIN_MS)
-  ticketCache.set(appId, { ticket, expiresAt })
+  const ttlMs = expiresIn * 1000 - TICKET_SAFETY_MARGIN_MS
+  if (ttlMs > 0) {
+    await cacheSet(cacheKey, ticket, ttlMs)
+  } else {
+    logger.warn(LOG_PREFIX.WECHAT, "jsapi_ticket expires too soon, skip caching", {
+      appId,
+      expiresIn,
+    })
+  }
   logger.info(LOG_PREFIX.WECHAT, "jsapi_ticket fetched", { appId, expiresIn })
   return ticket
 }
@@ -134,7 +146,9 @@ export async function signJsConfig(params: { url: string }): Promise<{
   return { appId, timestamp, noncestr, signature }
 }
 
-/** 仅供测试使用：清空 jsapi_ticket 缓存。 */
-export function __resetOaForTest(): void {
-  ticketCache.clear()
+/** 仅供测试使用：清空 jsapi_ticket 缓存(异步，调用方需 await)。 */
+export async function __resetOaForTest(): Promise<void> {
+  const keys = [...knownTicketAppIds].map((appId) => cacheKeys.wechatOaTicket(appId))
+  knownTicketAppIds.clear()
+  await cacheMdel(keys)
 }

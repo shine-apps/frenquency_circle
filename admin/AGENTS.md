@@ -48,6 +48,7 @@ All commands run from the project root with no `cd` needed.
 - **React 19.2.4** with strict `react-hooks/set-state-in-effect` lint rule.
 - **Auth.js 5.0.0-beta.31** with multiple Credentials Providers + JWT sessions.
 - **Drizzle ORM 0.45.2** with `postgres` driver; schema lives in `db/schema.ts`.
+- **cache-manager 7** with the default in-process memory driver; optional **`@keyv/redis`** when `CACHE_DRIVER=redis`. See "Cache subsystem" below.
 - **shadcn/ui 4.11.0** on **Tailwind v4** (CSS variables in `app/globals.css`). Uses **`@base-ui/react`** primitives (not Radix).
 - **Zod 4.x** for request validation and form input.
 - **bcryptjs 3.x** for password hashing and SMS code hashing.
@@ -95,6 +96,15 @@ All commands run from the project root with no `cd` needed.
 │   └── seed.ts                       # Seed script
 ├── lib/
 │   ├── db.ts                         # Drizzle singleton (dev globalThis cache)
+│   ├── cache/                        # 统一缓存层(cache-manager;memory 默认 / redis 可选)
+│   │   ├── types.ts                  # CacheStore 抽象(get/set/del/mdel/clear/wrap/incr/setIfAbsent)
+│   │   ├── config.ts                 # readCacheConfig + CACHE_TTL 常量
+│   │   ├── keys.ts                   # cacheKeys 命名空间(key 唯一约定)
+│   │   ├── base-store.ts             # 公共实现 + fail-open wrap(同键并发合并)
+│   │   ├── memory-store.ts           # 内存驱动 + 进程内原子原语
+│   │   ├── redis-store.ts            # @keyv/redis 驱动 + Lua 原子原语 + 降级窗口
+│   │   └── index.ts                  # getCacheStore() 单例 + cacheGet/Set/Del/Mdel/Wrap
+│   ├── settings.ts                   # 系统设置缓存读取与失效
 │   ├── api.ts                        # ok() / fail() / parsePagination()
 │   ├── auth-utils.ts                 # requireAdmin() / requireTeacher() / requireSession()
 │   ├── user-role.ts                  # USER_ROLE_OPTIONS / USER_ROLE_LABEL / TEACHER_AREA_ROLES
@@ -311,6 +321,30 @@ All commands run from the project root with no `cd` needed.
 - **不要**新增任何接收文件字节的 API 路由(`req.formData()` / `fs.writeFile` 都禁止);新上传场景一律复用上述 `uploadFileToCos`。
 - **微信小程序域名白名单**:发布前需在 `mp.weixin.qq.com` → 开发管理 → 服务器域名,把 `COS_PUBLIC_BASE_URL` 域名 + 后端 API 域名加入 `request` / `uploadFile` 合法域名。
 
+### Cache subsystem(统一缓存层)
+
+- **唯一入口**:`lib/cache/index.ts` 的 `getCacheStore()` + `cacheGet` / `cacheSet` / `cacheDel` / `cacheMdel` / `cacheWrap`;业务代码**只依赖这些 helper 与 `lib/cache/keys.ts` 的 key 约定**,不要直接 import `cache-manager` / `@keyv/redis`。
+- **驱动切换(env)**:`CACHE_DRIVER=memory|redis`(未设置时按 `REDIS_URL` 自动推断,默认 `memory`)、`REDIS_URL`、`CACHE_KEY_PREFIX`(默认 `qlq`)、`CACHE_KEY_SALT`(限流 key 哈希盐,留空回退 `AUTH_SECRET`)。Redis 未配置 / 加载失败 → `logger.warn` + 回退内存,业务无感。
+- **key 约定**:逻辑 key(不含前缀)一律由 `cacheKeys.*` 生成,前缀由驱动内部补齐;新增 key 必须在 `keys.ts` 注册,失效与写入共用同一份约定。
+- **TTL 常量**:`CACHE_TTL.CATEGORY_TREE`(10min)/ `TAG_SEARCH`(60s)/ `SETTINGS`(60s);微信凭据 TTL 由接口返回的 `expires_in − 5min` 动态决定。
+- **fail-open**:`cacheWrap` 读 / 写缓存异常降级回源,只有 loader 自身异常会抛出;Redis 驱动额外带 3s 建连超时与 30s 降级窗口(窗口内跳过网络),但 `del` / `mdel` / `clear` **不做降级短路**(失效被跳过即永久丢失)。
+- **原子原语**:`incr(key, ttlMs)`(TTL 仅首次创建生效,不重置窗口)与 `setIfAbsent(key, ttlMs)`(**必须传正 TTL,否则抛错**,防止误用造成永久死锁)——`lib/sms/rate-limit.ts` 用它实现「冷却 + 小时配额」:内存驱动为进程内原子,Redis 为 Lua 跨实例原子。原子原语与普通 key/value 共用 Redis key 空间但**值语义不同**(纯整数/占位),不要用 `cacheGet` 读。
+- **已接入与失效点**:
+
+  | 数据 | key | TTL | 失效入口 |
+  |---|---|---|---|
+  | 分类树 | `category:tree` | 10min | `invalidateCategoryCaches()`(`lib/categories.ts`) |
+  | 公开分类树(分类 + approved 标签) | `category:public` | 10min | 同上 |
+  | 标签搜索 | `tagsearch:{query}:{limit}` | 60s | 短 TTL 自然过期(不做前缀删除) |
+  | 系统设置全量 | `settings:all` | 60s | `invalidateSettingsCache(key)`(`lib/settings.ts`) |
+  | 微信 access_token / jsapi_ticket | `wechat:mp:token:{appId}` / `wechat:oa:ticket:{appId}` | `expires_in − 5min` | 到期自动 |
+  | 短信限流 | `ratelimit:*`(手机号 / IP 已加盐哈希) | 冷却 60s / 小时 1h | 到期自动 / `rateLimiter.resetPhone()` |
+
+  写 `categories` 或影响公开树的 `hobby_tags` 字段(`status` / `categoryId` / `name`)的接口**必须**调用 `invalidateCategoryCaches()`;写 `system_settings` **必须**调用 `invalidateSettingsCache(key)`。
+- **合规例外**:`isContentModerationEnabled()`(`lib/content-moderation.ts`)**故意不走缓存**,每次送审直读数据库 —— 审核开关是合规门禁,不允许存在陈旧窗口,不要"顺手"给它加缓存。
+- **测试**:缓存是模块级单例,集成测试若 mock db 且用例间数据不同,`beforeEach` 需调用 `lib/cache/index.ts` 的 `__resetCacheForTest()`;限流单测另用 `rateLimiter.__resetForTest()`。
+- **内存驱动的限制**:进程本地,多实例部署时各实例各自缓存 / 各自限流;需要全局一致时切 `redis`。
+
 ### WeChat Mini-Program provider
 
 - **适用场景**: 微信小程序端两种登录方式 —— ①静默登录(`wx.login` 即可,要求微信已绑定账号)；②手机号授权登录(`getPhoneNumber`,`**仅支持 2022+ 新接口**`:`phone_code` + `getuserphonenumber`,不支持旧的 `encryptedData`/`iv` 解密流程)。
@@ -396,6 +430,13 @@ All commands run from the project root with no `cd` needed.
 5. 表单需要地图选点时复用 `components/location-picker.tsx`，需要图片上传时复用 `lib/cos/upload.ts` 的 `uploadFileToCos`(COS 直传,凭证走 `GET /api/upload/cos-credentials`,cookie session 已被 `getToken` 支持)。
 6. Add a nav entry in `components/teacher-sidebar.tsx`.
 
+### 给一个只读数据加缓存
+
+1. 在 `lib/cache/keys.ts` 的 `CACHE_NAMESPACE` + `cacheKeys` 注册 key(用户输入参数用 `encodeKeySegment` 转义)。
+2. 在领域模块里用 `cacheWrap(key, loader, CACHE_TTL.XXX)` 包一层,参考 `lib/categories.ts` 的 `getCategoryTreeCached` / `lib/settings.ts` 的 `getSystemSettingsCached`。
+3. 在**所有**写入该数据的路由里调用对应失效函数(`invalidateCategoryCaches` / `invalidateSettingsCache` …);无法枚举 key 的高基数场景(如标签搜索)只设短 TTL,不做主动失效。
+4. 补测试:`tests/unit/lib/cache/business-cache.test.ts` 已有「mock db + 命中不查库 + 失效后重查」的断言模板。
+
 ### Modify a schema
 
 1. Edit `db/schema.ts`.
@@ -418,6 +459,8 @@ All commands run from the project root with no `cd` needed.
 - **`accounts` table is manually managed.** This project does not use `@auth/drizzle-adapter`. User creation and account linking go through `lib/auth/account-service.ts`. Future OAuth providers will need manual handling in NextAuth `events` callbacks.
 - **教师不能自主把圈子从 `pending` 改成 `active`。** `PATCH /api/teacher/circles/[circleId]` 只接受 `status: "active" | "offline"`，且当前状态必须已是 `active`/`offline`，否则 403 —— 这是「防绕过管理员审核」的硬约束，改 schema 或放宽状态机前请先确认不是安全回退。
 - **`components/ui/dialog.tsx` 的 `DialogContent` 默认没有 max-height。** 字段多的表单弹窗必须自己加 `max-h-[calc(100dvh-2rem)] overflow-y-auto`，否则移动端会被视口裁掉且无法滚动。
+- **新增缓存读取前先安排失效。** 写入路径必须调用对应的 `invalidate*` 函数;内存驱动下失效只对当前实例生效（跨实例一致性由 TTL 或 `CACHE_DRIVER=redis` 保证）。
+- **`setIfAbsent` 必须传正 TTL**（否则抛错,防止永久锁);原子原语的 key 不要用 `cacheGet` 读,其值是纯整数占位。
 
 ## Quality gate
 

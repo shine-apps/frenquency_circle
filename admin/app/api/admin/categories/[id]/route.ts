@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { categories, hobbyTags } from "@/db/schema"
 import { fail, ok } from "@/lib/api"
 import { requireAdmin } from "@/lib/auth-utils"
+import { invalidateCategoryCaches } from "@/lib/categories"
 import { LOG_PREFIX, logger } from "@/lib/logger"
 
 type RouteContext = { params: Promise<{ id: string }> }
@@ -83,6 +84,7 @@ export async function PATCH(req: Request, context: RouteContext) {
     .returning()
 
   logger.info(LOG_PREFIX.CATEGORY, "编辑分类", { id, by: guard.userId })
+  await invalidateCategoryCaches()
   return ok({ category: updated })
 }
 
@@ -119,5 +121,6 @@ export async function DELETE(_req: Request, context: RouteContext) {
 
   await db.delete(categories).where(eq(categories.id, id))
   logger.info(LOG_PREFIX.CATEGORY, "删除分类", { id, by: guard.userId })
+  await invalidateCategoryCaches()
   return ok({ deleted: true })
 }

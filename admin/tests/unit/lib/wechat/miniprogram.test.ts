@@ -45,10 +45,10 @@ function makeFetchMock(impl: (url: string, init: RequestInit) => Promise<FetchRe
   })
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   process.env.WECHAT_MP_APP_ID = "wx-test-app-id"
   process.env.WECHAT_MP_APP_SECRET = "wx-test-app-secret"
-  __resetWechatMpForTest()
+  await __resetWechatMpForTest()
 })
 
 afterEach(() => {
@@ -354,7 +354,7 @@ describe("lib/wechat/miniprogram", () => {
     })
 
     it("honors apiBase override instead of hardcoded host", async () => {
-      __resetWechatMpForTest()
+      await __resetWechatMpForTest()
       const fetchMock = makeFetchMock(async (url) => {
         expect(url).toContain("https://mock.example.test/cgi-bin/stable_token")
         return makeJsonResponse({
@@ -374,7 +374,7 @@ describe("lib/wechat/miniprogram", () => {
     })
 
     it("labels HTTP errors with stage='token' (not code2session)", async () => {
-      __resetWechatMpForTest()
+      await __resetWechatMpForTest()
       vi.stubGlobal(
         "fetch",
         makeFetchMock(async () => makeJsonResponse({}, 502, "Bad Gateway"))

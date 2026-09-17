@@ -2,6 +2,7 @@ import { and, eq, ilike, like, or, sql, aliasedTable } from "drizzle-orm"
 
 import { db } from "@/lib/db"
 import { hobbyTags, categories } from "@/db/schema"
+import { CACHE_TTL, cacheKeys, cacheWrap } from "@/lib/cache"
 import type { TagDTO } from "@/types/api"
 import { toPinyin, toPinyinInitials } from "@/lib/search/pinyin"
 
@@ -150,6 +151,26 @@ export async function searchTags(
   }
 
   return unique.map(toTagDTO)
+}
+
+/**
+ * 带缓存的标签搜索(公开搜索接口使用)。
+ *
+ * 结果按 `query + limit` 维度分片、短 TTL(60s)自然过期:
+ * 标签审核/改名无法枚举具体搜索 key,不做主动失效,靠短窗口保证最终一致;
+ * 管理端需要实时数据时仍应调用不带缓存的 {@link searchTags}。
+ */
+export async function searchTagsCached(
+  query: string,
+  limit: number = 10
+): Promise<TagDTO[]> {
+  const trimmed = query.trim()
+  if (!trimmed || limit <= 0) return []
+  return cacheWrap(
+    cacheKeys.tagSearch(trimmed, limit),
+    () => searchTags(trimmed, limit),
+    CACHE_TTL.TAG_SEARCH
+  )
 }
 
 // 重导出搜索辅助函数,便于其他模块(如 /api/hobby-tags/custom)复用

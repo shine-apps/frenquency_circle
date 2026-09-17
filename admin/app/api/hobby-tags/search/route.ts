@@ -1,7 +1,7 @@
 import { z } from "zod"
 
 import { corsOptions, fail, ok, withCors } from "@/lib/api"
-import { searchTags } from "@/lib/search/tag-search"
+import { searchTagsCached } from "@/lib/search/tag-search"
 import { computeHotInterests } from "@/lib/interest-ranking"
 import { readUserFromToken } from "@/lib/auth/session-token"
 import { recordInterestEvents } from "@/lib/interest-events"
@@ -52,7 +52,7 @@ export async function GET(req: Request) {
     const { list: hotList } = await computeHotInterests({ limit })
     list = hotList
   } else {
-    list = await searchTags(q, limit)
+    list = await searchTagsCached(q, limit)
   }
 
   // 记录搜索事件(仅登录用户;记录命中标签名,旁路失败不影响搜索结果)

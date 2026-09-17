@@ -49,4 +49,5 @@ export const LOG_PREFIX = {
   CHECKIN: "CHECKIN",
   COURSE: "COURSE",
   MODERATION: "MODERATION",
+  CACHE: "CACHE",
 } as const

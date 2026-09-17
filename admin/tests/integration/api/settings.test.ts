@@ -36,9 +36,12 @@ const { mockDb } = vi.hoisted(() => {
 vi.mock("@/lib/db", () => ({ db: mockDb }))
 
 import { GET as settingsGet } from "@/app/api/settings/route"
+import { __resetCacheForTest } from "@/lib/cache"
 import type { IResponse, SystemSettingDTO } from "@/types/api"
 
 beforeEach(() => {
+  // 设置列表走缓存:用例间必须清空,否则会读到上一个用例的 mock 数据
+  __resetCacheForTest()
   mockDb.select.mockClear()
   mockDb._setRows([])
 })

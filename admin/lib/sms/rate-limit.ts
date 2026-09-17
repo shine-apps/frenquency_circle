@@ -1,19 +1,23 @@
 /**
- * 进程内内存限流器（基于 Map + TTL 逻辑窗口）。
+ * 短信验证码限流器(基于统一缓存层的原子原语)。
  *
- * 限制规则：
+ * 限制规则(与历史进程内实现保持一致):
  * - 单手机号：60s 冷却 + 每小时最多 N 次（默认 5）
  * - 单 IP：每小时最多 M 次（默认 10）
  *
- * 已知限制：进程本地存储，重启后重置；不支持多实例部署。
- * 如需多实例，可在同一接口下替换为 Redis 实现。
+ * 实现要点:
+ * - 冷却窗口 = `setIfAbsent(冷却键, cooldownMs)`,仅首次写入成功才进入冷却;
+ * - 小时配额 = `incr(小时键, 1h)`,TTL 仅在首次创建时生效,窗口不因自增重置;
+ * - 内存驱动下即进程内原子;切换 Redis 后多实例一致(见 `lib/cache`);
+ * - 缓存层异常时 **fail-open**(放行并告警):`sms/send` 的 DB 维度
+ *   `isIssueCapped` 仍提供「按手机号」的全局上限兜底,Redis 故障不应阻断短信通道。
  */
 
-type Bucket = {
-  count: number
-  firstAt: number
-  nextAllowedAt: number
-}
+import { createHash } from "node:crypto"
+
+import { cacheKeys, getCacheStore } from "@/lib/cache"
+import { logger, LOG_PREFIX } from "@/lib/logger"
+import { errorMessage } from "@/lib/cache/utils"
 
 type PhoneReason = "cooldown" | "hourly"
 type IpReason = "hourly"
@@ -41,94 +45,109 @@ function thresholds() {
   }
 }
 
-class RateLimiter {
-  private phoneBuckets = new Map<string, Bucket>()
-  private ipBuckets = new Map<string, Bucket>()
+/** 测试用:记录本模块写入过的 key,便于精确清理(不影响其它缓存) */
+const touchedKeys = new Set<string>()
 
+function track(key: string): string {
+  touchedKeys.add(key)
+  return key
+}
+
+/**
+ * 限流 key 中的手机号 / IP 做加盐哈希后再落库:
+ * 切到 Redis 后 key 会保留最长 1 小时,明文标识会出现在 KEYS / 慢日志 / 监控面板 / 快照中。
+ * 盐取自部署必备的 AUTH_SECRET,保证 11 位号码空间不可被暴力反查。
+ */
+const KEY_SALT = process.env.CACHE_KEY_SALT || process.env.AUTH_SECRET || "qlq-ratelimit"
+
+function hashKeySegment(value: string): string {
+  return createHash("sha256").update(`${KEY_SALT}:${value}`).digest("hex").slice(0, 32)
+}
+
+const cooldownKey = (phone: string): string =>
+  track(cacheKeys.rateLimit("phone", "cooldown", hashKeySegment(phone)))
+const phoneHourlyKey = (phone: string): string =>
+  track(cacheKeys.rateLimit("phone", "hourly", hashKeySegment(phone)))
+const ipHourlyKey = (ip: string): string =>
+  track(cacheKeys.rateLimit("ip", "hourly", hashKeySegment(ip)))
+
+class RateLimiter {
   /**
    * 检查并消费一次手机号配额。
-   * 调用即视为尝试发送，成功时会计入冷却与小时计数。
+   * 调用即视为尝试发送:冷却通过后计入小时计数。
    */
-  checkAndConsumePhone(phone: string): PhoneLimitResult {
+  async checkAndConsumePhone(phone: string): Promise<PhoneLimitResult> {
     const t = thresholds()
-    const now = Date.now()
-    const key = `phone:${phone}`
-    const bucket = this.phoneBuckets.get(key)
+    try {
+      const store = await getCacheStore()
 
-    if (bucket) {
-      // 冷却期内
-      if (now < bucket.nextAllowedAt) {
+      // 1) 冷却窗口:仅当不存在时写入,写入失败说明仍在冷却期
+      const acquired = await store.setIfAbsent(cooldownKey(phone), t.phoneCooldownMs)
+      if (!acquired) {
         return { ok: false, reason: "cooldown" }
       }
-      // 小时窗口未过期且已达上限
-      const hourElapsed = now - bucket.firstAt >= HOUR_MS
-      if (!hourElapsed && bucket.count >= t.phoneHourly) {
+
+      // 2) 小时配额:自增;超限时释放本次冷却,保持「超限不消费冷却」的原有语义
+      const count = await store.incr(phoneHourlyKey(phone), HOUR_MS)
+      if (count > t.phoneHourly) {
+        await store.del(cooldownKey(phone))
         return { ok: false, reason: "hourly" }
       }
-      // 消费一次：窗口过期则重置
-      if (hourElapsed) {
-        bucket.count = 1
-        bucket.firstAt = now
-      } else {
-        bucket.count += 1
-      }
-      bucket.nextAllowedAt = now + t.phoneCooldownMs
+      return { ok: true }
+    } catch (err) {
+      logger.warn(LOG_PREFIX.SMS, "Phone rate limit check failed, fail open", {
+        phone,
+        error: errorMessage(err),
+      })
       return { ok: true }
     }
-
-    // 新建 bucket
-    this.phoneBuckets.set(key, {
-      count: 1,
-      firstAt: now,
-      nextAllowedAt: now + t.phoneCooldownMs,
-    })
-    return { ok: true }
   }
 
   /**
    * 检查并消费一次 IP 配额。仅小时窗口限制。
    */
-  checkAndConsumeIp(ip: string): IpLimitResult {
+  async checkAndConsumeIp(ip: string): Promise<IpLimitResult> {
     const t = thresholds()
-    const now = Date.now()
-    const key = `ip:${ip}`
-    const bucket = this.ipBuckets.get(key)
-
-    if (bucket) {
-      const hourElapsed = now - bucket.firstAt >= HOUR_MS
-      if (!hourElapsed && bucket.count >= t.ipHourly) {
+    try {
+      const store = await getCacheStore()
+      const count = await store.incr(ipHourlyKey(ip), HOUR_MS)
+      if (count > t.ipHourly) {
         return { ok: false, reason: "hourly" }
       }
-      if (hourElapsed) {
-        bucket.count = 1
-        bucket.firstAt = now
-      } else {
-        bucket.count += 1
-      }
+      return { ok: true }
+    } catch (err) {
+      logger.warn(LOG_PREFIX.SMS, "IP rate limit check failed, fail open", {
+        ip,
+        error: errorMessage(err),
+      })
       return { ok: true }
     }
-
-    this.ipBuckets.set(key, {
-      count: 1,
-      firstAt: now,
-      nextAllowedAt: 0,
-    })
-    return { ok: true }
   }
 
   /**
-   * 验证成功后清除手机号的限流状态（便于下一次会话立即请求新验证码）。
+   * 验证成功后清除手机号的限流状态(便于下一次会话立即请求新验证码)。
    */
-  resetPhone(phone: string): void {
-    this.phoneBuckets.delete(`phone:${phone}`)
+  async resetPhone(phone: string): Promise<void> {
+    try {
+      const store = await getCacheStore()
+      await store.mdel([cooldownKey(phone), phoneHourlyKey(phone)])
+    } catch (err) {
+      logger.warn(LOG_PREFIX.SMS, "Phone rate limit reset failed", {
+        phone,
+        error: errorMessage(err),
+      })
+    }
   }
 
   /**
-   * 仅供测试使用：重置所有内部状态。
+   * 仅供测试使用:清空本模块写入的限流 key。
    */
-  __resetForTest(): void {
-    this.phoneBuckets.clear()
-    this.ipBuckets.clear()
+  async __resetForTest(): Promise<void> {
+    const keys = [...touchedKeys]
+    touchedKeys.clear()
+    if (keys.length === 0) return
+    const store = await getCacheStore()
+    await store.mdel(keys)
   }
 }
 

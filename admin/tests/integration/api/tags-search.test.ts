@@ -23,6 +23,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 // 真实 schema 表对象,用于 from() 引用比较(需在 mock db 之前导入)
 import { categories, hobbyTags, interestEvents } from "@/db/schema"
+import { __resetCacheForTest } from "@/lib/cache"
 
 const {
   mockDb,
@@ -239,6 +240,8 @@ function makeUrl(path: string): URL {
 }
 
 beforeEach(() => {
+  // 缓存层是模块级单例:用例间必须清空,否则会读到上一个用例的 mock 数据
+  __resetCacheForTest()
   mockDb.select.mockClear()
   chainSelect.from.mockClear()
   chainSelect.leftJoin.mockClear()

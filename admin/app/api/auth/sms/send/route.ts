@@ -39,14 +39,14 @@ export async function POST(req: Request) {
 
   // 3. IP 限流
   const ip = getClientIp(req)
-  const ipResult = rateLimiter.checkAndConsumeIp(ip)
+  const ipResult = await rateLimiter.checkAndConsumeIp(ip)
   if (!ipResult.ok) {
     logger.warn(LOG_PREFIX.SMS, "Send rejected: ip rate limited", { ip })
     return withCors(fail(429, "请求过于频繁，请稍后再试"), req)
   }
 
   // 4. 手机号限流
-  const phoneResult = rateLimiter.checkAndConsumePhone(phone)
+  const phoneResult = await rateLimiter.checkAndConsumePhone(phone)
   if (!phoneResult.ok) {
     logger.warn(LOG_PREFIX.SMS, "Send rejected: phone rate limited", {
       phone,

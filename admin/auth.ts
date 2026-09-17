@@ -168,7 +168,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           })
           return null
         }
-        rateLimiter.resetPhone(phone)
+        await rateLimiter.resetPhone(phone)
 
         // Find-or-create 用户 + link account
         // 采用「按 provider 绑定优先、派生邮箱兜底」的解析方式：

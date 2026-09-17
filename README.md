@@ -58,6 +58,7 @@ root/
 - **统一 API 信封** — 后端 `IResponse<T>` + 前端 `request<T>()` 自动解析,业务码非 2xx 统一抛错
 - **测试基线** — Vitest + happy-dom + MSW(单元/集成) + Playwright(E2E,后端)
 - **结构化日志** — `admin/lib/logger.ts` 统一 info/warn/error 事件记录
+- **统一缓存层** — `admin/lib/cache` 基于 cache-manager:默认进程内内存缓存(零配置),按 env 可切 Redis;已接入分类树 / 标签搜索 / 系统设置 / 微信凭据 / 短信限流,缓存异常自动 fail-open
 - **样式分层** — 后端走 Tailwind v4 + shadcn/ui(`@base-ui/react` 基底);客户端走 wot-ui + UnoCSS
 
 ## 常用命令速查

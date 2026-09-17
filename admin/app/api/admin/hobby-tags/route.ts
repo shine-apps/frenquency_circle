@@ -6,6 +6,7 @@ import { db } from "@/lib/db"
 import { hobbyTags, categories } from "@/db/schema"
 import { fail, ok, parsePagination } from "@/lib/api"
 import { requireAdmin } from "@/lib/auth-utils"
+import { invalidateCategoryCaches } from "@/lib/categories"
 import { toTagDTO, selectTagsWithCategory, type TagRowWithCategory, nodeAlias, parentAlias } from "@/lib/search/tag-search"
 import { toPinyin, toPinyinInitials } from "@/lib/search/pinyin"
 import { logger, LOG_PREFIX } from "@/lib/logger"
@@ -163,5 +164,7 @@ export async function POST(req: Request) {
     .returning()
 
   logger.info(LOG_PREFIX.TAG, "新建标签", { id: row.id, by: guard.userId })
+  // approved 标签会进入公开分类树;pending / rejected 不影响,但统一失效最稳妥(成本极低)
+  await invalidateCategoryCaches()
   return ok({ tag: toTagDTO(row) }, { status: 201 })
 }

@@ -1,3 +1,4 @@
+import { cacheGet, cacheKeys, cacheMdel, cacheSet } from "@/lib/cache"
 import { logger, LOG_PREFIX } from "@/lib/logger"
 
 /**
@@ -49,8 +50,11 @@ const DEFAULT_TIMEOUT_MS = 8_000
 /** access_token 缓存安全余量: 提前 5 分钟视为过期 */
 const TOKEN_SAFETY_MARGIN_MS = 5 * 60 * 1000
 
-type TokenCacheEntry = { token: string; expiresAt: number }
-const tokenCache = new Map<string, TokenCacheEntry>()
+/**
+ * 已获取过 token 的 appId 集合。
+ * 仅用于测试钩子批量清理缓存(实际部署固定一个 appId,规模有界)。
+ */
+const knownTokenAppIds = new Set<string>()
 
 function readConfig() {
   const appId = process.env.WECHAT_MP_APP_ID ?? ""
@@ -210,7 +214,8 @@ export async function code2Session(params: {
 }
 
 /**
- * 拉服务端 access_token。进程内按 appId 缓存，提前 5 分钟视为过期。
+ * 拉服务端 access_token。按 appId 走统一缓存层(默认内存,可切 Redis),
+ * TTL 取微信返回的有效期减 5 分钟安全余量。
  * @see https://developers.weixin.qq.com/miniprogram/dev/api-backend/open-api/access-token/stable_token.html
  */
 export async function getAccessToken(params: {
@@ -220,11 +225,11 @@ export async function getAccessToken(params: {
 }): Promise<string> {
   const { appId, appSecret, apiBase } = params
   const base = apiBase || DEFAULT_API_BASE
-  const cached = tokenCache.get(appId)
-  const now = Date.now()
-  if (cached && cached.expiresAt > now) {
-    return cached.token
-  }
+  const cacheKey = cacheKeys.wechatMpToken(appId)
+  knownTokenAppIds.add(appId)
+
+  const cached = await cacheGet<string>(cacheKey)
+  if (cached) return cached
 
   const url = `${base}/cgi-bin/stable_token`
   const payload = (await wechatFetch(url, {
@@ -244,12 +249,16 @@ export async function getAccessToken(params: {
     throw new WechatMpError(-3, "invalid access_token response", "token")
   }
 
-  const expiresAt = now + (expiresIn * 1000 - TOKEN_SAFETY_MARGIN_MS)
-  tokenCache.set(appId, { token: accessToken, expiresAt })
-  logger.info(LOG_PREFIX.WECHAT, cached ? "Access token refreshed" : "Access token fetched", {
-    appId,
-    expiresIn,
-  })
+  const ttlMs = expiresIn * 1000 - TOKEN_SAFETY_MARGIN_MS
+  if (ttlMs > 0) {
+    await cacheSet(cacheKey, accessToken, ttlMs)
+  } else {
+    logger.warn(LOG_PREFIX.WECHAT, "Access token expires too soon, skip caching", {
+      appId,
+      expiresIn,
+    })
+  }
+  logger.info(LOG_PREFIX.WECHAT, "Access token fetched", { appId, expiresIn })
   return accessToken
 }
 
@@ -362,7 +371,9 @@ export function readWechatMpConfig(): {
   return { appId, appSecret, apiBase }
 }
 
-/** 仅供测试使用：清空 access_token 缓存。 */
-export function __resetWechatMpForTest(): void {
-  tokenCache.clear()
+/** 仅供测试使用：清空 access_token 缓存(异步，调用方需 await)。 */
+export async function __resetWechatMpForTest(): Promise<void> {
+  const keys = [...knownTokenAppIds].map((appId) => cacheKeys.wechatMpToken(appId))
+  knownTokenAppIds.clear()
+  await cacheMdel(keys)
 }

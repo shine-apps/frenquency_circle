@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { hobbyTags, categories } from "@/db/schema"
 import { fail, ok } from "@/lib/api"
 import { requireAdmin } from "@/lib/auth-utils"
+import { invalidateCategoryCaches } from "@/lib/categories"
 import { toTagDTO } from "@/lib/search/tag-search"
 import { toPinyin, toPinyinInitials } from "@/lib/search/pinyin"
 import { logger, LOG_PREFIX } from "@/lib/logger"
@@ -91,6 +92,9 @@ export async function PATCH(req: Request, context: RouteContext) {
     by: guard.userId,
   })
 
+  // 状态/归类/改名都会影响公开分类树内容(approved 标签),写后立即失效
+  await invalidateCategoryCaches()
+
   return ok(toTagDTO(updated))
 }
 
@@ -113,5 +117,7 @@ export async function DELETE(_req: Request, context: RouteContext) {
 
   await db.delete(hobbyTags).where(eq(hobbyTags.id, id))
   logger.info(LOG_PREFIX.TAG, "删除标签", { id, by: guard.userId })
+  // 删除 approved 标签会改变公开分类树内容,写后立即失效
+  await invalidateCategoryCaches()
   return ok({ deleted: true })
 }

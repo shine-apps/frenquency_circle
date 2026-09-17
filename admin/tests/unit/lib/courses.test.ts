@@ -11,6 +11,7 @@ import {
   deriveSortOrder,
   toCourseDTO,
   toCourseLessonDTO,
+  toPublicCourseDTO,
   updateCourseSchema,
 } from "@/lib/courses"
 import { courseLessons, type CourseLesson, type Course } from "@/db/schema"
@@ -287,6 +288,61 @@ describe("toCourseDTO", () => {
     expect(dto.reviewedAt).toBe("2026-09-16T08:00:00.000Z")
     expect(dto.reviewNote).toBe("已通过")
     expect(dto.status).toBe("active")
+  })
+})
+
+describe("toPublicCourseDTO", () => {
+  it("only exposes the C-side field whitelist (no review / creator fields)", () => {
+    const dto = toPublicCourseDTO(
+      makeCourseRow({
+        status: "active",
+        reviewerId: "admin-1",
+        reviewedAt: new Date("2026-09-16T08:00:00.000Z"),
+        // 驳回原因在重新上线后可能残留,绝不能随公开接口下发
+        reviewNote: "封面图不合格",
+      }),
+      [toCourseLessonDTO(makeLessonRow())]
+    )
+
+    expect(Object.keys(dto).sort()).toEqual(
+      [
+        "coverImages",
+        "createdAt",
+        "description",
+        "id",
+        "lessonCount",
+        "lessons",
+        "tags",
+        "title",
+        "updatedAt",
+      ].sort()
+    )
+    expect(dto).not.toHaveProperty("creatorId")
+    expect(dto).not.toHaveProperty("status")
+    expect(dto).not.toHaveProperty("reviewNote")
+    expect(dto).not.toHaveProperty("reviewedAt")
+    expect(dto.lessonCount).toBe(1)
+  })
+
+  it("projects timestamps to ISO strings and defaults empty arrays", () => {
+    const dto = toPublicCourseDTO(
+      makeCourseRow({
+        coverImages: null as unknown as string[],
+        tags: null as unknown as string[],
+      })
+    )
+    expect(dto.coverImages).toEqual([])
+    expect(dto.tags).toEqual([])
+    expect(dto.lessons).toEqual([])
+    expect(dto.lessonCount).toBe(0)
+    expect(dto.createdAt).toBe("2026-09-15T00:00:00.000Z")
+    expect(dto.updatedAt).toBe("2026-09-15T00:00:00.000Z")
+  })
+
+  it("uses an explicit lessonCount when lessons are not loaded (list scenario)", () => {
+    const dto = toPublicCourseDTO(makeCourseRow({ status: "active" }), [], 7)
+    expect(dto.lessons).toEqual([])
+    expect(dto.lessonCount).toBe(7)
   })
 })
 

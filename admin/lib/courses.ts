@@ -13,7 +13,7 @@ import {
   LESSON_DESCRIPTION_MAX,
   LESSON_TITLE_MAX,
 } from "@/lib/form-limits"
-import type { CourseDTO, CourseLessonDTO } from "@/types/api"
+import type { CourseDTO, CourseLessonDTO, PublicCourseDTO } from "@/types/api"
 
 /**
  * 视频课程共享层(教师后台 / 管理后台共用)。
@@ -186,6 +186,34 @@ export function toCourseDTO(
     lessonCount: lessonCount ?? lessons.length,
     reviewNote: row.reviewNote ?? null,
     reviewedAt: row.reviewedAt ? row.reviewedAt.toISOString() : null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  }
+}
+
+/**
+ * 课程行 → 用户端公开 DTO(uni-app 只读接口专用)。
+ *
+ * 与 {@link toCourseDTO} 的差异:只输出 C 端消费字段,剔除
+ * `creatorId / status / reviewNote / reviewedAt` —— 审核驳回原因在课程
+ * 重新上线后可能残留,不能随公开接口下发;创建者身份亦不外泄。
+ *
+ * - `lessons` 由调用方传入(详情场景),列表场景传空数组只给 `lessonCount`;
+ * - `lessonCount` 默认取 lessons 数量,列表场景(无课时明细)显式传入聚合值。
+ */
+export function toPublicCourseDTO(
+  row: typeof courses.$inferSelect,
+  lessons: CourseLessonDTO[] = [],
+  lessonCount?: number
+): PublicCourseDTO {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    coverImages: row.coverImages ?? [],
+    tags: row.tags ?? [],
+    lessons,
+    lessonCount: lessonCount ?? lessons.length,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }

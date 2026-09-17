@@ -62,6 +62,24 @@ export function formatActivityTime(iso: string | null): string {
   }
 }
 
+/**
+ * 视频时长格式化:秒 → `mm:ss`(不足 1 小时)/ `h:mm:ss`(超过 1 小时)。
+ * 空值 / 负数返回 fallback(默认 `--:--`,表示时长未知)。
+ * @example formatDuration(600)        // '10:00'
+ * @example formatDuration(3725)       // '1:02:05'
+ * @example formatDuration(null)       // '--:--'
+ */
+export function formatDuration(seconds: number | null | undefined, fallback = '--:--'): string {
+  if (seconds === null || seconds === undefined || !Number.isFinite(seconds) || seconds < 0)
+    return fallback
+  const total = Math.floor(seconds)
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const s = total % 60
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`
+}
+
 /** 练习年限格式化,空返回 fallback(默认 '') */
 export function practiceYearsText(years: number | null, fallback = ''): string {
   if (years === null || years === undefined)

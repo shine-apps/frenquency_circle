@@ -465,6 +465,34 @@ export type CourseDTO = {
   updatedAt: string
 }
 
+/**
+ * 用户端公开课程 DTO(uni-app 只读接口专用)。
+ *
+ * 在 {@link CourseDTO} 基础上剔除管理侧字段:
+ * - `creatorId`    创建者身份不对 C 端下发;
+ * - `status`       接口只返回已上线课程,状态本身无信息量;
+ * - `reviewNote` / `reviewedAt` 审核信息不外泄(驳回原因重新上线后可能残留)。
+ *
+ * `lessons` 在列表场景恒为 `[]`(仅返回 `lessonCount`),详情场景按 sortOrder 升序返回。
+ */
+export type PublicCourseDTO = {
+  id: string
+  title: string
+  description: string
+  /** 封面 / 轮播图 URL 数组(0-9 张) */
+  coverImages: string[]
+  /** 兴趣标签名称快照(存 hobby_tags.name) */
+  tags: string[]
+  lessons: CourseLessonDTO[]
+  /** 课时数 */
+  lessonCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+/** 用户端课程列表分页响应 */
+export type PublicCourseListDTO = Paginated<PublicCourseDTO>
+
 // ---- 分类（categories） ----
 
 export interface CategoryDTO {

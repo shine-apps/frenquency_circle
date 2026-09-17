@@ -87,7 +87,8 @@ vi.mock("@/lib/logger", () => ({
 }))
 
 import { DELETE, POST } from "@/app/api/users/[id]/follow/route"
-import type { IResponse } from "@/types/api"
+import { GET as getFollowedUsers } from "@/app/api/users/followed/route"
+import type { FollowedUserDTO, IResponse, Paginated } from "@/types/api"
 
 const VIEWER_ID = "11111111-1111-1111-1111-111111111111"
 const TARGET_ID = "22222222-2222-2222-2222-222222222222"
@@ -100,6 +101,10 @@ function makeRequest(method: string): Request {
   return new Request(`http://localhost/api/users/${TARGET_ID}/follow`, {
     method,
   })
+}
+
+function makeListRequest(path: string): Request {
+  return new Request(`http://localhost${path}`, { method: "GET" })
 }
 
 function loggedIn() {
@@ -194,5 +199,87 @@ describe("DELETE /api/users/:id/follow", () => {
     expect(res.status).toBe(200)
     const body = (await res.json()) as IResponse<{ followed: boolean }>
     expect(body.data.followed).toBe(false)
+  })
+})
+
+describe("GET /api/users/followed", () => {
+  it("returns 401 when not logged in", async () => {
+    notLoggedIn()
+    const res = await getFollowedUsers(makeListRequest("/api/users/followed"))
+    expect(res.status).toBe(401)
+  })
+
+  it("returns 400 when userId is not a uuid", async () => {
+    loggedIn()
+    const res = await getFollowedUsers(
+      makeListRequest("/api/users/followed?userId=not-a-uuid")
+    )
+    expect(res.status).toBe(400)
+  })
+
+  it("lists the given user's followed people when userId is provided", async () => {
+    loggedIn()
+    const FRIEND_ID = "33333333-3333-3333-3333-333333333333"
+    dbState.results = [
+      // select 关注记录(SQL 层分页)
+      [
+        {
+          userId: TARGET_ID,
+          targetUserId: FRIEND_ID,
+          createdAt: new Date("2026-09-01T00:00:00Z"),
+        },
+      ],
+      // select 总数
+      [{ value: 1 }],
+      // select 被关注用户
+      [
+        {
+          id: FRIEND_ID,
+          name: "趣友甲",
+          avatarUrl: null,
+          tags: ["书法"],
+          activityLevel: "medium",
+          practiceYears: 3,
+          address: "北京市朝阳区",
+        },
+      ],
+    ]
+
+    const res = await getFollowedUsers(
+      makeListRequest(`/api/users/followed?userId=${TARGET_ID}`)
+    )
+    expect(res.status).toBe(200)
+
+    const body = (await res.json()) as IResponse<Paginated<FollowedUserDTO>>
+    expect(body.data.total).toBe(1)
+    expect(body.data.list[0]!.id).toBe(FRIEND_ID)
+    expect(body.data.list[0]!.name).toBe("趣友甲")
+    expect(body.data.list[0]!.followedAt).toBe("2026-09-01T00:00:00.000Z")
+  })
+
+  it("defaults to the logged-in user's own follows without userId", async () => {
+    loggedIn()
+    // 无关注记录:关注记录 + 计数两次查询(跳过批量补用户信息)
+    dbState.results = [[], [{ value: 0 }]]
+
+    const res = await getFollowedUsers(makeListRequest("/api/users/followed"))
+    expect(res.status).toBe(200)
+
+    const body = (await res.json()) as IResponse<Paginated<FollowedUserDTO>>
+    expect(body.data.list).toEqual([])
+    expect(body.data.total).toBe(0)
+  })
+
+  it("falls back to the logged-in user when userId is an empty string", async () => {
+    loggedIn()
+    // 空串视为未传:按当前登录用户查询,正常返回而非 500
+    dbState.results = [[], [{ value: 0 }]]
+
+    const res = await getFollowedUsers(makeListRequest("/api/users/followed?userId="))
+    expect(res.status).toBe(200)
+
+    const body = (await res.json()) as IResponse<Paginated<FollowedUserDTO>>
+    expect(body.data.list).toEqual([])
+    expect(body.data.total).toBe(0)
   })
 })

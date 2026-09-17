@@ -39,11 +39,16 @@ export function unfollowUser(id: string) {
   return http.delete<{ followed: false }>(`/api/users/${encodeURIComponent(id)}/follow`)
 }
 
-/** 我关注的人列表(分页,按关注时间倒序) */
-export function getFollowedUsers(params?: { page?: number, pageSize?: number }) {
+/**
+ * 关注的人列表(分页,按关注时间倒序)。
+ * 传 userId 时查看该用户关注的人(公开主页展示「TA 关注的趣友」);
+ * 不传则为当前登录用户自己的关注列表。
+ */
+export function getFollowedUsers(params?: { page?: number, pageSize?: number, userId?: string }) {
   return http.get<Paginated<FollowedUserDTO>>('/api/users/followed', {
     ...(params?.page !== undefined ? { page: params.page } : {}),
     ...(params?.pageSize !== undefined ? { pageSize: params.pageSize } : {}),
+    ...(params?.userId ? { userId: params.userId } : {}),
   })
 }
 

@@ -237,6 +237,15 @@ function handleActivityPlaza() {
   uni.navigateTo({ url: '/pages/activity-list/activity-list' })
 }
 
+/** 跳视频课程列表(未登录先引导登录,登录后回到本页) */
+function handleMyCourses() {
+  if (!isLoggedIn.value) {
+    toLoginWithRedirect('navigateTo')
+    return
+  }
+  uni.navigateTo({ url: '/pages/course-list/course-list' })
+}
+
 /** 跳我的打卡页(含删除) */
 function handleMyCheckins() {
   if (!isLoggedIn.value) {
@@ -510,6 +519,23 @@ const roleChipClass = computed(() => {
           </text>
           <text class="mt-0.5 text-xs text-[#999]">
             浏览全部线下活动
+          </text>
+        </view>
+        <text class="text-sm text-[#ccc]">
+          ›
+        </text>
+      </view>
+
+      <view
+        class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4"
+        @click="handleMyCourses"
+      >
+        <view class="flex flex-col">
+          <text class="text-sm text-[#333] font-medium">
+            视频课程
+          </text>
+          <text class="mt-0.5 text-xs text-[#999]">
+            跟着老师视频学习兴趣课程
           </text>
         </view>
         <text class="text-sm text-[#ccc]">

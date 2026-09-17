@@ -1,8 +1,13 @@
 import { z } from "zod"
-import { asc, eq } from "drizzle-orm"
+import { and, asc, desc, eq, gte, inArray } from "drizzle-orm"
 
 import { db } from "@/lib/db"
-import { courseLessons, courses, type CourseStatus } from "@/db/schema"
+import {
+  courseLessonProgress,
+  courseLessons,
+  courses,
+  type CourseStatus,
+} from "@/db/schema"
 import {
   CIRCLE_TAGS_MAX,
   COVER_IMAGES_MAX,
@@ -13,7 +18,13 @@ import {
   LESSON_DESCRIPTION_MAX,
   LESSON_TITLE_MAX,
 } from "@/lib/form-limits"
-import type { CourseDTO, CourseLessonDTO, PublicCourseDTO } from "@/types/api"
+import type {
+  CourseDTO,
+  CourseLessonDTO,
+  CourseLessonProgressDTO,
+  PublicCourseDTO,
+  RecentCourseDTO,
+} from "@/types/api"
 
 /**
  * 视频课程共享层(教师后台 / 管理后台共用)。
@@ -349,4 +360,218 @@ export async function softDeleteCourse(courseId: string): Promise<void> {
     .update(courses)
     .set({ status: "deleted", updatedAt: new Date() })
     .where(eq(courses.id, courseId))
+}
+
+// ============================================================================
+// 课时播放进度(course_lesson_progress)
+// ============================================================================
+
+/** "最近学习"窗口:超过该天数的进度不再视为最近 */
+export const RECENT_PROGRESS_WINDOW_DAYS = 90
+/** "最近学习"列表最大返回条数(防异常用户塞满) */
+export const RECENT_PROGRESS_LIMIT_MAX = 50
+
+/**
+ * 上报/更新单课时播放进度(upsert)。
+ *
+ * 校验:
+ * - lesson 必须存在且所属课程 `status='active'`(否则视为已下线,返回 404);
+ * - 位置:
+ *   - 负数 / NaN → 0;
+ *   - 超过课程 `duration_seconds` → 裁剪到 duration(duration 为 null 时不裁剪)。
+ *
+ * @throws `LessonNotFoundError` lesson 不存在 / 所属课程未上线
+ */
+export async function recordLessonProgress(params: {
+  userId: string
+  lessonId: string
+  positionSeconds: number
+}): Promise<CourseLessonProgressDTO> {
+  const { userId, lessonId, positionSeconds } = params
+
+  // 1. 校验课时与课程状态,同时取 duration 用于裁剪
+  const [lesson] = await db
+    .select({
+      duration: courseLessons.durationSeconds,
+      courseStatus: courses.status,
+    })
+    .from(courseLessons)
+    .innerJoin(courses, eq(courses.id, courseLessons.courseId))
+    .where(eq(courseLessons.id, lessonId))
+    .limit(1)
+
+  if (!lesson || lesson.courseStatus !== "active") {
+    throw new LessonNotFoundError()
+  }
+
+  // 2. 位置裁剪(纯函数 clampPosition 单测覆盖)
+  const safePosition = clampPosition(positionSeconds, lesson.duration)
+
+  // 3. Upsert:用 onConflictDoUpdate,updated_at 永远刷新,
+  //    是"最近学习"列表的排序依据
+  const [row] = await db
+    .insert(courseLessonProgress)
+    .values({ userId, lessonId, positionSeconds: safePosition })
+    .onConflictDoUpdate({
+      target: [courseLessonProgress.userId, courseLessonProgress.lessonId],
+      set: { positionSeconds: safePosition, updatedAt: new Date() },
+    })
+    .returning({
+      lessonId: courseLessonProgress.lessonId,
+      positionSeconds: courseLessonProgress.positionSeconds,
+      updatedAt: courseLessonProgress.updatedAt,
+    })
+
+  if (!row) {
+    // returning 为空一般是 RLS / 触发器异常,数据库可达时几乎不可能发生
+    throw new Error("recordLessonProgress: upsert returned no row")
+  }
+
+  return {
+    lessonId: row.lessonId,
+    positionSeconds: row.positionSeconds,
+    updatedAt: row.updatedAt.toISOString(),
+  }
+}
+
+/**
+ * 拉取单课程内当前用户的所有课时进度。
+ *
+ * - join `course_lessons` 限定只返回该课程下的进度;
+ * - 不存在的 courseId / 非 active 课程 → 返回空数组(语义等价于"用户没看过")。
+ */
+export async function getCourseProgress(
+  userId: string,
+  courseId: string
+): Promise<CourseLessonProgressDTO[]> {
+  const rows = await db
+    .select({
+      lessonId: courseLessonProgress.lessonId,
+      positionSeconds: courseLessonProgress.positionSeconds,
+      updatedAt: courseLessonProgress.updatedAt,
+    })
+    .from(courseLessonProgress)
+    .innerJoin(courseLessons, eq(courseLessons.id, courseLessonProgress.lessonId))
+    .where(
+      and(
+        eq(courseLessonProgress.userId, userId),
+        eq(courseLessons.courseId, courseId)
+      )
+    )
+
+  return rows.map((r) => ({
+    lessonId: r.lessonId,
+    positionSeconds: r.positionSeconds,
+    updatedAt: r.updatedAt.toISOString(),
+  }))
+}
+
+/**
+ * "最近学习"列表(按 updated_at desc,聚合到课程粒度)。
+ *
+ * 实现要点:
+ * 1. 拉最近 {@link RECENT_PROGRESS_WINDOW_DAYS} 天内全部进度行(单用户数据量有限,
+ *    内存聚合完全够用,免去窗口函数的额外复杂度);
+ * 2. 按课程 ID group,每课程只保留最新一条(updated_at 倒序扫描中第一条命中);
+ * 3. 批量 join 课程行,过滤掉已下线 / 已删除(只返回 active);
+ * 4. 输出按 lastPlayedAt 倒序,截断到 `limit`。
+ */
+export async function getRecentCourseProgress(
+  userId: string,
+  options: { limit?: number } = {}
+): Promise<RecentCourseDTO[]> {
+  const limit = Math.min(
+    options.limit ?? RECENT_PROGRESS_LIMIT_MAX,
+    RECENT_PROGRESS_LIMIT_MAX
+  )
+  const cutoff = new Date(
+    Date.now() - RECENT_PROGRESS_WINDOW_DAYS * 24 * 60 * 60 * 1000
+  )
+
+  // 1. 拉用户窗口内全部进度行(join lessons 拿课时标题 / sortOrder / 课程 id)
+  const progressRows = await db
+    .select({
+      lessonId: courseLessonProgress.lessonId,
+      positionSeconds: courseLessonProgress.positionSeconds,
+      updatedAt: courseLessonProgress.updatedAt,
+      courseId: courseLessons.courseId,
+      lessonTitle: courseLessons.title,
+      lessonSortOrder: courseLessons.sortOrder,
+    })
+    .from(courseLessonProgress)
+    .innerJoin(courseLessons, eq(courseLessons.id, courseLessonProgress.lessonId))
+    .where(
+      and(
+        eq(courseLessonProgress.userId, userId),
+        gte(courseLessonProgress.updatedAt, cutoff)
+      )
+    )
+    .orderBy(desc(courseLessonProgress.updatedAt))
+
+  if (progressRows.length === 0) return []
+
+  // 2. 内存 group by courseId,取每课程第一行(已按 updated_at desc)
+  const latestByCourse = new Map<string, (typeof progressRows)[number]>()
+  for (const row of progressRows) {
+    if (!latestByCourse.has(row.courseId)) {
+      latestByCourse.set(row.courseId, row)
+    }
+  }
+
+  // 3. 拉课程(仅 active),过滤掉已下线的课程
+  const courseIds = [...latestByCourse.keys()]
+  const courseRows = await db
+    .select()
+    .from(courses)
+    .where(and(inArray(courses.id, courseIds), eq(courses.status, "active")))
+
+  const activeCourses = new Map(courseRows.map((c) => [c.id, c]))
+
+  // 4. 组装 DTO;按 lastPlayedAt 倒序(已按 progress.updated_at desc 入 map,顺序保留)
+  const result: RecentCourseDTO[] = []
+  for (const row of latestByCourse.values()) {
+    const courseRow = activeCourses.get(row.courseId)
+    if (!courseRow) continue
+    result.push({
+      course: toPublicCourseDTO(courseRow),
+      lastLessonId: row.lessonId,
+      lastLessonTitle: row.lessonTitle,
+      lastLessonSortOrder: row.lessonSortOrder,
+      lastPositionSeconds: row.positionSeconds,
+      lastPlayedAt: row.updatedAt.toISOString(),
+    })
+  }
+  return result.slice(0, limit)
+}
+
+/** lesson 不存在 / 已下线的错误标记,路由层捕获后转 404 */
+export class LessonNotFoundError extends Error {
+  constructor() {
+    super("LessonNotFound")
+    this.name = "LessonNotFoundError"
+  }
+}
+
+/**
+ * 播放位置裁剪(纯函数,便于单元测试)。
+ *
+ * - 非有限数(NaN / Infinity)→ 0;
+ * - 负数 → 0;
+ * - 向下取整(秒级精度);
+ * - 超过 `duration` → 钳到 `duration`(duration 为 null 时不裁剪,允许探测
+ *   失败时仍上报位置;客户端后续 seek 时按真实 duration 自行判断)。
+ *
+ * @example clampPosition(5.9, 100) // 5
+ * @example clampPosition(-1, 100)   // 0
+ * @example clampPosition(150, 100) // 100
+ * @example clampPosition(60, null) // 60
+ */
+export function clampPosition(
+  position: number,
+  duration: number | null
+): number {
+  if (!Number.isFinite(position)) return 0
+  let safe = Math.max(0, Math.floor(position))
+  if (duration !== null && safe > duration) safe = duration
+  return safe
 }

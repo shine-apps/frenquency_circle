@@ -10,6 +10,7 @@ import {
   index,
   uniqueIndex,
   check,
+  primaryKey,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
@@ -1336,3 +1337,54 @@ export const courseLessons = pgTable(
 
 export type CourseLesson = typeof courseLessons.$inferSelect
 export type NewCourseLesson = typeof courseLessons.$inferInsert
+
+/**
+ * 课时播放进度(用户 × 课时 维度的续播定位)。
+ *
+ * 设计要点:
+ * - **联合主键 (user_id, lesson_id)**:天然去重,upsert 用 `ON CONFLICT (user_id, lesson_id)`;
+ * - **无 completed 字段**:视频短,无需记录完成率;续播只需 `position_seconds`;
+ * - **onDelete cascade**:
+ *   - 用户注销 → 自动清理该用户全部进度(隐私);
+ *   - 课时删除 → 自动清理指向该课时的进度(避免悬空外键);
+ * - **`course_lesson_progress_user_updated_idx`(user_id, updated_at DESC)**:
+ *   "最近学习"按 updated_at desc 取,索引与查询方向一致;
+ * - **`course_lesson_progress_lesson_user_idx`(lesson_id, user_id)**:为单课程进度聚合备查
+ *   (GET ?courseId= 场景单课程课时数有限,实际走全表过滤 + 该索引消除 lesson_id 侧 fanout)。
+ */
+export const courseLessonProgress = pgTable(
+  "course_lesson_progress",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    lessonId: uuid("lesson_id")
+      .notNull()
+      .references(() => courseLessons.id, { onDelete: "cascade" }),
+    /** 上次播放位置(秒),已校验非负且裁剪到 ≤ duration_seconds */
+    positionSeconds: integer("position_seconds").notNull().default(0),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.lessonId] }),
+    // "最近学习"按更新时间倒序拉
+    index("course_lesson_progress_user_updated_idx").on(
+      table.userId,
+      table.updatedAt
+    ),
+    // 按课时反查用户进度(预留;当前主要走主键扫描)
+    index("course_lesson_progress_lesson_user_idx").on(
+      table.lessonId,
+      table.userId
+    ),
+    check(
+      "course_lesson_progress_position_check",
+      sql`"position_seconds" >= 0`
+    ),
+  ]
+)
+
+export type CourseLessonProgress = typeof courseLessonProgress.$inferSelect
+export type NewCourseLessonProgress = typeof courseLessonProgress.$inferInsert

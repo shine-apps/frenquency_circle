@@ -10,11 +10,11 @@
  */
 import { computed, ref } from 'vue'
 import { onLoad, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
-import { getCourse } from '@/api/courses'
+import { getCourse, getCourseProgress, reportLessonProgress } from '@/api/courses'
 import { useShare } from '@/composables/useShare'
 import { formatDate, formatDuration } from '@/utils/format'
 import VideoPlayer from '@/components/VideoPlayer/VideoPlayer.vue'
-import type { PublicCourseDTO } from '@/types'
+import type { CourseLessonProgressDTO, PublicCourseDTO } from '@/types'
 
 definePage({
   layout: 'default',
@@ -33,9 +33,16 @@ const notFound = ref(false)
 const activeIndex = ref(0)
 /** 播放器弹层是否可见 */
 const playerVisible = ref(false)
+/** 当前用户在该课程的课时进度(lessonId → progress);空 map 表示无进度或未拉取 */
+const progressMap = ref<Map<string, CourseLessonProgressDTO>>(new Map())
 
 const lessons = computed(() => course.value?.lessons ?? [])
 const currentLesson = computed(() => lessons.value[activeIndex.value] ?? null)
+/** 当前课时的初始播放位置(从 progressMap 取,无进度则为 0) */
+const initialPosition = computed(() => {
+  if (!currentLesson.value) return 0
+  return progressMap.value.get(currentLesson.value.id)?.positionSeconds ?? 0
+})
 
 /** 全屏播放页在同课程内续播用的播放列表(poster 统一取课程封面) */
 const playlist = computed(() => lessons.value.map(lesson => ({
@@ -67,28 +74,6 @@ onShareAppMessage(shareAppMessage)
 onShareTimeline(shareTimeline)
 // #endif
 
-/** 拉取课程详情 */
-async function fetchDetail(id: string) {
-  loading.value = true
-  try {
-    const res = await getCourse(id)
-    course.value = res
-    activeIndex.value = 0
-    notFound.value = false
-    // 小程序端用课程标题作为导航栏标题(H5 端为自定义导航,不生效也不影响)
-    if (res.title)
-      uni.setNavigationBarTitle({ title: res.title })
-  }
-  catch (e) {
-    // 404(不存在 / 未上线)与其他错误统一进入「已下线」态,不额外区分
-    notFound.value = true
-    console.warn('[CourseDetail] fetch error:', (e as Error)?.message)
-  }
-  finally {
-    loading.value = false
-  }
-}
-
 onLoad((options) => {
   const id = (options as { id?: string } | undefined)?.id ?? ''
   courseId.value = id
@@ -114,6 +99,57 @@ function selectLesson(index: number) {
 /** 关闭播放器弹层(VideoPlayer 内「关闭」按钮触发) */
 function handlePlayerClose() {
   playerVisible.value = false
+}
+
+/**
+ * 拉取课程详情 + 当前用户在该课程下的进度(并行;进度拉取失败不影响主流程)。
+ */
+async function fetchDetail(id: string) {
+  loading.value = true
+  try {
+    // 并行拉课程与进度(进度拉取失败不会阻塞课程详情展示)
+    const [res] = await Promise.all([
+      getCourse(id),
+      getCourseProgress(id)
+        .then((p) => {
+          const map = new Map<string, CourseLessonProgressDTO>()
+          for (const item of p.list) map.set(item.lessonId, item)
+          progressMap.value = map
+        })
+        .catch((err) => {
+          // 进度接口失败(401 / 网络)不应阻塞页面;首次未登录场景尤其常见
+          console.warn('[CourseDetail] progress fetch failed:', (err as Error)?.message)
+          progressMap.value = new Map()
+        }),
+    ])
+    course.value = res
+    activeIndex.value = 0
+    notFound.value = false
+    // 小程序端用课程标题作为导航栏标题(H5 端为自定义导航,不生效也不影响)
+    if (res.title)
+      uni.setNavigationBarTitle({ title: res.title })
+  }
+  catch (e) {
+    // 404(不存在 / 未上线)与其他错误统一进入「已下线」态,不额外区分
+    notFound.value = true
+    console.warn('[CourseDetail] fetch error:', (e as Error)?.message)
+  }
+  finally {
+    loading.value = false
+  }
+}
+
+/**
+ * 监听 VideoPlayer 进度事件,上报到后端。
+ *
+ * VideoPlayer 已做 5s 节流 + 暂停/结束/卸载强制上报,
+ * 此处直接转发;上报失败由 http 拦截器统一提示,不影响播放。
+ */
+function handleProgress(e: { positionSeconds: number; durationSeconds: number }) {
+  if (!currentLesson.value) return
+  // 只在位置有效时上报(>0);客户端不再裁剪,服务端会按 duration 二次裁剪
+  if (e.positionSeconds <= 0) return
+  void reportLessonProgress(currentLesson.value.id, e.positionSeconds).catch(() => {})
 }
 
 /** 进入单课时详情页(整行点击为弹层快播,此处为独立详情入口) */
@@ -278,8 +314,10 @@ function handleBack() {
             :poster="course.coverImages[0]"
             :title="currentLesson.title"
             :playlist="playlist"
+            :initial-position="initialPosition"
             video-id="courseLessonPlayer"
             @close="handlePlayerClose"
+            @progress="handleProgress"
           />
         </view>
       </wd-popup>

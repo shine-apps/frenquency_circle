@@ -493,6 +493,48 @@ export type PublicCourseDTO = {
 /** 用户端课程列表分页响应 */
 export type PublicCourseListDTO = Paginated<PublicCourseDTO>
 
+// ---- 课时播放进度(course_lesson_progress) ----
+
+/**
+ * 单课时播放进度(用户 × 课时)。
+ *
+ * 仅记录"上次播放位置",用于续播定位。视频较短不做完成率,
+ * 也不下发"已观看时长累计"等运营数据,避免冗余聚合与隐私争议。
+ */
+export type CourseLessonProgressDTO = {
+  lessonId: string
+  /** 上次播放位置(秒),已裁剪到 [0, duration] */
+  positionSeconds: number
+  updatedAt: string
+}
+
+/** 单课程进度批量响应(用于课程详情页 ✓/续播初始化) */
+export type CourseProgressListDTO = {
+  list: CourseLessonProgressDTO[]
+}
+
+/**
+ * 最近学习条目(课程粒度,聚合后的"上次学到哪")。
+ *
+ * - `course`:仅含课程概要(无 lessons,详情按需另查);
+ * - `lastLessonId / lastLessonTitle / lastLessonSortOrder`:上次播放的课时;
+ * - `lastPositionSeconds`:在该课时的播放位置(用于自动续播);
+ * - `lastPlayedAt`:`updated_at` 透传,UI 可显示"3 天前看过"。
+ */
+export type RecentCourseDTO = {
+  course: PublicCourseDTO
+  lastLessonId: string
+  lastLessonTitle: string
+  lastLessonSortOrder: number
+  lastPositionSeconds: number
+  lastPlayedAt: string
+}
+
+/** 最近学习列表响应(不分页,上限 50 条由接口兜底) */
+export type RecentCourseListDTO = {
+  list: RecentCourseDTO[]
+}
+
 // ---- 分类（categories） ----
 
 export interface CategoryDTO {

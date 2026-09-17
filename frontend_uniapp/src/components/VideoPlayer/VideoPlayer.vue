@@ -9,6 +9,14 @@ export interface PlaylistItem {
   title?: string
 }
 
+/** 进度上报 payload:仅含续播定位需要的字段(视频较短,不上报完成率) */
+export interface VideoProgressEvent {
+  /** 当前播放位置(秒,向下取整) */
+  positionSeconds: number
+  /** 视频总时长(秒,部分平台 onLoadedMetaData 时不可用,可能为 0) */
+  durationSeconds: number
+}
+
 interface Props {
   src: string
   poster?: string
@@ -17,6 +25,16 @@ interface Props {
   title?: string
   // 可选的播放列表，传入后全屏模式下会自动播放下一个
   playlist?: PlaylistItem[]
+  /**
+   * 续播定位:加载完成后自动 seek 到该位置(秒)。
+   * 取值范围 [0, duration);0 或负值视为不续播。
+   */
+  initialPosition?: number
+  /**
+   * 进度上报的最小间隔(秒),默认 5。
+   * 暂停 / 结束 / 组件卸载时无视间隔强制上报最后一次位置。
+   */
+  reportInterval?: number
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -24,11 +42,18 @@ const props = withDefaults(defineProps<Props>(), {
   containerWidth: 0,
   title: '',
   playlist: () => [],
+  initialPosition: 0,
+  reportInterval: 5,
 })
 
 const emit = defineEmits<{
   close: []
   ended: []
+  /**
+   * 周期性进度上报(节流 + 暂停/结束/卸载时强制)。
+   * 父组件用于上报 `PUT /api/users/me/course-progress/:lessonId`。
+   */
+  progress: [event: VideoProgressEvent]
 }>()
 
 const isMirrored = ref(false)
@@ -52,6 +77,11 @@ let hideControlsTimer: ReturnType<typeof setTimeout> | null = null
 
 let videoContext: UniApp.VideoContext | null = null
 let componentInstance: any = null
+
+// 续播定位:onLoadedMetaData 时 duration 可能尚未就绪,推迟到第一次 timeupdate 时执行
+let pendingSeekPosition: number | null = null
+// 上次进度上报时间戳(用于节流)
+let lastReportAt = 0
 
 const computedVideoHeight = computed(() => {
   if (videoOriginalWidth.value === 0 || videoOriginalHeight.value === 0)
@@ -98,10 +128,21 @@ function onPause() {
   console.log('onPause')
   isPlaying.value = false
   resetHideControlsTimer()
+  // 暂停时强制上报一次(避免下次打开停留在很久前的旧位置)
+  reportProgress(true)
 }
 
 // 视频播放结束事件
 function onEnded() {
+  // 播完时强制上报"已看完"的最终位置(覆盖整段时长),让父组件统一知道已结束
+  // 注意:必须在重置 currentTime 之前取值,否则 reportProgress 会拿到 0
+  if (duration.value > 0) {
+    emit('progress', {
+      positionSeconds: Math.floor(duration.value),
+      durationSeconds: Math.floor(duration.value),
+    })
+    lastReportAt = Date.now()
+  }
   // 重置播放进度为0
   currentTime.value = 0
   progress.value = 0
@@ -126,6 +167,33 @@ function onTimeUpdate(e: any) {
       progress.value = (currentTime.value / duration.value) * 100
     }
   }
+  // 续播:第一次拿到 duration 后,执行 seek 到 initialPosition
+  // (onLoadedMetaData 时 duration 可能仍未就绪)
+  if (pendingSeekPosition !== null && duration.value > 0) {
+    const target = Math.min(pendingSeekPosition, duration.value * 0.999)
+    videoContext?.seek(target)
+    pendingSeekPosition = null
+  }
+  // 节流上报进度
+  reportProgress(false)
+}
+
+/**
+ * 进度上报:
+ * - `force=true` 跳过节流(暂停 / 结束 / 卸载);
+ * - `positionOverride` 用于在 currentTime 已被重置的场景下报"已看完"的位置;
+ * - 位置 <= 0 时不上报(避免初始 0 触发空请求)。
+ */
+function reportProgress(force: boolean, positionOverride?: number) {
+  const pos = positionOverride ?? currentTime.value
+  if (pos <= 0) return
+  const now = Date.now()
+  if (!force && now - lastReportAt < props.reportInterval * 1000) return
+  lastReportAt = now
+  emit('progress', {
+    positionSeconds: Math.floor(pos),
+    durationSeconds: Math.floor(duration.value),
+  })
 }
 
 // 进度条拖动中
@@ -159,6 +227,18 @@ function onLoadedMetaData(e: any) {
   videoOriginalWidth.value = e.detail.width
   videoOriginalHeight.value = e.detail.height
   console.log('视频元数据:', videoOriginalWidth.value, 'x', videoOriginalHeight.value)
+  // 部分平台 loadedmetadata 已就绪 duration,优先取之,否则推迟到 timeupdate
+  if (typeof e.detail.duration === 'number' && e.detail.duration > 0) {
+    duration.value = e.detail.duration
+    if (pendingSeekPosition !== null) {
+      const target = Math.min(pendingSeekPosition, duration.value * 0.999)
+      videoContext?.seek(target)
+      pendingSeekPosition = null
+    }
+  }
+  else if (props.initialPosition > 0) {
+    pendingSeekPosition = props.initialPosition
+  }
 }
 
 function close() {
@@ -214,9 +294,14 @@ onMounted(() => {
   componentInstance = getCurrentInstance()?.proxy
   videoContext = uni.createVideoContext(props.videoId, componentInstance)
   console.log('videoContext initialized', videoContext, 'videoId:', props.videoId)
+  // 模块级变量在组件复用时不会自动重置,需在挂载时显式初始化续播位置
+  pendingSeekPosition = props.initialPosition > 0 ? props.initialPosition : null
 })
 
 onUnmounted(() => {
+  // 卸载前强制上报一次,避免切课时最后一次位置丢失
+  // 注意:此时 props 仍可读(响应式数据未销毁),可直接 emit
+  reportProgress(true)
   clearTimeout(hideControlsTimer)
   // 清理全局事件监听
   uni.$off(REQ_PLAYLIST_EVENT)

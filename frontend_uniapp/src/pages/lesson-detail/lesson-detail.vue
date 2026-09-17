@@ -10,11 +10,11 @@
  */
 import { computed, ref } from 'vue'
 import { onLoad, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
-import { getCourse } from '@/api/courses'
+import { getCourse, getCourseProgress, reportLessonProgress } from '@/api/courses'
 import { useShare } from '@/composables/useShare'
 import { formatDate, formatDuration } from '@/utils/format'
 import VideoPlayer from '@/components/VideoPlayer/VideoPlayer.vue'
-import type { CourseLessonDTO, PublicCourseDTO } from '@/types'
+import type { CourseLessonDTO, CourseLessonProgressDTO, PublicCourseDTO } from '@/types'
 
 definePage({
   layout: 'default',
@@ -32,9 +32,16 @@ const loading = ref(true)
 const notFound = ref(false)
 /** 当前课时下标 */
 const activeIndex = ref(0)
+/** 当前用户在该课程的课时进度(lessonId → progress);空 map 表示无进度或未拉取 */
+const progressMap = ref<Map<string, CourseLessonProgressDTO>>(new Map())
 
 const lessons = computed(() => course.value?.lessons ?? [])
 const currentLesson = computed(() => lessons.value[activeIndex.value] ?? null)
+/** 当前课时的初始播放位置(从 progressMap 取,无进度则为 0) */
+const initialPosition = computed(() => {
+  if (!currentLesson.value) return 0
+  return progressMap.value.get(currentLesson.value.id)?.positionSeconds ?? 0
+})
 /** 上一节(第一节时为 null) */
 const prevLesson = computed<CourseLessonDTO | null>(() => lessons.value[activeIndex.value - 1] ?? null)
 /** 下一节(最后一节时为 null) */
@@ -77,11 +84,24 @@ onShareAppMessage(shareAppMessage)
 onShareTimeline(shareTimeline)
 // #endif
 
-/** 拉取课程详情并按 lessonId 定位当前课时(找不到时兜底到第一节) */
+/** 拉取课程详情 + 当前用户在该课程的进度(并行);按 lessonId 定位当前课时 */
 async function fetchDetail(id: string) {
   loading.value = true
   try {
-    const res = await getCourse(id)
+    // 并行:课程详情 + 进度(进度失败不阻塞)
+    const [res] = await Promise.all([
+      getCourse(id),
+      getCourseProgress(id)
+        .then((p) => {
+          const map = new Map<string, CourseLessonProgressDTO>()
+          for (const item of p.list) map.set(item.lessonId, item)
+          progressMap.value = map
+        })
+        .catch((err) => {
+          console.warn('[LessonDetail] progress fetch failed:', (err as Error)?.message)
+          progressMap.value = new Map()
+        }),
+    ])
     course.value = res
     const index = res.lessons.findIndex(lesson => lesson.id === lessonId.value)
     activeIndex.value = index >= 0 ? index : 0
@@ -95,6 +115,16 @@ async function fetchDetail(id: string) {
   finally {
     loading.value = false
   }
+}
+
+/**
+ * 监听 VideoPlayer 进度事件,上报到后端。
+ * 切换课时时,播放器因 :key 重建会自动卸载并强制上报最后一次位置。
+ */
+function handleProgress(e: { positionSeconds: number; durationSeconds: number }) {
+  if (!currentLesson.value) return
+  if (e.positionSeconds <= 0) return
+  void reportLessonProgress(currentLesson.value.id, e.positionSeconds).catch(() => {})
 }
 
 /** 用当前课时标题刷新导航栏标题(小程序原生导航生效) */
@@ -198,8 +228,10 @@ function handleBack() {
           :poster="course.coverImages[0]"
           :title="currentLesson.title"
           :playlist="playlist"
+          :initial-position="initialPosition"
           video-id="lessonDetailPlayer"
           @ended="handleEnded"
+          @progress="handleProgress"
         />
       </view>
 

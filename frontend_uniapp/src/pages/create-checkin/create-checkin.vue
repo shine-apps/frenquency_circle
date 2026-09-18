@@ -238,7 +238,7 @@ async function handleSubmit() {
     setTimeout(() => {
       uni.navigateBack({
         fail() {
-          uni.reLaunch({ url: '/pages/checkin-plaza/checkin-plaza' })
+          uni.reLaunch({ url: '/pages/plaza/plaza' })
         },
       })
     }, 600)

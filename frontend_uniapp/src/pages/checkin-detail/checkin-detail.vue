@@ -111,11 +111,11 @@ function handleCircleTap() {
   uni.navigateTo({ url: `/pages/circle/circle?id=${circleId}` })
 }
 
-/** 返回上一页(无上一页时回打卡广场) */
+/** 返回上一页(无上一页时回广场) */
 function handleBack() {
   uni.navigateBack({
     fail() {
-      uni.switchTab({ url: '/pages/checkin-plaza/checkin-plaza' })
+      uni.switchTab({ url: '/pages/plaza/plaza' })
     },
   })
 }

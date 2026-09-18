@@ -3,12 +3,12 @@
  * 活动列表页(全局,与圈子解耦)。
  *
  * 调 GET /api/activities 拉取全部 active 活动,按起始时间倒序。
- * 所有登录用户可访问;点击卡片跳活动详情。
+ * 所有登录用户可访问;卡片复用通用 ActivityCard 组件,点击跳活动详情。
  */
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { getActivities } from '@/api/activities'
-import { formatDateTime } from '@/utils/format'
+import ActivityCard from '@/components/ActivityCard/ActivityCard.vue'
 import type { ActivityDTO } from '@/types'
 
 definePage({
@@ -47,8 +47,8 @@ onPullDownRefresh(() => {
 })
 
 /** 跳活动详情 */
-function goActivity(id: string) {
-  uni.navigateTo({ url: `/pages/activity/activity?activityId=${id}` })
+function goActivity(activity: ActivityDTO) {
+  uni.navigateTo({ url: `/pages/activity/activity?activityId=${activity.id}` })
 }
 </script>
 
@@ -74,31 +74,13 @@ function goActivity(id: string) {
       </text>
     </view>
     <view v-else class="mx-4 mt-3 flex flex-col gap-3 pb-32">
-      <view
+      <ActivityCard
         v-for="a in list"
         :key="a.id"
-        class="rounded-2xl bg-white p-4"
-        @click="goActivity(a.id)"
-      >
-        <view class="flex items-start justify-between gap-2">
-          <view class="min-w-0 flex-1">
-            <text class="truncate text-base text-[#333] font-medium">
-              {{ a.title }}
-            </text>
-            <view class="mt-1 flex flex-col gap-0.5">
-              <text class="text-xs text-[#999]">
-                起始 {{ formatDateTime(a.startTime) }}
-              </text>
-              <text class="text-xs text-[#999]">
-                报名截止 {{ formatDateTime(a.registrationDeadline) }}
-              </text>
-            </view>
-          </view>
-          <text class="shrink-0 text-sm text-[#ccc]">
-            ›
-          </text>
-        </view>
-      </view>
+        :activity="a"
+        clickable
+        @tap="goActivity"
+      />
     </view>
   </view>
 </template>

@@ -1,31 +1,20 @@
 <script lang="ts" setup>
 /**
- * 打卡广场(Tab 页,替换原「活动广场」)。
+ * 广场-打卡列表(自原「打卡广场」页抽出,供广场页 Tab 复用)。
  *
- * - 仅展示「含图片或视频」的打卡(纯文字打卡不上广场);
- * - 按发布时间倒序分页,支持下拉刷新 / 触底加载;
+ * - 仅展示「含图片或视频」的打卡(纯文字打卡不上广场),按发布时间倒序分页;
+ * - 游客策略:可预览第一页,触底翻页时引导登录(服务端同样限制);
  * - 右下角悬浮发布按钮进入发布打卡页。
  *
- * 游客策略:未登录可进入本页并预览**第一页**,触底翻页时引导登录
- * (服务端同样限制未登录只能取第一页,前端只是提前拦截并给出引导)。
+ * 数据拉取不自带生命周期:由父级(广场页)在 onShow / 下拉 / 触底时
+ * 通过 defineExpose 的 refresh / loadMore 委托调用。
  */
 import { computed, ref } from 'vue'
-import { onReachBottom, onShow } from '@dcloudio/uni-app'
 import { getPlazaCheckins } from '@/api/checkins'
 import CheckinCard from '@/components/CheckinCard/CheckinCard.vue'
 import { useUserStore } from '@/store/user'
 import { toLoginWithRedirect } from '@/utils/toLoginPage'
 import type { CheckinDTO } from '@/types'
-
-definePage({
-  layout: 'default',
-  style: {
-    navigationBarTitleText: '打卡广场',
-    enablePullDownRefresh: true,
-  },
-  // 免登录:游客可预览第一页,翻页时再引导登录
-  excludeLoginPath: true,
-})
 
 const PAGE_SIZE = 20
 
@@ -39,7 +28,7 @@ const finished = ref(false)
 
 /** 是否已登录(游客仅能看第一页) */
 const isLoggedIn = computed(() => userStore.isLoggedIn)
-/** 登录引导弹窗是否已弹出(每次进入页面只自动引导一次) */
+/** 登录引导弹窗是否已弹出(每次挂载只自动引导一次) */
 let loginPromptVisible = false
 
 /** 拉取列表;reset=true 时回到第一页 */
@@ -67,44 +56,38 @@ async function fetchList(reset = false) {
   }
 }
 
-// 进入时拉取(从发布页返回也会触发 onShow 刷新)
-onShow(() => {
-  void fetchList(true)
-})
-
-/** 下拉刷新 */
-onPullDownRefresh(() => {
-  fetchList(true).finally(() => {
-    uni.stopPullDownRefresh()
-  })
-})
+/** 刷新(reset=true 回到第一页),供父级下拉 / onShow 委托 */
+async function refresh(reset = true) {
+  await fetchList(reset)
+}
 
 /** 触底加载下一页(游客引导登录,不再请求下一页) */
-onReachBottom(() => {
-  if (finished.value)
+async function loadMore() {
+  if (finished.value || loading.value)
     return
   if (!isLoggedIn.value) {
     promptLogin()
     return
   }
   page.value += 1
-  void fetchList()
-})
+  await fetchList()
+}
 
-/** 跳登录页(携带 redirect,登录后回到打卡广场) */
+defineExpose({ refresh, loadMore })
+
+/** 跳登录页(携带 redirect,登录后回到广场) */
 function handleLogin() {
   toLoginWithRedirect('navigateTo')
 }
 
-/** 游客翻页:弹窗引导登录(每次进入页面只自动引导一次,避免反复触底重复打扰;底部另有常驻登录入口) */
+/** 游客翻页:弹窗引导登录(每次挂载只自动引导一次,底部另有常驻登录入口) */
 function promptLogin() {
   if (loginPromptVisible)
     return
-  // 不复位:重复触底不再弹窗(如需区分语义,可把该标记重命名为 loginPrompted)
   loginPromptVisible = true
   uni.showModal({
     title: '登录后可查看更多',
-    content: '打卡广场支持免登录浏览最新内容,登录后即可继续往下翻看。',
+    content: '打卡支持免登录浏览最新内容,登录后即可继续往下翻看。',
     confirmText: '去登录',
     cancelText: '暂不',
     success: (res) => {
@@ -135,17 +118,12 @@ function handleCheckinTap(checkin: CheckinDTO) {
 </script>
 
 <template>
-  <view class="min-h-screen flex flex-col bg-[#f7f8fa]">
-    <!-- 头部:标题 + 发布入口 -->
-    <view class="flex items-center justify-between bg-white px-4 py-4">
-      <view class="flex flex-col">
-        <text class="text-base text-[#333] font-semibold">
-          打卡广场
-        </text>
-        <text class="mt-1 text-xs text-[#999]">
-          {{ total > 0 ? `共 ${total} 条打卡${isLoggedIn ? '' : ' · 登录后可看更多'}` : '记录你的兴趣日常' }}
-        </text>
-      </view>
+  <view class="flex flex-col">
+    <!-- 工具条:统计 + 发布入口 -->
+    <view class="flex items-center justify-between bg-white px-4 pb-3 pt-1">
+      <text class="text-xs text-[#999]">
+        {{ total > 0 ? `共 ${total} 条打卡${isLoggedIn ? '' : ' · 登录后可看更多'}` : '记录你的兴趣日常' }}
+      </text>
       <view class="flex items-center gap-1 rounded-full bg-[#e8f5f1] px-3 py-1.5" @click="handleCreate">
         <text class="i-carbon-add text-sm text-[#018d71]" />
         <text class="text-xs text-[#018d71] font-medium">
@@ -155,14 +133,14 @@ function handleCheckinTap(checkin: CheckinDTO) {
     </view>
 
     <!-- 加载中 -->
-    <view v-if="loading && list.length === 0" class="flex flex-col items-center pt-20">
+    <view v-if="loading && list.length === 0" class="flex flex-col items-center pt-16">
       <text class="text-sm text-[#999]">
         加载中...
       </text>
     </view>
 
     <!-- 空态 -->
-    <view v-else-if="list.length === 0" class="flex flex-col items-center pt-20">
+    <view v-else-if="list.length === 0" class="flex flex-col items-center pt-16">
       <text class="i-carbon-calendar-heat-map text-5xl text-[#d9d9d9]" />
       <text class="mt-4 text-sm text-[#999]">
         还没有打卡,来发布第一条吧
@@ -199,9 +177,9 @@ function handleCheckinTap(checkin: CheckinDTO) {
       </view>
     </view>
 
-    <!-- 悬浮发布按钮(Tab 栏之上) -->
+    <!-- 悬浮发布按钮(Tab 栏之上;隐藏于其他 tab,由 v-show 控制随本组件隐藏) -->
     <view
-      class="fixed bottom-[140rpx] right-4 h-12 w-12 flex items-center justify-center rounded-full bg-[#018d71] shadow-lg"
+      class="fixed bottom-[140rpx] right-4 z-10 h-12 w-12 flex items-center justify-center rounded-full bg-[#018d71] shadow-lg"
       @click="handleCreate"
     >
       <text class="i-carbon-add text-2xl text-white" />

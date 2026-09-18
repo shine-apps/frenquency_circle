@@ -49,10 +49,10 @@ export const customTabbarList: CustomTabBarItem[] = [
     icon: 'i-carbon-home',
   },
   {
-    text: '打卡广场',
-    pagePath: 'pages/checkin-plaza/checkin-plaza',
+    text: '广场',
+    pagePath: 'pages/plaza/plaza',
     iconType: 'unocss',
-    icon: 'i-carbon-calendar-heat-map',
+    icon: 'i-carbon-earth',
   },
   {
     pagePath: 'pages/me/me',

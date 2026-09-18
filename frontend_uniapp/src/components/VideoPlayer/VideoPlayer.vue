@@ -54,6 +54,8 @@ const emit = defineEmits<{
    * 父组件用于上报 `PUT /api/users/me/course-progress/:lessonId`。
    */
   progress: [event: VideoProgressEvent]
+  /** 视频加载 / 播放出错(src 失效 / 网络中断等),父组件展示提示 */
+  error: [event: { errMsg?: string }]
 }>()
 
 const isMirrored = ref(false)
@@ -158,9 +160,16 @@ function onEnded() {
   }
 }
 
+// 视频加载/播放出错(src 失效 / 网络中断等)
+function onError(e: any) {
+  console.warn('[VideoPlayer] error:', e?.detail)
+  // 出错时清掉待执行 seek,避免恢复后跳到错误位置
+  pendingSeekPosition = null
+  emit('error', { errMsg: e?.detail?.errMsg })
+}
+
 // 时间更新事件
-function onTimeUpdate(e: any) {
-  if (!isDragging.value) {
+function onTimeUpdate(e: any) {  if (!isDragging.value) {
     currentTime.value = e.detail.currentTime
     duration.value = e.detail.duration
     if (duration.value > 0) {
@@ -249,7 +258,19 @@ function close() {
 // 全局事件名：全屏页请求 playlist / 返回 playlist 数据
 const REQ_PLAYLIST_EVENT = 'video-fullscreen-req-playlist'
 const PLAYLIST_DATA_EVENT = 'video-fullscreen-playlist-data'
+/** 全屏页退出时回传播放位置(VideoPlayer 接收,按 videoId 匹配过滤) */
+const POSITION_EVENT = 'video-fullscreen-position'
 
+/**
+ * 打开全屏播放页。
+ *
+ * - 跳转前暂停当前视频,避免双声源;
+ * - 通过 URL 参数把 `videoId` 带给全屏页(playlist 事件的 currentId 兜底);
+ * - 注册一次性位置监听器:全屏页退出(onUnload)时把播放位置回传到这里,
+ *   本组件用它同步 currentTime / seek,并 force 上报一次 progress ——
+ *   父组件(如课程详情)靠这个把用户在全屏页看的进度落库,
+ *   无需把业务字段(如 lessonId)透传给本组件,保持播放器的通用性。
+ */
 function openFullscreen() {
   // 暂停当前视频
   videoContext?.pause()
@@ -262,9 +283,28 @@ function openFullscreen() {
     uni.$off(REQ_PLAYLIST_EVENT, handler)
   }
   uni.$on(REQ_PLAYLIST_EVENT, handler)
-  // 导航到全屏播放页面
+  // 注册一次性位置监听器:videoId 匹配才处理(页面栈里可能有多个 VideoPlayer 实例)
+  const positionHandler = (payload: { videoId?: string, currentTime?: number, duration?: number }) => {
+    if (!payload || payload.videoId !== props.videoId)
+      return
+    // 用全屏页的播放位置覆盖本地状态(用户可能拖进度 / 看到末尾)
+    if (typeof payload.currentTime === 'number' && payload.currentTime > 0) {
+      currentTime.value = payload.currentTime
+      if (typeof payload.duration === 'number' && payload.duration > 0) {
+        duration.value = payload.duration
+        progress.value = (payload.currentTime / payload.duration) * 100
+      }
+      // 同步底层 video 到该位置(用户点播放时从这里继续)
+      videoContext?.seek(payload.currentTime)
+      // force 上报一次 progress,父组件经此把全屏页的进度落库
+      reportProgress(true)
+    }
+    uni.$off(POSITION_EVENT, positionHandler)
+  }
+  uni.$on(POSITION_EVENT, positionHandler)
+  // 导航到全屏播放页面(带 videoId 供回传位置;带 start 供全屏页续播,避免视觉上回到 0)
   uni.navigateTo({
-    url: `/pages/tools/fullscreen-player?src=${encodeURIComponent(props.src)}&poster=${encodeURIComponent(props.poster || '')}&title=${encodeURIComponent(props.title || '')}`,
+    url: `/pages/tools/fullscreen-player?src=${encodeURIComponent(props.src)}&poster=${encodeURIComponent(props.poster || '')}&title=${encodeURIComponent(props.title || '')}&videoId=${encodeURIComponent(props.videoId)}&start=${encodeURIComponent(Math.floor(currentTime.value))}`,
   })
   resetHideControlsTimer()
 }
@@ -306,6 +346,7 @@ onUnmounted(() => {
   // 清理全局事件监听
   uni.$off(REQ_PLAYLIST_EVENT)
   uni.$off(PLAYLIST_DATA_EVENT)
+  uni.$off(POSITION_EVENT)
 })
 </script>
 
@@ -332,6 +373,7 @@ onUnmounted(() => {
       @loadedmetadata="onLoadedMetaData"
       @timeupdate="onTimeUpdate"
       @ended="onEnded"
+      @error="onError"
     />
 
     <!-- 标题 -->

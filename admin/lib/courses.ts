@@ -22,7 +22,9 @@ import type {
   CourseDTO,
   CourseLessonDTO,
   CourseLessonProgressDTO,
+  CourseTeacherDTO,
   PublicCourseDTO,
+  PublicCourseDetailDTO,
   RecentCourseDTO,
 } from "@/types/api"
 
@@ -210,12 +212,15 @@ export function toCourseDTO(
  * 重新上线后可能残留,不能随公开接口下发;创建者身份亦不外泄。
  *
  * - `lessons` 由调用方传入(详情场景),列表场景传空数组只给 `lessonCount`;
- * - `lessonCount` 默认取 lessons 数量,列表场景(无课时明细)显式传入聚合值。
+ * - `lessonCount` 默认取 lessons 数量,列表场景(无课时明细)显式传入聚合值;
+ * - `totalDurationSeconds` 默认从 lessons 累计(仅非 null 的 durationSeconds),
+ *   列表场景(无课时明细)显式传入 SQL 聚合值 `SUM(duration_seconds)`。
  */
 export function toPublicCourseDTO(
   row: typeof courses.$inferSelect,
   lessons: CourseLessonDTO[] = [],
-  lessonCount?: number
+  lessonCount?: number,
+  totalDurationSeconds?: number
 ): PublicCourseDTO {
   return {
     id: row.id,
@@ -225,8 +230,28 @@ export function toPublicCourseDTO(
     tags: row.tags ?? [],
     lessons,
     lessonCount: lessonCount ?? lessons.length,
+    totalDurationSeconds:
+      totalDurationSeconds
+      ?? lessons.reduce((sum, l) => sum + (l.durationSeconds ?? 0), 0),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+  }
+}
+
+/**
+ * 课程行 + 创建者行 → 用户端课程详情 DTO。
+ *
+ * 仅详情接口使用(列表不 join 创建者);创建者已被软删除时返回 `teacher: null`,
+ * 前端按"无老师入口"渲染,不影响课程本身展示。
+ */
+export function toPublicCourseDetailDTO(
+  row: typeof courses.$inferSelect,
+  teacher: CourseTeacherDTO | null,
+  lessons: CourseLessonDTO[] = []
+): PublicCourseDetailDTO {
+  return {
+    ...toPublicCourseDTO(row, lessons),
+    teacher,
   }
 }
 

@@ -314,6 +314,7 @@ describe("toPublicCourseDTO", () => {
         "lessons",
         "tags",
         "title",
+        "totalDurationSeconds",
         "updatedAt",
       ].sort()
     )
@@ -322,6 +323,8 @@ describe("toPublicCourseDTO", () => {
     expect(dto).not.toHaveProperty("reviewNote")
     expect(dto).not.toHaveProperty("reviewedAt")
     expect(dto.lessonCount).toBe(1)
+    // 详情场景:totalDurationSeconds 由 lessons 累计(durationSeconds=600)
+    expect(dto.totalDurationSeconds).toBe(600)
   })
 
   it("projects timestamps to ISO strings and defaults empty arrays", () => {
@@ -335,14 +338,27 @@ describe("toPublicCourseDTO", () => {
     expect(dto.tags).toEqual([])
     expect(dto.lessons).toEqual([])
     expect(dto.lessonCount).toBe(0)
+    // 无课时 → 总时长 0(前端展示为「时长待补充」)
+    expect(dto.totalDurationSeconds).toBe(0)
     expect(dto.createdAt).toBe("2026-09-15T00:00:00.000Z")
     expect(dto.updatedAt).toBe("2026-09-15T00:00:00.000Z")
   })
 
-  it("uses an explicit lessonCount when lessons are not loaded (list scenario)", () => {
-    const dto = toPublicCourseDTO(makeCourseRow({ status: "active" }), [], 7)
+  it("uses explicit lessonCount and totalDuration when lessons are not loaded (list scenario)", () => {
+    const dto = toPublicCourseDTO(makeCourseRow({ status: "active" }), [], 7, 3600)
     expect(dto.lessons).toEqual([])
     expect(dto.lessonCount).toBe(7)
+    expect(dto.totalDurationSeconds).toBe(3600)
+  })
+
+  it("skips null durationSeconds when summing lessons (detail scenario)", () => {
+    const dto = toPublicCourseDTO(makeCourseRow({ status: "active" }), [
+      toCourseLessonDTO(makeLessonRow({ durationSeconds: 600 })),
+      toCourseLessonDTO(makeLessonRow({ id: "lesson-2", durationSeconds: null })),
+      toCourseLessonDTO(makeLessonRow({ id: "lesson-3", durationSeconds: 120 })),
+    ])
+    // 仅累计非 null 的 durationSeconds(600 + 120)
+    expect(dto.totalDurationSeconds).toBe(720)
   })
 })
 

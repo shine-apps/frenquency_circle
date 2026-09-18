@@ -12,6 +12,8 @@ import { computed, ref } from 'vue'
 import { onLoad, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { getCourse, getCourseProgress, reportLessonProgress } from '@/api/courses'
 import { useShare } from '@/composables/useShare'
+import { useUserStore } from '@/store/user'
+import { toLoginWithRedirect } from '@/utils/toLoginPage'
 import { formatDate, formatDuration } from '@/utils/format'
 import VideoPlayer from '@/components/VideoPlayer/VideoPlayer.vue'
 import type { CourseLessonDTO, CourseLessonProgressDTO, PublicCourseDTO } from '@/types'
@@ -21,8 +23,18 @@ definePage({
   style: {
     navigationBarTitleText: '课时详情',
   },
-  excludeLoginPath: false,
+  // 分享链路:未登录可浏览课时元属性,播放器区域显示「登录后观看」占位
+  excludeLoginPath: true,
 })
+
+const userStore = useUserStore()
+/** 是否已登录(未登录时不渲染播放器,避免未登录自动播放) */
+const isLoggedIn = computed(() => userStore.isLoggedIn)
+
+/** 未登录点击播放占位:引导登录(登录成功后回到本页即可观看) */
+function goLogin() {
+  toLoginWithRedirect('navigateTo')
+}
 
 const courseId = ref('')
 const lessonId = ref('')
@@ -60,10 +72,13 @@ const playlist = computed(() => lessons.value.map(lesson => ({
 const shareTitle = computed(() => currentLesson.value?.title || course.value?.title || '趣邻圈 · 视频课程')
 /** 分享图:课时无独立封面,统一取课程封面(为空时由 useShare 回退默认图) */
 const shareImage = computed(() => course.value?.coverImages?.[0] ?? '')
-/** 分享描述:课时简介,缺省回退课程简介 */
+/** 分享描述:课时简介 → 课程简介 → 兜底文案(避免分享卡空白) */
 const shareDesc = computed(() => {
   const lessonDesc = currentLesson.value?.description?.trim()
-  return lessonDesc ? lessonDesc.slice(0, 80) : (course.value?.description?.slice(0, 80) ?? '')
+  if (lessonDesc) return lessonDesc.slice(0, 80)
+  const courseDesc = course.value?.description?.trim()
+  if (courseDesc) return courseDesc.slice(0, 80)
+  return '跟着老师视频学习兴趣课程'
 })
 
 const { share, shareAppMessage, shareTimeline } = useShare({
@@ -84,24 +99,29 @@ onShareAppMessage(shareAppMessage)
 onShareTimeline(shareTimeline)
 // #endif
 
-/** 拉取课程详情 + 当前用户在该课程的进度(并行);按 lessonId 定位当前课时 */
+/**
+ * 拉取课程详情 + 当前用户在该课程的进度(并行);按 lessonId 定位当前课时。
+ *
+ * 未登录时跳过进度请求:进度接口 401 会触发 http 拦截器的全局登录跳转,
+ * 破坏"未登录浏览"的分享链路(课程信息本身可匿名获取)。
+ */
 async function fetchDetail(id: string) {
   loading.value = true
   try {
+    const progressTask = isLoggedIn.value
+      ? getCourseProgress(id)
+          .then((p) => {
+            const map = new Map<string, CourseLessonProgressDTO>()
+            for (const item of p.list) map.set(item.lessonId, item)
+            progressMap.value = map
+          })
+          .catch((err) => {
+            console.warn('[LessonDetail] progress fetch failed:', (err as Error)?.message)
+            progressMap.value = new Map()
+          })
+      : Promise.resolve()
     // 并行:课程详情 + 进度(进度失败不阻塞)
-    const [res] = await Promise.all([
-      getCourse(id),
-      getCourseProgress(id)
-        .then((p) => {
-          const map = new Map<string, CourseLessonProgressDTO>()
-          for (const item of p.list) map.set(item.lessonId, item)
-          progressMap.value = map
-        })
-        .catch((err) => {
-          console.warn('[LessonDetail] progress fetch failed:', (err as Error)?.message)
-          progressMap.value = new Map()
-        }),
-    ])
+    const [res] = await Promise.all([getCourse(id), progressTask])
     course.value = res
     const index = res.lessons.findIndex(lesson => lesson.id === lessonId.value)
     activeIndex.value = index >= 0 ? index : 0
@@ -125,6 +145,11 @@ function handleProgress(e: { positionSeconds: number; durationSeconds: number })
   if (!currentLesson.value) return
   if (e.positionSeconds <= 0) return
   void reportLessonProgress(currentLesson.value.id, e.positionSeconds).catch(() => {})
+}
+
+/** 视频加载/播放失败:轻提示,不阻塞上下节切换 */
+function handleVideoError() {
+  uni.showToast({ title: '视频加载失败,请检查网络后重试', icon: 'none' })
 }
 
 /** 用当前课时标题刷新导航栏标题(小程序原生导航生效) */
@@ -222,16 +247,37 @@ function handleBack() {
     <template v-else-if="currentLesson">
       <!-- ====== 播放区 ====== -->
       <view class="bg-black">
+        <!-- 未登录:封面占位 + 登录引导(分享链路可浏览元属性,播放需登录) -->
+        <view
+          v-if="!isLoggedIn"
+          class="relative h-[420rpx] w-full"
+          @click="goLogin"
+        >
+          <image
+            :src="course.coverImages[0] || ''"
+            class="h-full w-full opacity-50"
+            mode="aspectFill"
+          />
+          <view class="absolute inset-0 flex flex-col items-center justify-center gap-2">
+            <view class="h-14 w-14 flex items-center justify-center rounded-full bg-black/50">
+              <text class="i-carbon-play-filled text-2xl text-white" />
+            </view>
+            <text class="text-sm text-white">
+              登录后观看
+            </text>
+          </view>
+        </view>
         <VideoPlayer
+          v-else
           :key="currentLesson.id"
           :src="currentLesson.videoUrl"
           :poster="course.coverImages[0]"
           :title="currentLesson.title"
-          :playlist="playlist"
           :initial-position="initialPosition"
           video-id="lessonDetailPlayer"
           @ended="handleEnded"
           @progress="handleProgress"
+          @error="handleVideoError"
         />
       </view>
 

@@ -8,9 +8,9 @@
  * 入口:我的 → 视频课程。
  */
 import { ref } from 'vue'
-import { onReachBottom, onPullDownRefresh, onShow } from '@dcloudio/uni-app'
+import { onLoad, onReachBottom, onPullDownRefresh, onShow } from '@dcloudio/uni-app'
 import { getCourses } from '@/api/courses'
-import { formatDate } from '@/utils/format'
+import { formatDate, formatTotalDuration } from '@/utils/format'
 import type { PublicCourseDTO } from '@/types'
 
 definePage({
@@ -23,6 +23,8 @@ definePage({
 })
 
 const PAGE_SIZE = 10
+/** 缓存窗:距上次成功拉取小于该值时,onShow 不再重拉(避免详情页返回时闪烁+浪费流量) */
+const SHOW_CACHE_WINDOW_MS = 60_000
 
 const list = ref<PublicCourseDTO[]>([])
 const total = ref(0)
@@ -31,6 +33,8 @@ const loading = ref(false)
 const finished = ref(false)
 /** 首屏加载失败(空态中展示重试入口;错误提示已由 http 拦截统一 toast) */
 const loadFailed = ref(false)
+/** 上次拉取时间戳(0 表示从未拉取) */
+let lastFetchAt = 0
 
 /** 拉取列表;reset=true 时回到第一页 */
 async function fetchList(reset = false) {
@@ -46,6 +50,7 @@ async function fetchList(reset = false) {
     list.value = reset ? res.list : [...list.value, ...res.list]
     total.value = res.total
     loadFailed.value = false
+    lastFetchAt = Date.now()
     // total 与 list 口径一致,同时以「不足一页」兜底判定到底
     if (list.value.length >= res.total || res.list.length < PAGE_SIZE)
       finished.value = true
@@ -60,12 +65,22 @@ async function fetchList(reset = false) {
   }
 }
 
-// 进入时拉取(从详情页返回也会触发 onShow,保持数据新鲜)
-onShow(() => {
+// 首次进入拉取;后续 onShow 仅在缓存窗(60s)外重拉,
+// 从详情页返回时直接复用现有数据,保留滚动位置,不闪烁。
+onLoad(() => {
   void fetchList(true)
 })
 
-/** 下拉刷新 */
+onShow(() => {
+  // 首次 onLoad 已拉取;这里只兜底「缓存过期 + 有数据」场景刷新
+  if (lastFetchAt === 0)
+    return
+  if (Date.now() - lastFetchAt < SHOW_CACHE_WINDOW_MS)
+    return
+  void fetchList(true)
+})
+
+/** 下拉刷新:无视缓存窗强制重拉 */
 onPullDownRefresh(() => {
   fetchList(true).finally(() => {
     uni.stopPullDownRefresh()
@@ -180,7 +195,7 @@ function goCourse(courseId: string) {
               {{ tag }}
             </text>
             <text class="text-xs text-[#999]">
-              {{ formatDate(course.updatedAt) }} 更新
+              {{ course.lessonCount }} 课时 · {{ formatTotalDuration(course.totalDurationSeconds) }} · {{ formatDate(course.updatedAt) }} 更新
             </text>
           </view>
         </view>

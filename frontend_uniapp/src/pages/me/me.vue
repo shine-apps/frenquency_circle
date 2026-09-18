@@ -5,6 +5,7 @@ import { useTokenStore } from '@/store/token'
 import { useSettingsStore } from '@/store/settings'
 import { getMyProfile, updateMyTags, updateProfile } from '@/api/auth'
 import { getUnreadNotificationCount } from '@/api/notifications'
+import { getRecentCourses } from '@/api/courses'
 import { canCreateCircle } from '@/utils/role'
 import { LOGIN_PAGE } from '@/router/config'
 import { toLoginWithRedirect } from '@/utils/toLoginPage'
@@ -12,7 +13,7 @@ import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue
 // #ifdef H5
 import H5LocationPicker from '@/components/H5LocationPicker/H5LocationPicker.vue'
 // #endif
-import type { UserRole } from '@/types'
+import type { RecentCourseDTO, UserRole } from '@/types'
 
 definePage({
   layout: 'default',
@@ -35,8 +36,10 @@ const isAppDeploying = computed(() => settingsStore.isAppDeploying)
 onShow(() => {
   // 每次回到我的页同步一次系统设置(命中 10 分钟缓存时无网络开销)
   void settingsStore.getSettings().catch(() => { /* 拉取失败沿用旧值 */ })
-  if (!userStore.isLoggedIn)
+  if (!userStore.isLoggedIn) {
+    recentCourses.value = []
     return
+  }
   getMyProfile()
     .then((profile) => {
       userStore.setProfile(profile)
@@ -48,6 +51,8 @@ onShow(() => {
     })
   // 同步未读消息数(失败静默,不影响其他功能)
   void fetchUnreadCount()
+  // 同步最近学习(失败静默,不阻塞其他功能)
+  void fetchRecentCourses()
 })
 
 /** 未读消息数量(>0 时我的页显示角标) */
@@ -63,6 +68,31 @@ async function fetchUnreadCount() {
     // 静默
   }
 }
+
+/** 最近学习的课程(按 updated_at desc,后端聚合到课程粒度) */
+const recentCourses = ref<RecentCourseDTO[]>([])
+
+/** 拉取最近学习列表(失败静默;未登录时清空) */
+async function fetchRecentCourses() {
+  try {
+    const res = await getRecentCourses({ limit: 20 })
+    recentCourses.value = res.list
+  }
+  catch {
+    // 静默:401 由拦截器跳登录,其他错误不阻塞我的页
+    recentCourses.value = []
+  }
+}
+
+/** "视频课程"入口副标题:有最近学习时显示「继续观看 N 门」,否则显示默认文案 */
+const courseEntrySubtitle = computed(() => {
+  const n = recentCourses.value.length
+  if (n === 0)
+    return '跟着老师视频学习兴趣课程'
+  const latest = recentCourses.value[0]
+  const lesson = latest?.lastLessonTitle ?? '上次看到的课时'
+  return `继续观看 ${n} 门 · 最近 ${lesson}`
+})
 
 /** 跳消息中心 */
 function handleNotifications() {
@@ -237,10 +267,24 @@ function handleActivityPlaza() {
   uni.navigateTo({ url: '/pages/activity-list/activity-list' })
 }
 
-/** 跳视频课程列表(未登录先引导登录,登录后回到本页) */
+/** 跳视频课程入口:
+ * - 未登录 → 先引导登录;
+ * - 有最近学习 → 直接跳最近一条(带 lessonId,自动定位到上次课时并续播);
+ * - 无最近学习 → 跳课程列表。
+ *
+ * 简化方案:行点击直接跳最近一条,不做二级 popup。
+ * 后续若需要展开多门最近学习列表,可在此处加 wd-action-sheet。
+ */
 function handleMyCourses() {
   if (!isLoggedIn.value) {
     toLoginWithRedirect('navigateTo')
+    return
+  }
+  const latest = recentCourses.value[0]
+  if (latest) {
+    uni.navigateTo({
+      url: `/pages/course-detail/course-detail?id=${encodeURIComponent(latest.course.id)}&lessonId=${encodeURIComponent(latest.lastLessonId)}`,
+    })
     return
   }
   uni.navigateTo({ url: '/pages/course-list/course-list' })
@@ -535,12 +579,20 @@ const roleChipClass = computed(() => {
             视频课程
           </text>
           <text class="mt-0.5 text-xs text-[#999]">
-            跟着老师视频学习兴趣课程
+            {{ courseEntrySubtitle }}
           </text>
         </view>
-        <text class="text-sm text-[#ccc]">
-          ›
-        </text>
+        <view class="flex items-center gap-2">
+          <text
+            v-if="recentCourses.length > 0"
+            class="rounded-full bg-[#e8f5f1] px-3 py-1 text-xs text-[#018d71]"
+          >
+            继续观看
+          </text>
+          <text class="text-sm text-[#ccc]">
+            ›
+          </text>
+        </view>
       </view>
 
       <view

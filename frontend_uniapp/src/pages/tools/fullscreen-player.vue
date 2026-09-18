@@ -5,6 +5,8 @@ import { computed, getCurrentInstance, onMounted, onUnmounted, ref, watch } from
 // 全局事件名：与 VideoPlayer 保持一致
 const REQ_PLAYLIST_EVENT = 'video-fullscreen-req-playlist'
 const PLAYLIST_DATA_EVENT = 'video-fullscreen-playlist-data'
+/** 全屏页退出时回传播放位置给打开它的 VideoPlayer(按 videoId 匹配) */
+const POSITION_EVENT = 'video-fullscreen-position'
 
 // 通用播放列表项结构（与 VideoPlayer 中的保持一致）
 interface PlaylistItem {
@@ -26,6 +28,10 @@ definePage({
 const videoSrc = ref('')
 const poster = ref('')
 const title = ref('')
+/** 打开本页的 VideoPlayer 实例 id(用于退出时回传位置,避免多实例误收) */
+const callerVideoId = ref('')
+/** 续播定位:VideoPlayer 传入的起始位置(秒),视频元数据加载完成后 seek 到该位置 */
+const initialSeekPosition = ref(0)
 
 // 可选的播放列表（由调用方通过全局事件传入）
 const playlist = ref<PlaylistItem[]>([])
@@ -75,6 +81,12 @@ onLoad((options) => {
     videoSrc.value = decodeURIComponent(options.src || '')
     poster.value = decodeURIComponent(options.poster || '')
     title.value = decodeURIComponent(options.title || '')
+    // 打开本页的 VideoPlayer 实例 id(URL 参数兜底;playlist 事件会再覆盖一次)
+    callerVideoId.value = decodeURIComponent(options.videoId || '')
+    // 续播定位:与 VideoPlayer 的 initialPosition 同款语义,0 或负值不 seek
+    const start = Number.parseFloat(options.start ?? '')
+    if (Number.isFinite(start) && start > 0)
+      initialSeekPosition.value = start
   }
 
   // 初始化屏幕方向判断
@@ -85,6 +97,9 @@ onLoad((options) => {
   uni.$on(PLAYLIST_DATA_EVENT, (data: { playlist: PlaylistItem[], currentId: string }) => {
     if (data && Array.isArray(data.playlist)) {
       playlist.value = data.playlist
+      // 以 playlist 事件的 currentId 为准(URL 参数仅作兜底,防止 VideoPlayer 未传)
+      if (data.currentId)
+        callerVideoId.value = data.currentId
       console.log('fullscreen-player received playlist:', playlist.value.length)
     }
   })
@@ -94,6 +109,15 @@ onLoad((options) => {
 
 // 页面卸载时清理
 onUnload(() => {
+  // 回传播放位置给打开本页的 VideoPlayer,让它:
+  // 1) 把 currentTime 同步到全屏前的位置(下次点播放续播);
+  // 2) force 上报一次 progress(父组件用 lessonId 落库)。
+  // 若 callerVideoId 为空(非 VideoPlayer 入口),广播一个空 videoId,由 VideoPlayer 忽略。
+  uni.$emit(POSITION_EVENT, {
+    videoId: callerVideoId.value,
+    currentTime: currentTime.value,
+    duration: duration.value,
+  })
   if (hideControlsTimer) {
     clearTimeout(hideControlsTimer)
   }
@@ -121,6 +145,17 @@ onUnmounted(() => {
 function onLoadedMetaData(e: any) {
   videoOriginalWidth.value = e.detail.width
   videoOriginalHeight.value = e.detail.height
+
+  // 续播定位:元数据就绪后 seek 到 VideoPlayer 传入的起始位置,
+  // 避免全屏视觉上从 0 开始(与退出时回传位置闭环:进全屏续播 + 退全屏回传)
+  if (initialSeekPosition.value > 0) {
+    const detailDuration = typeof e.detail.duration === 'number' ? e.detail.duration : 0
+    const target = detailDuration > 0
+      ? Math.min(initialSeekPosition.value, detailDuration * 0.999)
+      : initialSeekPosition.value
+    videoContext?.seek(target)
+    initialSeekPosition.value = 0
+  }
 
   // 这里的 isLandscape 已经由 onLoad 和 onWindowResize 根据窗口大小实时更新，
   // 不再根据视频本身的宽高比来强制设置横竖屏，以尊重用户的屏幕旋转设置

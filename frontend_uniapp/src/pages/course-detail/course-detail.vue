@@ -12,20 +12,29 @@ import { computed, ref } from 'vue'
 import { onLoad, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { getCourse, getCourseProgress, reportLessonProgress } from '@/api/courses'
 import { useShare } from '@/composables/useShare'
-import { formatDate, formatDuration } from '@/utils/format'
+import { useUserStore } from '@/store/user'
+import { toLoginWithRedirect } from '@/utils/toLoginPage'
+import { formatDate, formatDuration, formatTotalDuration } from '@/utils/format'
 import VideoPlayer from '@/components/VideoPlayer/VideoPlayer.vue'
-import type { CourseLessonProgressDTO, PublicCourseDTO } from '@/types'
+import type { CourseLessonProgressDTO, PublicCourseDetailDTO } from '@/types'
 
 definePage({
   layout: 'default',
   style: {
     navigationBarTitleText: '课程详情',
   },
-  excludeLoginPath: false,
+  // 分享链路:未登录可浏览课程信息,点「播放」时再拦到登录页(产品决策)
+  excludeLoginPath: true,
 })
 
+const userStore = useUserStore()
+/** 是否已登录(未登录时点播放需先登录) */
+const isLoggedIn = computed(() => userStore.isLoggedIn)
+
 const courseId = ref('')
-const course = ref<PublicCourseDTO | null>(null)
+/** 入口携带的 lessonId(用于「继续观看」二级入口自动定位并播放) */
+const targetLessonId = ref('')
+const course = ref<PublicCourseDetailDTO | null>(null)
 const loading = ref(true)
 /** 课程不存在 / 已下线(或首屏加载失败) */
 const notFound = ref(false)
@@ -57,8 +66,13 @@ const playlist = computed(() => lessons.value.map(lesson => ({
 const shareTitle = computed(() => course.value?.title || '趣邻圈 · 视频课程')
 /** 分享图:课程封面(无封面时由 useShare 回退默认图) */
 const shareImage = computed(() => course.value?.coverImages?.[0] ?? '')
-/** 分享描述:课程简介摘要 */
-const shareDesc = computed(() => course.value?.description?.slice(0, 80) ?? '')
+/** 分享描述:课程简介摘要;简介为空时兜底到「共 N 课时」文案,避免分享卡空白 */
+const shareDesc = computed(() => {
+  const desc = course.value?.description?.trim()
+  if (desc) return desc.slice(0, 80)
+  const n = course.value?.lessonCount ?? 0
+  return n > 0 ? `课程共 ${n} 课时,跟着老师视频学习` : '跟着老师视频学习兴趣课程'
+})
 
 const { share, shareAppMessage, shareTimeline } = useShare({
   title: () => shareTitle.value,
@@ -75,8 +89,10 @@ onShareTimeline(shareTimeline)
 // #endif
 
 onLoad((options) => {
-  const id = (options as { id?: string } | undefined)?.id ?? ''
+  const params = (options ?? {}) as { id?: string; lessonId?: string }
+  const id = params.id ?? ''
   courseId.value = id
+  targetLessonId.value = params.lessonId ?? ''
   if (!id) {
     notFound.value = true
     loading.value = false
@@ -88,10 +104,15 @@ onLoad((options) => {
 /**
  * 点击课时:记录高亮项并弹出播放器播放该课时。
  *
+ * 未登录先引导登录(登录成功后由登录页 redirect 回本页,再点即可播放);
  * 弹层每次打开都重建 `VideoPlayer`(见模板 v-if),关闭即卸载,
  * 避免弹层隐藏后视频仍在后台播放。
  */
 function selectLesson(index: number) {
+  if (!isLoggedIn.value) {
+    toLoginWithRedirect('navigateTo')
+    return
+  }
   activeIndex.value = index
   playerVisible.value = true
 }
@@ -103,28 +124,38 @@ function handlePlayerClose() {
 
 /**
  * 拉取课程详情 + 当前用户在该课程下的进度(并行;进度拉取失败不影响主流程)。
+ *
+ * 未登录时跳过进度请求 —— 公开接口(课程信息)可匿名访问,但进度接口
+ * 401 会触发 http 拦截器的全局登录跳转,破坏"未登录浏览"的分享链路。
  */
 async function fetchDetail(id: string) {
   loading.value = true
   try {
+    const progressTask = isLoggedIn.value
+      ? getCourseProgress(id)
+          .then((p) => {
+            const map = new Map<string, CourseLessonProgressDTO>()
+            for (const item of p.list) map.set(item.lessonId, item)
+            progressMap.value = map
+          })
+          .catch((err) => {
+            console.warn('[CourseDetail] progress fetch failed:', (err as Error)?.message)
+            progressMap.value = new Map()
+          })
+      : Promise.resolve()
     // 并行拉课程与进度(进度拉取失败不会阻塞课程详情展示)
-    const [res] = await Promise.all([
-      getCourse(id),
-      getCourseProgress(id)
-        .then((p) => {
-          const map = new Map<string, CourseLessonProgressDTO>()
-          for (const item of p.list) map.set(item.lessonId, item)
-          progressMap.value = map
-        })
-        .catch((err) => {
-          // 进度接口失败(401 / 网络)不应阻塞页面;首次未登录场景尤其常见
-          console.warn('[CourseDetail] progress fetch failed:', (err as Error)?.message)
-          progressMap.value = new Map()
-        }),
-    ])
+    const [res] = await Promise.all([getCourse(id), progressTask])
     course.value = res
     activeIndex.value = 0
     notFound.value = false
+    // 「继续观看」入口:根据 URL 中的 lessonId 定位到指定课时并自动弹层播放
+    if (targetLessonId.value) {
+      const idx = res.lessons.findIndex(l => l.id === targetLessonId.value)
+      if (idx >= 0) {
+        activeIndex.value = idx
+        playerVisible.value = true
+      }
+    }
     // 小程序端用课程标题作为导航栏标题(H5 端为自定义导航,不生效也不影响)
     if (res.title)
       uni.setNavigationBarTitle({ title: res.title })
@@ -160,6 +191,19 @@ function goLessonDetail(index: number) {
   uni.navigateTo({
     url: `/pages/lesson-detail/lesson-detail?courseId=${encodeURIComponent(course.value.id)}&lessonId=${encodeURIComponent(lesson.id)}`,
   })
+}
+
+/** 跳老师公开主页(详情接口下发 teacher;被软删除时为 null 不渲染入口) */
+function goTeacherHome() {
+  const teacher = course.value?.teacher
+  if (!teacher)
+    return
+  uni.navigateTo({ url: `/pages/user-home/user-home?id=${encodeURIComponent(teacher.id)}` })
+}
+
+/** 视频加载/播放失败:轻提示,不阻塞课时列表浏览 */
+function handleVideoError() {
+  uni.showToast({ title: '视频加载失败,请检查网络后重试', icon: 'none' })
 }
 
 /** 返回上一页 */
@@ -220,12 +264,36 @@ function handleBack() {
             {{ tag }}
           </text>
           <text class="text-xs text-[#999]">
-            {{ course.lessonCount }} 课时 · {{ formatDate(course.updatedAt) }} 更新
+            {{ course.lessonCount }} 课时 · {{ formatTotalDuration(course.totalDurationSeconds) }} · {{ formatDate(course.updatedAt) }} 更新
           </text>
         </view>
         <text class="mt-3 block text-sm text-[#666] leading-relaxed">
           {{ course.description }}
         </text>
+
+        <!-- 老师入口:跳公开主页(teacher 为 null 时不渲染,创建者被软删除场景) -->
+        <view
+          v-if="course.teacher"
+          class="mt-3 flex items-center justify-between border-t border-[#f5f5f5] pt-3 active:opacity-70"
+          @click="goTeacherHome"
+        >
+          <view class="flex items-center gap-2.5">
+            <image
+              :src="course.teacher.avatarUrl || ''"
+              class="h-9 w-9 rounded-full bg-[#f2f2f2]"
+              mode="aspectFill"
+            />
+            <view class="flex flex-col">
+              <text class="text-sm text-[#333] font-medium">
+                {{ course.teacher.name }}
+              </text>
+              <text class="mt-0.5 text-xs text-[#999]">
+                本课程老师 · 查看主页
+              </text>
+            </view>
+          </view>
+          <text class="i-carbon-chevron-right text-sm text-[#ccc]" />
+        </view>
       </view>
 
       <!-- ====== 课时列表 ====== -->
@@ -313,11 +381,11 @@ function handleBack() {
             :src="currentLesson.videoUrl"
             :poster="course.coverImages[0]"
             :title="currentLesson.title"
-            :playlist="playlist"
             :initial-position="initialPosition"
             video-id="courseLessonPlayer"
             @close="handlePlayerClose"
             @progress="handleProgress"
+            @error="handleVideoError"
           />
         </view>
       </wd-popup>

@@ -2,6 +2,7 @@ import { http } from '@/http/http'
 import type {
   CourseProgressListDTO,
   PublicCourseDTO,
+  PublicCourseDetailDTO,
   PublicCourseListDTO,
   RecentCourseListDTO,
 } from '@/types'
@@ -34,9 +35,9 @@ export function getCourses(params?: CourseListParams) {
   return http.get<PublicCourseListDTO>('/api/courses', toListQuery(params))
 }
 
-/** 视频课程详情(含全部课时,按 sortOrder 升序;未上线或不存在返回 404) */
+/** 视频课程详情(含全部课时 + 老师入口信息;未上线或不存在返回 404) */
 export function getCourse(courseId: string) {
-  return http.get<PublicCourseDTO>(
+  return http.get<PublicCourseDetailDTO>(
     `/api/courses/${encodeURIComponent(courseId)}`,
   )
 }

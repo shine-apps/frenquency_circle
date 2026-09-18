@@ -178,11 +178,18 @@ beforeEach(() => {
 })
 
 describe("GET /api/courses", () => {
-  it("returns 401 when not logged in", async () => {
+  it("returns 200 for anonymous visitors (optional auth for shared links)", async () => {
     readUserFromTokenMock.mockResolvedValue(null)
+    setSelectResultsQueue([
+      [{ course: makeCourseRow(), lessonCount: 2, totalDuration: 600 }],
+      [{ value: 1 }],
+    ])
+
     const res = await listCourses(makeGetRequest("/api/courses"))
-    expect(res.status).toBe(401)
-    expect(mockDb.select).not.toHaveBeenCalled()
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as IResponse<Paginated<PublicCourseDTO>>
+    expect(body.data.total).toBe(1)
+    expect(body.data.list[0]!.id).toBe(COURSE_ID)
   })
 
   it.each(["page=0", "page=abc", "pageSize=0", "pageSize=101"])(
@@ -195,11 +202,11 @@ describe("GET /api/courses", () => {
     }
   )
 
-  it("returns a paginated active-only list with aggregated lessonCount", async () => {
+  it("returns a paginated active-only list with aggregated lessonCount and totalDuration", async () => {
     readUserFromTokenMock.mockResolvedValue(USER)
     // 第一次 select:列表(leftJoin 聚合);第二次 select:总数
     setSelectResultsQueue([
-      [{ course: makeCourseRow(), lessonCount: 2 }],
+      [{ course: makeCourseRow(), lessonCount: 2, totalDuration: 1500 }],
       [{ value: 1 }],
     ])
 
@@ -215,12 +222,15 @@ describe("GET /api/courses", () => {
     const item = body.data.list[0]!
     expect(item.id).toBe(COURSE_ID)
     expect(item.lessonCount).toBe(2)
-    // 列表不返回课时明细,也不下发审核 / 创建者信息
+    // 列表聚合总时长(SQL SUM(duration_seconds));全部未探测时为 0
+    expect(item.totalDurationSeconds).toBe(1500)
+    // 列表不返回课时明细,也不下发审核 / 创建者 / 老师信息
     expect(item.lessons).toEqual([])
     expect(item).not.toHaveProperty("reviewNote")
     expect(item).not.toHaveProperty("reviewedAt")
     expect(item).not.toHaveProperty("creatorId")
     expect(item).not.toHaveProperty("status")
+    expect(item).not.toHaveProperty("teacher")
 
     // 列表查询必须带 leftJoin + groupBy(聚合课时数,避免 N+1)
     expect(selectChains[0]!.leftJoin).toHaveBeenCalledTimes(1)
@@ -285,14 +295,21 @@ describe("GET /api/courses", () => {
 })
 
 describe("GET /api/courses/:courseId", () => {
-  it("returns 401 when not logged in", async () => {
+  it("returns 200 for anonymous visitors (optional auth for shared links)", async () => {
     readUserFromTokenMock.mockResolvedValue(null)
+    setSelectResultsQueue([
+      [makeCourseRow()],
+      makeLessonRows(),
+      [{ id: "11111111-1111-1111-1111-111111111111", name: "王老师", avatarUrl: null }],
+    ])
+
     const res = await getCourse(
       makeGetRequest(`/api/courses/${COURSE_ID}`),
       makeContext(COURSE_ID)
     )
-    expect(res.status).toBe(401)
-    expect(mockDb.select).not.toHaveBeenCalled()
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as IResponse<{ id: string }>
+    expect(body.data.id).toBe(COURSE_ID)
   })
 
   it("returns 400 when the course id is not a uuid", async () => {
@@ -331,9 +348,14 @@ describe("GET /api/courses/:courseId", () => {
     }
   )
 
-  it("returns the course detail with ordered lessons and a C-side whitelist", async () => {
+  it("returns the course detail with ordered lessons, teacher info and a C-side whitelist", async () => {
     readUserFromTokenMock.mockResolvedValue(USER)
-    setSelectResultsQueue([[makeCourseRow()], makeLessonRows()])
+    // 3 次 select:课程行 → 课时行 → 创建者(users)
+    setSelectResultsQueue([
+      [makeCourseRow()],
+      makeLessonRows(),
+      [{ id: "11111111-1111-1111-1111-111111111111", name: "王老师", avatarUrl: "https://cos.example.com/a.png" }],
+    ])
 
     const res = await getCourse(
       makeGetRequest(`/api/courses/${COURSE_ID}`),
@@ -341,18 +363,27 @@ describe("GET /api/courses/:courseId", () => {
     )
     expect(res.status).toBe(200)
 
-    const body = (await res.json()) as IResponse<PublicCourseDTO>
+    const body = (await res.json()) as IResponse<PublicCourseDTO & { teacher: { id: string, name: string, avatarUrl: string | null } }>
     const data = body.data
     expect(data.id).toBe(COURSE_ID)
     expect(data.title).toBe("太极拳入门")
     expect(data.coverImages).toEqual(["https://cos.example.com/cover.jpg"])
     expect(data.tags).toEqual(["太极拳"])
     expect(data.lessonCount).toBe(2)
+    // 详情场景 totalDurationSeconds 由 lessons 累计(600 + null → 600)
+    expect(data.totalDurationSeconds).toBe(600)
     expect(data.lessons.map(lesson => lesson.sortOrder)).toEqual([0, 1])
     expect(data.lessons[0]!.videoUrl).toBe("https://cos.example.com/lesson-1.mp4")
     expect(data.lessons[1]!.durationSeconds).toBeNull()
 
-    // 公开字段白名单:审核 / 创建者信息一律不下发(驳回原因曾写过 reviewNote)
+    // 老师信息:仅公开字段(id / name / avatarUrl),可跳公开主页
+    expect(data.teacher).toEqual({
+      id: "11111111-1111-1111-1111-111111111111",
+      name: "王老师",
+      avatarUrl: "https://cos.example.com/a.png",
+    })
+
+    // 公开字段白名单:审核信息不下发;创建者仅暴露 teacher 轻量字段
     expect(Object.keys(data).sort()).toEqual(
       [
         "coverImages",
@@ -362,11 +393,28 @@ describe("GET /api/courses/:courseId", () => {
         "lessonCount",
         "lessons",
         "tags",
+        "teacher",
         "title",
+        "totalDurationSeconds",
         "updatedAt",
       ].sort()
     )
     expect(JSON.stringify(data)).not.toContain("已通过")
-    expect(JSON.stringify(data)).not.toContain(makeCourseRow().creatorId)
+    // creatorId 字段本身不下发(通过 teacher.id 提供)
+    expect(data).not.toHaveProperty("creatorId")
+  })
+
+  it("returns teacher: null when the creator user row is missing (soft-deleted)", async () => {
+    readUserFromTokenMock.mockResolvedValue(USER)
+    setSelectResultsQueue([[makeCourseRow()], makeLessonRows(), []])
+
+    const res = await getCourse(
+      makeGetRequest(`/api/courses/${COURSE_ID}`),
+      makeContext(COURSE_ID)
+    )
+    expect(res.status).toBe(200)
+
+    const body = (await res.json()) as IResponse<{ teacher: unknown }>
+    expect(body.data.teacher).toBeNull()
   })
 })

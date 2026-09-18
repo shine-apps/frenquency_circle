@@ -80,6 +80,27 @@ export function formatDuration(seconds: number | null | undefined, fallback = '-
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`
 }
 
+/**
+ * 课程总时长的友好文案:秒 → 「X 小时 Y 分钟 / Y 分钟 / 不足 1 分钟」。
+ * 0 / 负数 / 非有限数返回 fallback(默认「时长待补充」,用于课时未探测时长的场景)。
+ * @example formatTotalDuration(3725)  // '1 小时 2 分钟'
+ * @example formatTotalDuration(600)   // '10 分钟'
+ * @example formatTotalDuration(45)    // '不足 1 分钟'
+ * @example formatTotalDuration(0)     // '时长待补充'
+ */
+export function formatTotalDuration(seconds: number | null | undefined, fallback = '时长待补充'): string {
+  if (seconds === null || seconds === undefined || !Number.isFinite(seconds) || seconds <= 0)
+    return fallback
+  const total = Math.floor(seconds)
+  const h = Math.floor(total / 3600)
+  const m = Math.ceil((total % 3600) / 60)
+  if (total < 60)
+    return '不足 1 分钟'
+  if (h > 0)
+    return m > 0 ? `${h} 小时 ${m} 分钟` : `${h} 小时`
+  return `${m} 分钟`
+}
+
 /** 练习年限格式化,空返回 fallback(默认 '') */
 export function practiceYearsText(years: number | null, fallback = ''): string {
   if (years === null || years === undefined)

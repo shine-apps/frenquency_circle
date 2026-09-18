@@ -486,12 +486,37 @@ export type PublicCourseDTO = {
   lessons: CourseLessonDTO[]
   /** 课时数 */
   lessonCount: number
+  /**
+   * 课程总时长(秒)。仅累计已探测到时长的课时(duration_seconds 非 null),
+   * 部分或全部课时未探测时可能小于真实值;0 表示"无课时或时长未知"。
+   */
+  totalDurationSeconds: number
   createdAt: string
   updatedAt: string
 }
 
 /** 用户端课程列表分页响应 */
 export type PublicCourseListDTO = Paginated<PublicCourseDTO>
+
+/**
+ * 课程创建者的轻量信息(仅含公开主页跳转与展示所需字段)。
+ * 与 {@link CircleDetailDTO} 的 `creator` 同构;不含邮箱 / 手机号等隐私字段。
+ */
+export type CourseTeacherDTO = {
+  id: string
+  name: string
+  avatarUrl: string | null
+}
+
+/**
+ * 用户端课程详情 DTO(含创建者信息)。
+ *
+ * 列表接口不返回 `teacher`(列表卡片不展示创建者,减少 join 开销);
+ * 详情页需要"老师入口 → 公开主页"跳转,故详情接口单独下发。
+ */
+export type PublicCourseDetailDTO = PublicCourseDTO & {
+  teacher: CourseTeacherDTO | null
+}
 
 // ---- 课时播放进度(course_lesson_progress) ----
 

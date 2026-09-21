@@ -1,5 +1,6 @@
 import { z } from "zod"
-import { and, asc, desc, eq, gte, inArray } from "drizzle-orm"
+import { and, asc, desc, eq, gte, ilike, inArray, or, sql } from "drizzle-orm"
+import type { SQL } from "drizzle-orm"
 
 import { db } from "@/lib/db"
 import {
@@ -253,6 +254,36 @@ export function toPublicCourseDetailDTO(
     ...toPublicCourseDTO(row, lessons),
     teacher,
   }
+}
+
+/** 检索关键词长度上限(超出截断,避免超长 LIKE 模式拖慢全表扫描) */
+const KEYWORD_MAX_LENGTH = 50
+
+/** 转义 LIKE 通配符（`%` / `_` / `\`），使关键词按字面量匹配（Postgres 默认转义符为 `\`，与 lib/checkins 同款守卫） */
+function escapeLikePattern(keyword: string): string {
+  return keyword.replace(/[\\%_]/g, (ch) => `\\${ch}`)
+}
+
+/**
+ * 用户端课程列表检索条件:关键词命中「标题 / 简介 / 标签」任一即算匹配。
+ *
+ * - 关键词先 trim + 截断,通配符转义后按字面量匹配(避免用户输入被当作 LIKE 模式串);
+ * - 标签为 text[] 数组(存 hobby_tags.name),转成逗号串再 ILIKE —— 标签数量少,
+ *   成本可接受,换来"按兴趣找课"的检索体验;
+ * - 关键词为空 / 全空白时返回 undefined,调用方按"未检索"处理。
+ */
+export function buildCourseKeywordCondition(
+  keyword: string | null | undefined
+): SQL | undefined {
+  const trimmed = (keyword ?? "").trim().slice(0, KEYWORD_MAX_LENGTH)
+  if (!trimmed) return undefined
+
+  const pattern = `%${escapeLikePattern(trimmed)}%`
+  return or(
+    ilike(courses.title, pattern),
+    ilike(courses.description, pattern),
+    sql`array_to_string(${courses.tags}, ',') ilike ${pattern}`
+  ) as SQL
 }
 
 /** 由部分更新入参构造 `update().set()` 的补丁(仅含已提供字段 + updatedAt) */

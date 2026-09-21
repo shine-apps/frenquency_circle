@@ -1,3 +1,22 @@
+import { PgDialect } from "drizzle-orm/pg-core"
+import type { SQL } from "drizzle-orm"
+
+const dialect = new PgDialect()
+
+/**
+ * 测试辅助:把 drizzle 条件对象编译成「最终 SQL + 绑定参数」。
+ *
+ * `extractSqlParamValues` 只能看到构造期就生成的 Param 节点;而 `ilike()` 的
+ * 匹配模式在构造期是裸字符串片段,编译期才变成 `$n` 参数 —— 检索类条件
+ * (keyword / LIKE 模式)改用本函数断言,结果与真正下发的 SQL 一致。
+ */
+export function compileSqlCondition(condition: unknown): {
+  sql: string
+  params: unknown[]
+} {
+  return dialect.sqlToQuery(condition as SQL)
+}
+
 /**
  * 测试辅助:提取 drizzle 条件对象(如 `eq()` / `and()` 的结果)中绑定的参数值。
  *

@@ -32,6 +32,9 @@ const isLoggedIn = computed(() => userStore.isLoggedIn)
 /** 系统设置 isAppDeploying 为 true 时表示应用处于发布维护中,直接读取 store 计算属性 */
 const isAppDeploying = computed(() => settingsStore.isAppDeploying)
 
+/** 最近学习的课程(按 updated_at desc,后端聚合到课程粒度;未登录时由 onShow 清空) */
+const recentCourses = ref<RecentCourseDTO[]>([])
+
 // 进入时刷新用户资料(头像/标签/role 最新)
 onShow(() => {
   // 每次回到我的页同步一次系统设置(命中 10 分钟缓存时无网络开销)
@@ -51,8 +54,9 @@ onShow(() => {
     })
   // 同步未读消息数(失败静默,不影响其他功能)
   void fetchUnreadCount()
-  // 同步最近学习(失败静默,不阻塞其他功能)
-  void fetchRecentCourses()
+  // 同步最近学习(失败静默,不阻塞其他功能);应用发布维护中课程入口已隐藏,无需拉取
+  if (!isAppDeploying.value)
+    void fetchRecentCourses()
 })
 
 /** 未读消息数量(>0 时我的页显示角标) */
@@ -68,9 +72,6 @@ async function fetchUnreadCount() {
     // 静默
   }
 }
-
-/** 最近学习的课程(按 updated_at desc,后端聚合到课程粒度) */
-const recentCourses = ref<RecentCourseDTO[]>([])
 
 /** 拉取最近学习列表(失败静默;未登录时清空) */
 async function fetchRecentCourses() {
@@ -267,7 +268,8 @@ function handleActivityPlaza() {
   uni.navigateTo({ url: '/pages/activity-list/activity-list' })
 }
 
-/** 跳视频课程入口:
+/**
+ * 跳视频课程入口:
  * - 未登录 → 先引导登录;
  * - 有最近学习 → 直接跳最近一条(带 lessonId,自动定位到上次课时并续播);
  * - 无最近学习 → 跳课程列表。
@@ -398,7 +400,7 @@ const roleChipClass = computed(() => {
     </view>
 
     <!-- ====== 设置入口列表 ====== -->
-    <view class="mx-4 rounded-2xl bg-white" v-if="!isAppDeploying">
+    <view v-if="!isAppDeploying" class="mx-4 rounded-2xl bg-white">
       <view class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4" @click="handleNotifications">
         <text class="text-sm text-[#333] font-medium">
           消息
@@ -464,7 +466,7 @@ const roleChipClass = computed(() => {
             ›
           </text>
         </view>
-        <text class="mt-1 line-clamp-2 break-all text-xs text-[#999]">
+        <text class="line-clamp-2 mt-1 break-all text-xs text-[#999]">
           {{ addressForm.address || '点击选择地址' }}
         </text>
         <text

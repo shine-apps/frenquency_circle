@@ -5,11 +5,13 @@
  * - 调 GET /api/courses 拉取已上线课程,按创建时间倒序分页;
  * - 支持下拉刷新 / 触底加载更多,首屏失败可在空态中重试;
  * - 点击卡片跳课程详情播放页。
- * 入口:我的 → 视频课程。
+ * 入口:我的 → 视频课程;
+ * - 应用发布维护中(isAppDeploying 为 true):入口隐藏,且本页禁止进入(跳回首页)。
  */
 import { ref } from 'vue'
-import { onLoad, onReachBottom, onPullDownRefresh, onShow } from '@dcloudio/uni-app'
+import { onLoad, onPullDownRefresh, onReachBottom, onShow } from '@dcloudio/uni-app'
 import { getCourses } from '@/api/courses'
+import { shouldBlockForAppDeploying } from '@/composables/useAppDeployingGuard'
 import { formatDate, formatTotalDuration } from '@/utils/format'
 import type { PublicCourseDTO } from '@/types'
 
@@ -67,11 +69,19 @@ async function fetchList(reset = false) {
 
 // 首次进入拉取;后续 onShow 仅在缓存窗(60s)外重拉,
 // 从详情页返回时直接复用现有数据,保留滚动位置,不闪烁。
-onLoad(() => {
+onLoad(async () => {
+  // 应用发布维护中(isAppDeploying 为 true)不允许进入,跳转首页(阻断直达 / 分享 / 返回)
+  if (await shouldBlockForAppDeploying()) {
+    return
+  }
   void fetchList(true)
 })
 
-onShow(() => {
+onShow(async () => {
+  // 维护开关可能在页面打开后被打开:每次回到页面复检一次,命中则跳回首页
+  if (await shouldBlockForAppDeploying()) {
+    return
+  }
   // 首次 onLoad 已拉取;这里只兜底「缓存过期 + 有数据」场景刷新
   if (lastFetchAt === 0)
     return
@@ -183,7 +193,7 @@ function goCourse(courseId: string) {
           <text class="line-clamp-1 text-base text-[#333] font-medium">
             {{ course.title }}
           </text>
-          <text class="mt-1 line-clamp-2 text-xs text-[#999] leading-relaxed">
+          <text class="line-clamp-2 mt-1 text-xs text-[#999] leading-relaxed">
             {{ course.description }}
           </text>
           <view class="mt-2.5 flex flex-wrap items-center gap-2">

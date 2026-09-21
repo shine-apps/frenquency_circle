@@ -11,7 +11,7 @@ import {
   withCors,
 } from "@/lib/api"
 import { readUserFromToken } from "@/lib/auth/session-token"
-import { toPublicCourseDTO } from "@/lib/courses"
+import { buildCourseKeywordCondition, toPublicCourseDTO } from "@/lib/courses"
 import type { Paginated, PublicCourseDTO } from "@/types/api"
 
 /**
@@ -26,6 +26,8 @@ import type { Paginated, PublicCourseDTO } from "@/types/api"
  * - 仅 active 可见,pending / offline / rejected / deleted 一律不外泄;
  * - `?creatorId=<id>`:只返回该发布者的已上线课程,供公开主页展示「TA 发布的课程」
  *   (口径对齐 `app/api/activities/route.ts`,对外只暴露 active);
+ * - `?keyword=<文本>`:按关键词检索「标题 / 简介 / 标签」(ILIKE,通配符已转义),
+ *   可与 `creatorId` 叠加;空 / 全空白关键词视为不检索(不返回 400);
  * - 列表不返回课时明细(lessons 恒为 []),`lessonCount` 由 `course_lessons`
  *   左连接聚合得出 —— 与分页主查询合并为单条 SQL,避免逐课程查课时造成 N+1;
  * - 审核信息 / 创建者信息不下发(见 `lib/courses.toPublicCourseDTO`)。
@@ -50,10 +52,16 @@ export async function GET(req: Request) {
     return withCors(fail(400, "creatorId 参数格式不正确"), req)
   }
 
+  // keyword 为自由文本,无需 400:空 / 全空白直接视为未检索
+  const keywordCondition = buildCourseKeywordCondition(
+    url.searchParams.get("keyword")
+  )
+
   // 3. 列表:左连接聚合课时数 + 总时长,与总数共用同一 where(口径一致)
-  const where = creatorId
-    ? and(eq(courses.creatorId, creatorId), eq(courses.status, "active"))
-    : eq(courses.status, "active")
+  const whereFilters = [eq(courses.status, "active")]
+  if (creatorId) whereFilters.push(eq(courses.creatorId, creatorId))
+  if (keywordCondition) whereFilters.push(keywordCondition)
+  const where = and(...whereFilters)
 
   const rows = await db
     .select({

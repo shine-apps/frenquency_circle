@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
  * 覆盖:
  * - GET /api/courses
  *     401 未登录 / 400 非法分页 / 200 分页列表(仅 active + 聚合课时数) / 200 空列表
+ *     / 400 非法 creatorId / 200 creatorId 过滤 / 200 keyword 检索(通配符转义)
  * - GET /api/courses/:courseId
  *     401 / 400 非 uuid / 404 不存在 / 404 非 active(不区分"未上线"与"不存在")
  *     / 200 详情(字段白名单:不含 reviewNote / reviewedAt / creatorId / status)
@@ -103,7 +104,10 @@ vi.mock("@/lib/auth/session-token", () => ({
 
 import { GET as listCourses } from "@/app/api/courses/route"
 import { GET as getCourse } from "@/app/api/courses/[courseId]/route"
-import { extractSqlParamValues } from "@/tests/helpers/sql-params"
+import {
+  compileSqlCondition,
+  extractSqlParamValues,
+} from "@/tests/helpers/sql-params"
 import type { IResponse, Paginated, PublicCourseDTO } from "@/types/api"
 
 const USER = {
@@ -291,6 +295,57 @@ describe("GET /api/courses", () => {
       selectChains[1]!.where.mock.calls[0]?.[0]
     )
     expect(totalWhereParams).toContain(creatorId)
+  })
+
+  it("narrows by keyword on title / description / tags", async () => {
+    readUserFromTokenMock.mockResolvedValue(USER)
+    setSelectResultsQueue([
+      [{ course: makeCourseRow(), lessonCount: 2, totalDuration: 600 }],
+      [{ value: 1 }],
+    ])
+
+    // URL 编码的「太极」
+    const res = await listCourses(
+      makeGetRequest("/api/courses?keyword=%E5%A4%AA%E6%9E%81")
+    )
+    expect(res.status).toBe(200)
+
+    // 标题 / 简介 / 标签三个分支共用同一 LIKE 模式,并与 active 叠加
+    const compiled = compileSqlCondition(
+      selectChains[0]!.where.mock.calls[0]?.[0]
+    )
+    expect(compiled.sql).toContain("ilike")
+    expect(compiled.params).toContain("active")
+    expect(compiled.params).toContain("%太极%")
+
+    // 计数查询与列表同口径(同一 LIKE 模式)
+    const totalCompiled = compileSqlCondition(
+      selectChains[1]!.where.mock.calls[0]?.[0]
+    )
+    expect(totalCompiled.params).toContain("%太极%")
+  })
+
+  it("escapes LIKE wildcards and treats a blank keyword as no filter", async () => {
+    readUserFromTokenMock.mockResolvedValue(USER)
+
+    // `%` / `_` / `\` 按字面量转义,避免用户输入被当作 LIKE 通配符
+    setSelectResultsQueue([[], [{ value: 0 }]])
+    await listCourses(makeGetRequest("/api/courses?keyword=100%25_%5C"))
+    const escaped = compileSqlCondition(
+      selectChains[0]!.where.mock.calls[0]?.[0]
+    )
+    expect(escaped.params).toContain("%100\\%\\_\\\\%")
+
+    // 全空白关键词等价于未检索:条件里不出现 ILIKE,只剩 active
+    mockDb.select.mockClear()
+    selectChains.length = 0
+    setSelectResultsQueue([[], [{ value: 0 }]])
+    await listCourses(makeGetRequest("/api/courses?keyword=%20%20"))
+    const blank = compileSqlCondition(
+      selectChains[0]!.where.mock.calls[0]?.[0]
+    )
+    expect(blank.sql).not.toContain("ilike")
+    expect(blank.params).toEqual(["active"])
   })
 })
 

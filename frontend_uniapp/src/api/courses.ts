@@ -1,7 +1,6 @@
 import { http } from '@/http/http'
 import type {
   CourseProgressListDTO,
-  PublicCourseDTO,
   PublicCourseDetailDTO,
   PublicCourseListDTO,
   RecentCourseListDTO,
@@ -13,6 +12,8 @@ export interface CourseListParams {
   pageSize?: number
   /** 指定发布者(仅返回其已上线课程),公开主页展示「TA 发布的课程」时使用 */
   creatorId?: string
+  /** 检索关键词:命中「标题 / 简介 / 标签」(服务端 ILIKE,空值不下发) */
+  keyword?: string
 }
 
 /** 课程列表公共 query 构造(未传字段不下发,由后端取默认值) */
@@ -21,6 +22,7 @@ function toListQuery(params?: CourseListParams) {
     ...(params?.page !== undefined ? { page: params.page } : {}),
     ...(params?.pageSize !== undefined ? { pageSize: params.pageSize } : {}),
     ...(params?.creatorId ? { creatorId: params.creatorId } : {}),
+    ...(params?.keyword ? { keyword: params.keyword } : {}),
   }
 }
 
@@ -29,6 +31,7 @@ function toListQuery(params?: CourseListParams) {
  *
  * - 列表项不返回课时明细(`lessons` 恒为 `[]`),`lessonCount` 为课时数;
  * - `creatorId` 可查看指定发布者的课程(公开主页用,仅 active);
+ * - `keyword` 按「标题 / 简介 / 标签」检索(广场课程 tab 的搜索框用);
  * - 接口需登录,未登录由 http 拦截统一跳登录页。
  */
 export function getCourses(params?: CourseListParams) {
@@ -58,7 +61,7 @@ export function reportLessonProgress(
   lessonId: string,
   positionSeconds: number,
 ) {
-  return http.put<{ lessonId: string; positionSeconds: number; updatedAt: string }>(
+  return http.put<{ lessonId: string, positionSeconds: number, updatedAt: string }>(
     `/api/users/me/course-progress/${encodeURIComponent(lessonId)}`,
     { positionSeconds: Math.floor(positionSeconds) },
   )
@@ -87,6 +90,7 @@ export function getCourseProgress(courseId: string) {
  */
 export function getRecentCourses(params?: { limit?: number }) {
   const query: Record<string, number> = {}
-  if (params?.limit !== undefined) query.limit = params.limit
+  if (params?.limit !== undefined)
+    query.limit = params.limit
   return http.get<RecentCourseListDTO>('/api/users/me/courses/recent', query)
 }

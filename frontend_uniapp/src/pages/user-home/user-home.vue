@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { onShareAppMessage, onShareTimeline, onShow } from '@dcloudio/uni-app'
 import { getActivities } from '@/api/activities'
 import { getFollowedCircles, getUserCircles } from '@/api/circles'
@@ -18,6 +18,7 @@ import { toLoginPage } from '@/utils/toLoginPage'
 import { activityLevelShortText, formatDate, formatDateTime, practiceYearsText } from '@/utils/format'
 import { canCreateCircle } from '@/utils/role'
 import { useUserStore } from '@/store/user'
+import { useSettingsStore } from '@/store/settings'
 import { useShare } from '@/composables/useShare'
 import type { HttpError } from '@/http/types'
 import type { ActivityDTO, CircleDTO, FollowedCircleDTO, FollowedUserDTO, PublicCourseDTO, PublicUserProfileDTO } from '@/types'
@@ -37,6 +38,10 @@ const MAX_TAG_VISIBLE = 5
 const MESSAGE_MAX = 100
 
 const userStore = useUserStore()
+const settingsStore = useSettingsStore()
+
+/** 应用发布维护中(isAppDeploying 为 true):隐藏「视频课程」tab(课程入口统一口径) */
+const isAppDeploying = computed(() => settingsStore.isAppDeploying)
 
 const userId = ref('')
 const profile = ref<PublicUserProfileDTO | null>(null)
@@ -105,6 +110,8 @@ onLoad((options) => {
 
 /** 每次展示都重拉(从请求列表 accept/reject 返回后状态需刷新) */
 onShow(() => {
+  // 同步系统设置(命中 10 分钟缓存时无网络开销),保证维护开关变化即时生效
+  void settingsStore.getSettings().catch(() => { /* 拉取失败沿用旧值 */ })
   fetchProfile(userId.value)
 })
 
@@ -173,15 +180,25 @@ const showPublished = computed(() => canCreateCircle(profile.value?.role))
 /** 发布内容 tab:圈子 / 活动 / 视频课程 */
 type PublishTab = 'circles' | 'activities' | 'courses'
 
-/** 发布内容 tab 定义(按需懒加载:首次点开某个 tab 时才请求该类数据) */
-const PUBLISH_TABS: { key: PublishTab, label: string }[] = [
-  { key: 'circles', label: '圈子' },
-  { key: 'activities', label: '活动' },
-  { key: 'courses', label: '视频课程' },
-]
+/** 发布内容 tab 定义(按需懒加载:首次点开某个 tab 时才请求该类数据;维护期隐藏「视频课程」) */
+const PUBLISH_TABS = computed<{ key: PublishTab, label: string }[]>(() => {
+  const tabs: { key: PublishTab, label: string }[] = [
+    { key: 'circles', label: '圈子' },
+    { key: 'activities', label: '活动' },
+  ]
+  if (!isAppDeploying.value)
+    tabs.push({ key: 'courses', label: '视频课程' })
+  return tabs
+})
 
 /** 当前选中的发布内容 tab */
 const activePublishTab = ref<PublishTab>('circles')
+
+// 维护期开启时,若当前停留在「视频课程」tab,切回「圈子」,避免停留在已隐藏的 tab
+watch(isAppDeploying, (deploying) => {
+  if (deploying && activePublishTab.value === 'courses')
+    activePublishTab.value = 'circles'
+})
 
 /** 当前 tab 的条目总数(右上角数量提示) */
 const activePublishedTotal = computed(() => {
@@ -702,10 +719,14 @@ function renderTags(tags: string[]): { visible: string[], rest: number } {
         <!-- 分享入口:小程序原生转发按钮 / H5 引导右上角分享 -->
         <view class="absolute right-4 top-9 z-10">
           <!-- #ifdef MP-WEIXIN -->
-          <wd-button plain round size="small" open-type="share">分享</wd-button>
+          <wd-button plain round size="small" open-type="share">
+            分享
+          </wd-button>
           <!-- #endif -->
           <!-- #ifdef H5 -->
-          <wd-button plain round size="small" @click="share">分享</wd-button>
+          <wd-button plain round size="small" @click="share">
+            分享
+          </wd-button>
           <!-- #endif -->
         </view>
         <view class="flex flex-col items-center">
@@ -1145,7 +1166,6 @@ function renderTags(tags: string[]): { visible: string[], rest: number } {
             </button>
           </view>
         </template>
-
       </view>
     </template>
 

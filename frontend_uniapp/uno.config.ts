@@ -79,6 +79,7 @@ export default defineConfig({
   // 动态图标需要在这里配置，或者写在vue页面中注释掉
   safelist: [
     'i-carbon-code',
+    'i-carbon-earth',
     'i-carbon-home',
     'i-carbon-user',
     'i-carbon-user-activity',

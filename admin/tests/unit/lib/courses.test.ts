@@ -121,9 +121,10 @@ describe("createCourseSchema", () => {
     expect(parsed.success).toBe(false)
   })
 
-  it("rejects empty lessons", () => {
+  it("accepts empty lessons(支持先建课、后补课时)", () => {
     const parsed = createCourseSchema.safeParse({ ...validCreateInput, lessons: [] })
-    expect(parsed.success).toBe(false)
+    expect(parsed.success).toBe(true)
+    expect(parsed.success && parsed.data.lessons).toEqual([])
   })
 
   it("rejects more lessons than the max", () => {
@@ -170,9 +171,10 @@ describe("updateCourseSchema", () => {
     expect(parsed.success).toBe(true)
   })
 
-  it("rejects empty lessons when provided", () => {
+  it("accepts empty lessons when provided(清空全部课时)", () => {
     const parsed = updateCourseSchema.safeParse({ lessons: [] })
-    expect(parsed.success).toBe(false)
+    expect(parsed.success).toBe(true)
+    expect(parsed.success && parsed.data.lessons).toEqual([])
   })
 
   it("rejects a teacher-forbidden status", () => {

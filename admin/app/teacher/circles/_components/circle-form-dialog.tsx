@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { Trash2Icon } from "lucide-react"
 
 import {
   Dialog,
@@ -15,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { CoverImagesField } from "@/components/cover-images-field"
+import { InterestTagsField } from "@/components/interest-tags-field"
 import { LocationPicker, type LocationValue } from "@/components/location-picker"
 import { CIRCLE_TAGS_MAX } from "@/lib/form-limits"
 import type { IResponse } from "@/types/api"
@@ -48,6 +48,8 @@ const TEXTAREA_CLASS =
  * 提交语义为**全量**:编辑态把联系方式 / 活动时间 / 人数上限一并提交,
  * 空值表示清空(后端把 `""` / `null` 写成 NULL),因此用户删空输入框能真正生效。
  *
+ * 兴趣标签走公共字段组件 `InterestTagsField`(仅可从已审核通过的标签库中挑选)。
+ *
  * 响应式:弹窗限高 `calc(100dvh - 2rem)` 并可滚动,字段栅格窄屏单列、
  * ≥640px 双列,长字段通栏;地图选点与图片预览也各自做了窄屏适配。
  */
@@ -68,7 +70,6 @@ export function CircleFormDialog({
   const [title, setTitle] = useState(initial?.title ?? "")
   const [description, setDescription] = useState(initial?.description ?? "")
   const [tags, setTags] = useState<string[]>(initial?.tags ?? [])
-  const [tagFilter, setTagFilter] = useState("")
   const [pick, setPick] = useState<LocationValue | null>(
     initial
       ? {
@@ -88,21 +89,6 @@ export function CircleFormDialog({
 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  const filteredTags = availableTags
-    .filter((name) => !tags.includes(name))
-    .filter((name) => (tagFilter.trim() ? name.includes(tagFilter.trim()) : false))
-    .slice(0, 40)
-
-  function toggleTag(name: string) {
-    setTags((prev) =>
-      prev.includes(name)
-        ? prev.filter((t) => t !== name)
-        : prev.length >= CIRCLE_TAGS_MAX
-          ? prev
-          : [...prev, name]
-    )
-  }
 
   /** 客户端必填校验:把后端 zod 的英文 "Invalid request body" 变成可读的中文提示 */
   function validate(): string | null {
@@ -211,55 +197,14 @@ export function CircleFormDialog({
             <p className="text-xs text-muted-foreground">{description.length} / 1000</p>
           </div>
 
-          {/* 标签多选 */}
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label>
-              兴趣标签（1-{CIRCLE_TAGS_MAX} 个）
-            </Label>
-            {tags.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5">
-                {tags.map((name) => (
-                  <button
-                    key={name}
-                    type="button"
-                    onClick={() => toggleTag(name)}
-                    className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary hover:bg-primary/20"
-                  >
-                    {name}
-                    <Trash2Icon className="size-3" />
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">尚未选择标签</p>
-            )}
-            <Input
-              value={tagFilter}
-              onChange={(e) => setTagFilter(e.target.value)}
-              placeholder="输入关键词搜索标签，如：太极"
-            />
-            {tagFilter.trim() && tags.length < CIRCLE_TAGS_MAX ? (
-              <div className="max-h-32 overflow-y-auto rounded-lg border p-1.5">
-                <div className="flex flex-wrap gap-1.5">
-                  {filteredTags.map((name) => (
-                    <button
-                      key={name}
-                      type="button"
-                      onClick={() => toggleTag(name)}
-                      className="rounded-full border px-2.5 py-1 text-xs hover:bg-muted"
-                    >
-                      {name}
-                    </button>
-                  ))}
-                  {filteredTags.length === 0 ? (
-                    <p className="px-1.5 py-1 text-xs text-muted-foreground">
-                      没有匹配的标签
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
-          </div>
+          {/* 兴趣标签多选(公共字段组件) */}
+          <InterestTagsField
+            value={tags}
+            onChange={setTags}
+            availableTags={availableTags}
+            max={CIRCLE_TAGS_MAX}
+            required
+          />
 
           {/* 地点选点(必须由用户确认,不会用兜底坐标充数) */}
           <div className="space-y-1.5 sm:col-span-2">

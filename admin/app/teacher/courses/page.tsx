@@ -3,12 +3,14 @@ import { and, asc, desc, eq, inArray, ne } from "drizzle-orm"
 
 import { auth } from "@/auth"
 import { db } from "@/lib/db"
-import { courseLessons, courses, users } from "@/db/schema"
+import { courseLessons, courses, hobbyTags, users } from "@/db/schema"
 import { toCourseDTO, toCourseLessonDTO } from "@/lib/courses"
 import { TeacherCoursesTable, type TeacherCourseItem } from "./_components/courses-table"
 
 /** SSR 课程列表上限(与教师后台其他页一致的简化分页策略) */
 const SSR_COURSE_LIMIT = 200
+/** 表单可选的已审核标签上限 */
+const TAG_LIMIT = 500
 
 /**
  * 教师后台「我的课程」页(server component)。
@@ -32,18 +34,27 @@ export default async function TeacherCoursesPage({
   const { scope: scopeParam } = await searchParams
   const scope: "mine" | "all" = isAdmin && scopeParam === "all" ? "all" : "mine"
 
-  const rows = await db
-    .select({ course: courses, creatorName: users.name })
-    .from(courses)
-    .innerJoin(users, eq(users.id, courses.creatorId))
-    .where(
-      and(
-        ne(courses.status, "deleted"),
-        scope === "all" ? undefined : eq(courses.creatorId, userId)
+  const [rows, tagRows] = await Promise.all([
+    db
+      .select({ course: courses, creatorName: users.name })
+      .from(courses)
+      .innerJoin(users, eq(users.id, courses.creatorId))
+      .where(
+        and(
+          ne(courses.status, "deleted"),
+          scope === "all" ? undefined : eq(courses.creatorId, userId)
+        )
       )
-    )
-    .orderBy(desc(courses.createdAt))
-    .limit(SSR_COURSE_LIMIT)
+      .orderBy(desc(courses.createdAt))
+      .limit(SSR_COURSE_LIMIT),
+    // 编辑表单的兴趣标签候选项(仅已审核通过,按名称稳定排序)
+    db
+      .select({ name: hobbyTags.name })
+      .from(hobbyTags)
+      .where(eq(hobbyTags.status, "approved"))
+      .orderBy(hobbyTags.name)
+      .limit(TAG_LIMIT),
+  ])
 
   // 一次查出本页课程全部课时,按课程分组(避免编辑表单额外请求)
   const courseIds = rows.map((row) => row.course.id)
@@ -77,7 +88,12 @@ export default async function TeacherCoursesPage({
         </p>
       </div>
 
-      <TeacherCoursesTable items={items} scope={scope} canSwitchScope={isAdmin} />
+      <TeacherCoursesTable
+        items={items}
+        scope={scope}
+        canSwitchScope={isAdmin}
+        availableTags={tagRows.map((row) => row.name)}
+      />
     </div>
   )
 }

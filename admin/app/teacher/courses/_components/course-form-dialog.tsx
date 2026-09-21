@@ -14,10 +14,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { CoverImagesField } from "@/components/cover-images-field"
+import { InterestTagsField } from "@/components/interest-tags-field"
 import { LessonEditor, type LessonDraft } from "./lesson-editor"
 import {
   COURSE_DESCRIPTION_MAX,
   COURSE_LESSONS_MAX,
+  COURSE_TAGS_MAX,
   COURSE_TITLE_MAX,
   LESSON_DESCRIPTION_MAX,
   LESSON_TITLE_MAX,
@@ -57,14 +59,20 @@ function toLessonPayload(lessons: LessonDraft[]) {
  * - 新建 → `POST /api/teacher/courses`(落 pending,待管理员审核)
  * - 编辑 → `PATCH /api/teacher/courses/:courseId`(lessons 全量替换)
  *
+ * 兴趣标签为多选(仅可从已审核通过的标签库中挑选),与圈子表单口径一致。
+ * 课时**可为空**:支持先建课、后补课时,新建时默认不预置空白课时。
+ *
  * 响应式:弹窗限高可滚动,字段窄屏单列、≥640px 双列,长字段通栏。
  */
 export function CourseFormDialog({
   initial,
+  availableTags,
   onClose,
   onSaved,
 }: {
   initial: CourseFormInitial | null
+  /** 已通过审核的标签名称(SSR 传入,用于多选) */
+  availableTags: string[]
   onClose: () => void
   onSaved: () => void
 }) {
@@ -73,23 +81,22 @@ export function CourseFormDialog({
   const [title, setTitle] = useState(initial?.title ?? "")
   const [description, setDescription] = useState(initial?.description ?? "")
   const [coverImages, setCoverImages] = useState<string[]>(initial?.coverImages ?? [])
-  const [tagsText, setTagsText] = useState((initial?.tags ?? []).join("，"))
+  const [tags, setTags] = useState<string[]>(initial?.tags ?? [])
+  // 新建时不给空白课时(课时可后补);编辑态直接铺开已有课时
   const [lessons, setLessons] = useState<LessonDraft[]>(
-    initial?.lessons.length
-      ? initial.lessons.map((lesson) => ({
-          title: lesson.title,
-          description: lesson.description,
-          videoUrl: lesson.videoUrl,
-          durationSeconds: lesson.durationSeconds,
-        }))
-      : [{ title: "", description: "", videoUrl: "", durationSeconds: null }]
+    initial?.lessons.map((lesson) => ({
+      title: lesson.title,
+      description: lesson.description,
+      videoUrl: lesson.videoUrl,
+      durationSeconds: lesson.durationSeconds,
+    })) ?? []
   )
 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   /** 客户端必填校验:把后端 zod 的英文 "Invalid request body" 变成可读的中文提示 */
-  function validate(): { tags: string[] } | string {
+  function validate(): string | null {
     if (!title.trim()) return "课程标题不能为空"
     if (title.trim().length < 2) return "课程标题至少 2 字"
     if (title.trim().length > COURSE_TITLE_MAX) return `课程标题过长（最多 ${COURSE_TITLE_MAX} 字）`
@@ -98,7 +105,7 @@ export function CourseFormDialog({
     if (description.trim().length > COURSE_DESCRIPTION_MAX) {
       return `课程简介过长（最多 ${COURSE_DESCRIPTION_MAX} 字）`
     }
-    if (lessons.length === 0) return "至少添加 1 个课时"
+    // 课时可为空(先建课、后补课时),仅在填写了课时时逐条校验
     if (lessons.length > COURSE_LESSONS_MAX) return `课时最多 ${COURSE_LESSONS_MAX} 个`
     for (let i = 0; i < lessons.length; i += 1) {
       const lesson = lessons[i]
@@ -111,22 +118,15 @@ export function CourseFormDialog({
       }
       if (!lesson.videoUrl) return `请为第 ${i + 1} 个课时上传视频`
     }
-    // 标签:中文 / 英文逗号分隔,去空去重
-    const tags = Array.from(
-      new Set(
-        tagsText
-          .split(/[，,]/)
-          .map((tag) => tag.trim())
-          .filter(Boolean)
-      )
-    )
-    return { tags }
+    // 标签选填,但数量不得超上限(toggleTag 已拦截,此处兜底)
+    if (tags.length > COURSE_TAGS_MAX) return `兴趣标签最多 ${COURSE_TAGS_MAX} 个`
+    return null
   }
 
   async function handleSubmit() {
-    const checked = validate()
-    if (typeof checked === "string") {
-      setError(checked)
+    const invalid = validate()
+    if (invalid) {
+      setError(invalid)
       return
     }
     setBusy(true)
@@ -136,7 +136,7 @@ export function CourseFormDialog({
       title: title.trim(),
       description: description.trim(),
       coverImages,
-      tags: checked.tags,
+      tags,
       lessons: toLessonPayload(lessons),
     }
 
@@ -206,15 +206,13 @@ export function CourseFormDialog({
             />
           </div>
 
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="course-tags">兴趣标签</Label>
-            <Input
-              id="course-tags"
-              value={tagsText}
-              onChange={(e) => setTagsText(e.target.value)}
-              placeholder="选填，多个标签用逗号分隔，如：太极拳，养生"
-            />
-          </div>
+          {/* 兴趣标签多选(公共字段组件:只能从已审核通过的标签库中挑选) */}
+          <InterestTagsField
+            value={tags}
+            onChange={setTags}
+            availableTags={availableTags}
+            max={COURSE_TAGS_MAX}
+          />
 
           <CoverImagesField
             value={coverImages}

@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
  *
  * 覆盖:
  * - POST   /api/teacher/courses
- *     401 / 403 USER / 400 空 lessons / 201 成功(status=pending, lessons 带序)
+ *     401 / 403 USER / 201 空 lessons(先建课后补课时) / 201 成功(status=pending, lessons 带序)
  * - PATCH  /api/teacher/courses/:courseId
  *     401 / 400 非 uuid / 404 / 403 非创建者且非 ADMIN
  *     403 pending→active / 200 active→offline / 200 ADMIN 代管 / 200 lessons 全量替换
@@ -277,13 +277,21 @@ describe("POST /api/teacher/courses", () => {
     expect(mockDb.insert).not.toHaveBeenCalled()
   })
 
-  it("returns 400 when lessons is empty", async () => {
+  it("creates a course without lessons(先建课、后补课时)", async () => {
     authMock.mockResolvedValue(sessionOf(TEACHER))
+    insertReturningMock.mockResolvedValueOnce([makeCourseRow()])
+
     const res = await postCourse(
       makeJsonRequest({ ...VALID_BODY, lessons: [] }, "/api/teacher/courses")
     )
-    expect(res.status).toBe(400)
-    expect(mockDb.insert).not.toHaveBeenCalled()
+    expect(res.status).toBe(201)
+
+    const data = (await res.json()) as IResponse<CourseDTO>
+    expect(data.data.lessonCount).toBe(0)
+    expect(data.data.lessons).toEqual([])
+
+    // 事务内只插入课程:空课时数组不能走 insert().values([])
+    expect(mockDb.insert).toHaveBeenCalledTimes(1)
   })
 
   it("creates a pending course with ordered lessons", async () => {

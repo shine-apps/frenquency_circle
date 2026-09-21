@@ -105,7 +105,6 @@ export function LessonEditor({
                 size="icon-sm"
                 className="text-destructive"
                 aria-label="删除课时"
-                disabled={lessons.length <= 1}
                 onClick={() => remove(index)}
               >
                 <Trash2Icon />
@@ -149,7 +148,9 @@ export function LessonEditor({
       ))}
 
       {lessons.length === 0 ? (
-        <p className="text-xs text-muted-foreground">尚未添加课时，点击「添加课时」开始</p>
+        <p className="text-xs text-muted-foreground">
+          尚未添加课时，点击「添加课时」开始；也可以先保存课程，稍后再补课时
+        </p>
       ) : null}
     </div>
   )

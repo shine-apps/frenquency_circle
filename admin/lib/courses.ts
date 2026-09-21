@@ -10,11 +10,11 @@ import {
   type CourseStatus,
 } from "@/db/schema"
 import {
-  CIRCLE_TAGS_MAX,
   COVER_IMAGES_MAX,
   COURSE_DESCRIPTION_MAX,
   COURSE_LESSONS_MAX,
   COURSE_REVIEW_NOTE_MAX,
+  COURSE_TAGS_MAX,
   COURSE_TITLE_MAX,
   LESSON_DESCRIPTION_MAX,
   LESSON_TITLE_MAX,
@@ -56,7 +56,7 @@ const coverImagesSchema = z
 
 const tagsSchema = z
   .array(z.string().trim().min(1, "标签不能为空").max(50, "标签过长"))
-  .max(CIRCLE_TAGS_MAX, `兴趣标签最多 ${CIRCLE_TAGS_MAX} 个`)
+  .max(COURSE_TAGS_MAX, `兴趣标签最多 ${COURSE_TAGS_MAX} 个`)
 
 /**
  * 课时输入。`sortOrder` 不由客户端提交,由提交顺序派生(见 `deriveSortOrder`),
@@ -86,9 +86,12 @@ export const courseLessonInputSchema = z.object({
 
 export type CourseLessonInput = z.infer<typeof courseLessonInputSchema>
 
+/**
+ * 课时数组。**允许为空**:支持"先建课、后补课时"的草稿式建课流程
+ * (C 端对 0 课时的课程展示「课时整理中,敬请期待」)。
+ */
 const lessonsSchema = z
   .array(courseLessonInputSchema)
-  .min(1, "至少需要 1 个课时")
   .max(COURSE_LESSONS_MAX, `课时最多 ${COURSE_LESSONS_MAX} 个`)
 
 /** 创建课程输入(status 恒为 pending,不接受客户端指定) */
@@ -315,7 +318,12 @@ function toLessonInsert(
   }))
 }
 
-/** 创建课程(事务:课程 + 课时同成败),status 恒为 pending */
+/**
+ * 创建课程(事务:课程 + 课时同成败),status 恒为 pending。
+ *
+ * `lessons` 允许为空数组(先建课、后补课时);空数组时跳过插入,
+ * 因为 drizzle 的 `values([])` 会直接抛错。
+ */
 export async function createCourse(params: {
   creatorId: string
   input: CreateCourseInput
@@ -337,10 +345,12 @@ export async function createCourse(params: {
       })
       .returning()
 
-    const lessonRows = await tx
-      .insert(courseLessons)
-      .values(toLessonInsert(course.id, input.lessons))
-      .returning()
+    const lessonRows = input.lessons.length
+      ? await tx
+          .insert(courseLessons)
+          .values(toLessonInsert(course.id, input.lessons))
+          .returning()
+      : []
 
     return { course, lessons: lessonRows }
   })

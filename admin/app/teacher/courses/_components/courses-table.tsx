@@ -76,12 +76,15 @@ export function TeacherCoursesTable({
   items,
   scope,
   canSwitchScope,
+  availableTags,
 }: {
   items: TeacherCourseItem[]
   /** 当前数据范围:mine 仅自己 / all 全部(ADMIN) */
   scope: "mine" | "all"
   /** 是否展示「查看全部」开关(仅 ADMIN) */
   canSwitchScope: boolean
+  /** 可选标签(SSR 传入的已审核标签) */
+  availableTags: string[]
 }) {
   const router = useRouter()
   const [, startTransition] = useTransition()
@@ -269,6 +272,7 @@ export function TeacherCoursesTable({
       {form ? (
         <CourseFormDialog
           initial={form.initial}
+          availableTags={availableTags}
           onClose={() => setForm(null)}
           onSaved={() => {
             setForm(null)

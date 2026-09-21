@@ -11,6 +11,9 @@ export const COVER_IMAGES_MAX = 9
 /** 圈子兴趣标签数量上限 */
 export const CIRCLE_TAGS_MAX = 5
 
+/** 课程兴趣标签数量上限 */
+export const COURSE_TAGS_MAX = 5
+
 /** 课程标题长度上限 */
 export const COURSE_TITLE_MAX = 100
 /** 课程简介长度上限 */

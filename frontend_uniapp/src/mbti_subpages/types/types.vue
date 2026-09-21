@@ -55,7 +55,7 @@ onLoad(() => {
 })
 
 function goDetail(code: string) {
-  uni.navigateTo({ url: `/pages/mbti/type-detail?code=${code}` })
+  uni.navigateTo({ url: `/mbti_subpages/type-detail/type-detail?code=${code}` })
 }
 </script>
 

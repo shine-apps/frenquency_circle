@@ -88,7 +88,9 @@ export default defineConfig(({ command, mode }) => {
         // pages 目录为 src/pages，分包目录不能配置在pages目录下！！
         // 是个数组，可以配置多个，但是不能为pages里面的目录！！
         // "src/pages-demo" 是unibest demo 预留的，方便后续插入demo示例
-        subPackages: ['src/pages-demo'],
+        // "src/mbti_subpages" 是 MBTI 人格测试相关页面（intro/test/result/history/types/type-detail）的分包，
+        // 从主包迁出以减小主包体积，小程序端按需加载，H5 端仍为普通路由
+        subPackages: ['src/pages-demo', 'src/mbti_subpages'],
         dts: 'src/types/uni-pages.d.ts',
       }),
       // UniOptimization 插件需要 page.json 文件，故应在 UniPages 插件之后执行

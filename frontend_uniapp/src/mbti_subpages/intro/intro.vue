@@ -21,7 +21,7 @@ const mbtiStore = useMbtiStore()
 // ====== 分享(小程序好友/朋友圈 + H5 微信 JSSDK,引导朋友来测) ======
 const { share, shareAppMessage, shareTimeline } = useShare({
   title: 'MBTI 人格测试｜发现适合你的兴趣',
-  path: '/pages/mbti/intro',
+  path: '/mbti_subpages/intro/intro',
   desc: '精简版问卷 · 约 5 分钟,测出你的 16 型人格与推荐兴趣',
 })
 
@@ -35,7 +35,7 @@ onShareTimeline(shareTimeline)
 const hasRecommendations = computed(() => (mbtiStore.lastResult?.recommendations.length ?? 0) > 0)
 
 function startTest() {
-  uni.navigateTo({ url: '/pages/mbti/test' })
+  uni.navigateTo({ url: '/mbti_subpages/test/test' })
 }
 
 function goHistory() {
@@ -43,11 +43,11 @@ function goHistory() {
     uni.showToast({ title: '请先登录后查看历史', icon: 'none' })
     return
   }
-  uni.navigateTo({ url: '/pages/mbti/history' })
+  uni.navigateTo({ url: '/mbti_subpages/history/history' })
 }
 
 function goTypes() {
-  uni.navigateTo({ url: '/pages/mbti/types' })
+  uni.navigateTo({ url: '/mbti_subpages/types/types' })
 }
 
 /** 用我的推荐去找同好:有结果则带推荐兴趣跳首页匹配,暂无结果则引导先测 */
@@ -60,7 +60,7 @@ function goFindMatchByResult() {
     return
   }
   uni.showToast({ title: '先完成测试,即可按推荐找同好', icon: 'none' })
-  setTimeout(() => uni.navigateTo({ url: '/pages/mbti/test' }), 800)
+  setTimeout(() => uni.navigateTo({ url: '/mbti_subpages/test/test' }), 800)
 }
 
 function goHome() {

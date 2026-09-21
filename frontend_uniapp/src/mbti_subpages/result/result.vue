@@ -75,7 +75,7 @@ async function loadResult(recordId?: string) {
     }
     else {
       uni.showToast({ title: '暂无测试结果', icon: 'none' })
-      setTimeout(() => uni.redirectTo({ url: '/pages/mbti/intro' }), 800)
+      setTimeout(() => uni.redirectTo({ url: '/mbti_subpages/intro/intro' }), 800)
       return
     }
   }
@@ -94,7 +94,7 @@ onLoad((query) => {
 
 /** 重新测试 */
 function retake() {
-  uni.redirectTo({ url: '/pages/mbti/test' })
+  uni.redirectTo({ url: '/mbti_subpages/test/test' })
 }
 
 /** 查看历史(未登录引导登录) */
@@ -104,7 +104,7 @@ function goHistory() {
     toLoginPage()
     return
   }
-  uni.navigateTo({ url: '/pages/mbti/history' })
+  uni.navigateTo({ url: '/mbti_subpages/history/history' })
 }
 
 /** 找同趣的人与圈子:携带该兴趣跳首页匹配(匹配接口未强制登录,游客同样可用) */

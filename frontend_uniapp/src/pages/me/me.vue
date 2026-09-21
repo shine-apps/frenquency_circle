@@ -311,9 +311,9 @@ function handlePrivacy() {
   uni.navigateTo({ url: '/pages/privacy/privacy' })
 }
 
-/** 跳 MBTI 人格测试介绍页 */
+/** 跳 MBTI 人格测试介绍页(页面在 mbti_subpages 分包内) */
 function handleMbti() {
-  uni.navigateTo({ url: '/pages/mbti/intro' })
+  uni.navigateTo({ url: '/mbti_subpages/intro/intro' })
 }
 
 /** 跳关于页 */

@@ -75,13 +75,14 @@ pnpm build:mp   # 构建微信小程序，产物在 dist/build/mp-weixin
 
 ```
 src/
-├── pages/          # 约定式路由页面（自动注册）
+├── pages/          # 主包约定式路由页面（自动注册）
 │   ├── index/      # 首页（圈子/推荐）
 │   ├── auth/       # 登录、注册
 │   ├── circle/     # 圈子详情
 │   ├── me/         # 我的
 │   ├── privacy/    # 隐私设置
 │   └── about/      # 关于我们
+├── mbti_subpages/  # 分包：MBTI 人格测试（intro / test / result / history / types / type-detail）
 ├── layouts/        # 布局
 ├── router/         # 路由与登录拦截配置
 ├── components/     # 公共组件

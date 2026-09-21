@@ -79,7 +79,7 @@ async function handleSubmit() {
   try {
     const res = await submitMbtiTest(finalAnswers)
     mbtiStore.setResult(res)
-    uni.redirectTo({ url: '/pages/mbti/result' })
+    uni.redirectTo({ url: '/mbti_subpages/result/result' })
   }
   catch (e) {
     uni.showToast({ title: (e as Error).message || '提交失败,请重试', icon: 'none' })

@@ -48,11 +48,11 @@ onShow(() => {
 })
 
 function goDetail(item: MbtiTestRecordDTO) {
-  uni.navigateTo({ url: `/pages/mbti/result?recordId=${item.id}` })
+  uni.navigateTo({ url: `/mbti_subpages/result/result?recordId=${item.id}` })
 }
 
 function goIntro() {
-  uni.redirectTo({ url: '/pages/mbti/intro' })
+  uni.redirectTo({ url: '/mbti_subpages/intro/intro' })
 }
 </script>
 

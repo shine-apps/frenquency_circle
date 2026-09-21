@@ -49,7 +49,7 @@ onLoad((query) => {
 
 /** 去测一测(进入答题页) */
 function goTest() {
-  uni.redirectTo({ url: '/pages/mbti/test' })
+  uni.redirectTo({ url: '/mbti_subpages/test/test' })
 }
 
 /** 找同趣的人与圈子:携带该兴趣跳首页匹配(匹配接口未强制登录,游客同样可用) */

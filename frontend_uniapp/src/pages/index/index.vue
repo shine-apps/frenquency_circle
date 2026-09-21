@@ -395,9 +395,9 @@ function handleGoNotification(): void {
   uni.navigateTo({ url: '/pages/notifications/notifications' })
 }
 
-/** 跳 MBTI 介绍页(反向导流:测完人格可就势用推荐兴趣匹配同趣的人与圈子) */
+/** 跳 MBTI 介绍页(反向导流:测完人格可就势用推荐兴趣匹配同趣的人与圈子;页面在 mbti_subpages 分包内) */
 function handleGoMbti(): void {
-  uni.navigateTo({ url: '/pages/mbti/intro' })
+  uni.navigateTo({ url: '/mbti_subpages/intro/intro' })
 }
 
 /** 首页 MBTI 入口是否可见(用户可关闭,关闭后设备维度不再展示) */

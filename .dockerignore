@@ -19,13 +19,13 @@
 # 改为显式排除真正含密钥的 env 文件;frontend_uniapp/env/ 下仅含客户端 VITE_ 变量,构建期必需,不排除
 /.env
 /.env.*
-admin/.env
-admin/.env.*
+backend/.env
+backend/.env.*
 frontend_uniapp/.env
 frontend_uniapp/.env.*
 
 # 测试代码与产物(不进生产镜像)
-admin/tests
+backend/tests
 **/coverage
 **/test-results
 **/playwright-report

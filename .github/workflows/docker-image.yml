@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
-    # 功能验证依赖 PostgreSQL(与 admin/docker-compose.yml 凭据一致)
+    # 功能验证依赖 PostgreSQL(与 backend/docker-compose.yml 凭据一致)
     services:
       postgres:
         image: postgres:16
@@ -179,14 +179,14 @@ jobs:
             type=semver,pattern={{major}}
           labels: |
             org.opencontainers.image.title=frenqency_circle
-            org.opencontainers.image.description=Admin (Next.js) + H5 + Drizzle migrations
+            org.opencontainers.image.description=Backend (Next.js) + H5 + Drizzle migrations
             org.opencontainers.image.licenses=MIT
 
       # ============================================================
       # 5. 构建镜像(load 到本地 Docker,供验证步骤使用)
       #    使用 GitHub Actions 缓存加速后续构建
       #
-      #    注:高德地图 key 已改为运行时注入(由 admin /api/config/amap.js 提供),
+      #    注:高德地图 key 已改为运行时注入(由 backend /api/config/amap.js 提供),
       #    不再通过 BuildKit secret 注入。构建期无需任何 secret,
       #    PR from fork 也可自由复现构建。
       #    容器启动时通过 -e AMAP_KEY / -e AMAP_SECURITY_CODE 传入。

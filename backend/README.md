@@ -16,7 +16,7 @@ Next.js 16 后端 + 管理后台,为 `frenqency_circle` 仓库的 `frontend_unia
 
 ## 快速开始
 
-> 本子项目是**独立项目**,依赖与 `frontend_uniapp/` 不共享,`pnpm install` 仅作用于 `admin/` 目录。
+> 本子项目是**独立项目**,依赖与 `frontend_uniapp/` 不共享,`pnpm install` 仅作用于 `backend/` 目录。
 
 ```bash
 # 1. 启动 PostgreSQL(走 docker-compose)
@@ -91,7 +91,7 @@ pnpm dev
 ## 目录结构
 
 ```
-admin/
+backend/
 ├── app/                  # Next.js App Router
 │   ├── (auth)/login/     # 公共登录页
 │   ├── admin/            # 受保护的后台(由 proxy.ts 守卫)

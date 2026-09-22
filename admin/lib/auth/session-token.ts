@@ -112,13 +112,22 @@ export function readBearerToken(req: Request): string | null {
 /**
  * 从请求的 Bearer token 解析出当前用户。
  *
- * 利用 Auth.js v5 的 `getToken`,原生支持从 `Authorization: Bearer` 头读取 JWT。
+ * 利用 Auth.js v5 的 `getToken`,原生支持从 `Authorization: Bearer` 头读取 JWT,
+ * 也会从 cookie 读取(admin/teacher 网页端同源请求只带 cookie、不带 Bearer)。
  * JWT payload 中的 `id` / `email` / `name` / `role` 由 `auth.config.ts` 的
  * `jwt` callback 写入。
  *
  * 注意:Auth.js v5 的 JWT 是加密的,加密密钥由 secret + salt 经 HKDF 派生。
  * salt 取决于 secureCookie 设置(HTTP vs HTTPS),生产环境(HTTPS)和开发环境(HTTP)
  * 使用不同的 salt。本函数依次尝试两种 salt,兼容两种部署环境。
+ *
+ * 关键坑(本次修复):`getToken` 读取 cookie 时使用的 cookie 名由 `secureCookie`
+ * 决定 —— HTTP 下为 `authjs.session-token`,HTTPS 生产下为 `__Secure-authjs.session-token`。
+ * 若不显式传 `secureCookie`,它默认按 `false` 只读 `authjs.session-token`,
+ * 生产环境永远读不到带 `__Secure-` 前缀的 cookie,导致所有「仅靠 cookie 鉴权」的
+ * 调用方(网页端同源请求)被误判为未登录返回 401。
+ * 因此这里直接按请求协议推导 `secureCookie`(优先看反向代理下发的
+ * `X-Forwarded-Proto`,兜底看 `req.url` 协议),而非盲目尝试两种取值。
  */
 export async function readUserFromToken(
   req: Request
@@ -126,11 +135,26 @@ export async function readUserFromToken(
   const secret = process.env.AUTH_SECRET
   if (!secret) return null
 
+  // 生产环境 nginx 做 SSL 终止,backend 看到的 req.url 是 http,
+  // 故优先用 X-Forwarded-Proto(nginx 已设为 https)判断真实协议。
+  const forwardedProto = req.headers
+    .get("x-forwarded-proto")
+    ?.split(",")[0]
+    ?.trim()
+    .toLowerCase()
+  const isHttps =
+    forwardedProto === "https" ||
+    new URL(req.url).protocol === "https:"
+  const secureCookie = isHttps
+
+  // cookie 名差异:HTTPS 为 `__Secure-authjs.session-token`,HTTP 为 `authjs.session-token`。
+  // 解密 salt 与 secureCookie 同源,这里两套 salt 都试以兼容不同部署历史。
   for (const salt of JWT_SALTS) {
     const token = await getToken({
       req,
       secret,
       salt,
+      secureCookie,
     })
     if (token) {
       return {

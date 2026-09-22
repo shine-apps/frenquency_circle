@@ -12,7 +12,7 @@
 ## 快速开始
 
 ```bash
-# 1. 启动后端依赖的数据库(PostgreSQL 16,走 Docker)
+# 1. 启动后端依赖的数据库(PostgreSQL 18,走 Docker)
 cd backend && pnpm db:up
 
 # 2. 安装后端依赖并初始化数据库
@@ -78,7 +78,13 @@ root/
 
 ## 部署
 
-本仓库已不再提供统一的 Docker 镜像与 CI 工作流。两个子项目需独立构建与部署:
+本仓库提供统一的全量 Docker 镜像(H5 与 backend 同源部署)与配套 CI 工作流:
+
+- **根 [`Dockerfile`](./Dockerfile)** — 两阶段构建(`backend-builder` → `runtime`),把 `backend/` 的 Next.js standalone 产物、Drizzle 迁移文件与 `frontend_uniapp/` 的 H5 产物(`frontend_uniapp/h5-dist`,资源 base 为 `/ui/`)聚合进同一镜像;容器入口 `/entrypoint.sh` 先执行 Drizzle 迁移再启动 `server.js`,健康检查探测 `/api/health`。
+  - H5 产物不在镜像内构建:本地构建镜像前需先 `cd frontend_uniapp && pnpm install --frozen-lockfile --no-scripts && pnpm build:h5`,再 `rm -rf h5-dist && cp -r dist/build/h5 h5-dist`(详见 `Dockerfile` 头部说明)。
+- **[`.github/workflows/docker-image.yml`](./.github/workflows/docker-image.yml)** — push 到 `main`/`master`、打 `v*` 标签、PR、手动 dispatch 时触发;流程为:runner 上构建 H5 产物 → Hadolint 校验 Dockerfile → 构建镜像 → 起容器做功能验证(健康检查 + `/api/health`、`/api/config/amap.js` 探测 + 文件校验) → Trivy 漏洞扫描 → 发布到 GHCR(`ghcr.io/shine-apps/frenquency_circle`)。
+
+两个子项目也可独立构建与部署:
 
 - `backend/`:Next.js 16 standalone 产物在 `backend/.next/standalone/`,部署时复制 standalone/ + `.next/static/` + `public/` 即可启动。
 - `frontend_uniapp/`:uni-app 跨端产物按目标平台走 `pnpm build:<plat>`,具体见 [frontend_uniapp/README.md](./frontend_uniapp/README.md)。

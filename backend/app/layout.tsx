@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "frenqency_circle admin",
-  description: "frenqency_circle 后台管理系统",
+  title: "qulinquan admin",
+  description: "qulinquan 后台管理系统",
 };
 
 export default function RootLayout({

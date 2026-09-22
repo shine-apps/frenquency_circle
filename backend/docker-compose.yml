@@ -1,18 +1,20 @@
 services:
   postgres:
-    image: postgis/postgis:16-3.4
-    container_name: frenqency_circle_postgres
+    image: postgres:18-alpine
+    container_name: qulinquan_postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: frenqency
       POSTGRES_PASSWORD: frenqency
-      POSTGRES_DB: frenqency_circle
+      POSTGRES_DB: qulinquan
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # PG 18 起官方镜像布局变更:PGDATA=/var/lib/postgresql/18/docker、VOLUME=/var/lib/postgresql
+      # (旧版为 /var/lib/postgresql/data)。挂载点必须同步,否则数据落在命名卷之外,容器重建即丢。
+      - postgres_data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U frenqency -d frenqency_circle"]
+      test: ["CMD-SHELL", "pg_isready -U frenqency -d qulinquan"]
       interval: 5s
       timeout: 5s
       retries: 5

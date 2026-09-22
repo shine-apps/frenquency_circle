@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # =============================================================================
-# frenqency_circle 镜像:backend (Next.js standalone) + Drizzle 迁移 + frontend_uniapp H5
+# qulinquan 镜像:backend (Next.js standalone) + Drizzle 迁移 + frontend_uniapp H5
 # 两阶段构建:backend-builder → runtime
 # - backend-builder:构建 Next.js standalone 产物
 # - runtime:聚合 backend 产物与 H5 静态资源,使 H5 与 backend 同源部署(资源 base 为 /ui/)

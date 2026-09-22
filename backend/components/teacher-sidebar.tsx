@@ -44,7 +44,7 @@ export function TeacherSidebar() {
                 <AudioWaveformIcon className="size-4" />
               </div>
               <div className="flex flex-col gap-0.5 leading-none">
-                <span className="font-medium">frenqency</span>
+                <span className="font-medium">qulinquan</span>
                 <span className="text-xs text-muted-foreground">teacher</span>
               </div>
             </SidebarMenuButton>

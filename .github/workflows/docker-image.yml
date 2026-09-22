@@ -1,5 +1,5 @@
 # =============================================================================
-# Docker Image CI — 构建、验证、发布 frenqency_circle 全量镜像
+# Docker Image CI — 构建、验证、发布 qulinquan 全量镜像
 # =============================================================================
 # 触发:push 到 main/master、打 v* 标签、提交 PR、手动 dispatch
 # 产物:ghcr.io/<owner>/<repo>:<tag>  (GitHub Container Registry)
@@ -47,18 +47,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
-    # 功能验证依赖 PostgreSQL(与 backend/docker-compose.yml 凭据一致)
+    # 功能验证依赖 PostgreSQL(与 backend/docker-compose.yml 的大版本/凭据一致)
     services:
       postgres:
-        image: postgres:16
+        image: postgres:18
         env:
           POSTGRES_USER: frenqency
           POSTGRES_PASSWORD: frenqency
-          POSTGRES_DB: frenqency_circle
+          POSTGRES_DB: qulinquan
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U frenqency -d frenqency_circle"
+          --health-cmd "pg_isready -U frenqency -d qulinquan"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -178,7 +178,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
           labels: |
-            org.opencontainers.image.title=frenqency_circle
+            org.opencontainers.image.title=qulinquan
             org.opencontainers.image.description=Backend (Next.js) + H5 + Drizzle migrations
             org.opencontainers.image.licenses=MIT
 
@@ -198,7 +198,7 @@ jobs:
           context: .
           file: ./Dockerfile
           load: true
-          tags: frenqency-circle:ci-test
+          tags: qulinquan:ci-test
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false
@@ -226,13 +226,13 @@ jobs:
           docker run -d \
             --name verify-app \
             --network host \
-            -e DATABASE_URL="postgresql://frenqency:frenqency@localhost:5432/frenqency_circle" \
+            -e DATABASE_URL="postgresql://frenqency:frenqency@localhost:5432/qulinquan" \
             -e AUTH_SECRET="$AUTH_SECRET" \
             -e AUTH_TRUST_HOST="true" \
             -e PORT=3000 \
             -e AMAP_KEY="$AMAP_KEY" \
             -e AMAP_SECURITY_CODE="$AMAP_SECURITY_CODE" \
-            frenqency-circle:ci-test
+            qulinquan:ci-test
           echo "::endgroup::"
 
           echo "::group::等待健康检查通过"
@@ -342,7 +342,7 @@ jobs:
         continue-on-error: true
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: frenqency-circle:ci-test
+          image-ref: qulinquan:ci-test
           format: sarif
           output: trivy-results.sarif
           exit-code: '0'

@@ -1,13 +1,13 @@
 # admin
 
-Next.js 16 后端 + 管理后台,为 `frenqency_circle` 仓库的 `frontend_uniapp/` 提供 REST API。
+Next.js 16 后端 + 管理后台,为 `qulinquan` 仓库的 `frontend_uniapp/` 提供 REST API。
 
 ## 技术栈
 
 - **Next.js 16.2.9**(App Router + Turbopack)
 - **React 19.2.4**
 - **Auth.js 5.0.0-beta.31**(多 Credentials Provider + JWT session)
-- **Drizzle ORM 0.45.2** + PostgreSQL 16
+- **Drizzle ORM 0.45.2** + PostgreSQL 18
 - **shadcn/ui 4.11.0** + **Tailwind v4** + **`@base-ui/react`**
 - **Zod 4.x** / **bcryptjs 3.x** / **Aliyun SMS**
 - **cache-manager 7**(默认进程内内存缓存,可选 `@keyv/redis`)

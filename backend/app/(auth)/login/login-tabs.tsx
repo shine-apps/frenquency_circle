@@ -17,7 +17,7 @@ export function LoginTabs() {
       <CardHeader>
         <CardTitle className="text-xl">后台登录</CardTitle>
         <CardDescription>
-          使用管理员账号登录 frenqency_circle 后台。
+          使用管理员账号登录 qulinquan 后台。
         </CardDescription>
       </CardHeader>
       <CardContent>

@@ -1,6 +1,6 @@
 ---
 name: local-dev
-description: 本地一键启动项目服务。当用户要求"启动项目/启动后端/启动前端/启动 H5/启动微信小程序/run dev/local start"时触发。负责在终端中按端口占用检测启动 admin 后端（:3000）与 frontend_uniapp 前端（H5 或微信小程序），已启动则跳过。
+description: 本地一键启动项目服务。当用户要求"启动项目/启动后端/启动前端/启动 H5/启动微信小程序/run dev/local start"时触发。负责在终端中按端口占用检测启动 backend 后端（:3000）与 frontend_uniapp 前端（H5 或微信小程序），已启动则跳过。
 allowed-tools:
 disable: false
 ---
@@ -11,7 +11,7 @@ disable: false
 
 ## 项目背景
 
-- `admin/`：Next.js 后端 + 管理后台，开发服务器默认监听 `:3000`。
+- `backend/`：Next.js 后端 + 管理后台，开发服务器默认监听 `:3000`。
 - `frontend_uniapp/`：uni-app 客户端，支持 H5（`pnpm dev:h5`）与微信小程序（`pnpm dev:mp-weixin`）。
 
 两个子项目互相独立，需分别启动。
@@ -36,14 +36,14 @@ disable: false
 
   **Windows (PowerShell)：**
   ```powershell
-  cd C:\Users\shine\projects\frenquency_circle
-  cd admin
+  cd D:\projects\qulinquan\qulinquan-code
+  cd backend
   pnpm run dev
   ```
   **非 Windows (bash)：**
   ```bash
-  cd /c/Users/shine/projects/frenquency_circle   # 或仓库实际绝对路径
-  cd ./admin
+  cd /d/projects/qulinquan/qulinquan-code   # 或仓库实际绝对路径
+  cd ./backend
   pnpm run dev
   ```
 
@@ -63,13 +63,13 @@ disable: false
 
   **Windows (PowerShell)：**
   ```powershell
-  cd C:\Users\shine\projects\frenquency_circle
+  cd D:\projects\qulinquan\qulinquan-code
   cd frontend_uniapp
   pnpm run dev:h5        # 或 pnpm run dev:mp-weixin
   ```
   **非 Windows (bash)：**
   ```bash
-  cd /c/Users/shine/projects/frenquency_circle   # 或仓库实际绝对路径
+  cd /d/projects/qulinquan/qulinquan-code   # 或仓库实际绝对路径
   cd ./frontend_uniapp
   pnpm run dev:h5      # 或 pnpm run dev:mp-weixin
   ```

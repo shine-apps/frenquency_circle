@@ -49,7 +49,7 @@ export default async function AdminDashboardPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
         <p className="text-sm text-muted-foreground">
-          frenqency_circle 后台概览
+          qulinquan 后台概览
         </p>
       </div>
 

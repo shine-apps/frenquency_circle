@@ -7,18 +7,26 @@
  *   输入防抖后回到第一页重拉(wd-search 的 change / search / clear 三个入口统一走 applyKeyword);
  * - 首次激活时拉取,后续由父级(广场页)在 onShow / 下拉 / 触底时
  *   通过 defineExpose 的 refresh / loadMore 委托调用(刷新保留当前关键词);
- * - 点击卡片跳课程详情播放页。
+ * - 点击卡片跳课程详情播放页;
+ * - 工具条右侧「创建课程」入口:未登录先引导登录,登录后跳发布视频课程页。
  */
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { getCourses } from '@/api/courses'
+import { useUserStore } from '@/store/user'
 import { debounce } from '@/utils/debounce'
 import { formatDate, formatTotalDuration } from '@/utils/format'
+import { toLoginWithRedirect } from '@/utils/toLoginPage'
 import type { PublicCourseDTO } from '@/types'
 
 const props = defineProps<{
   /** 是否为当前激活 tab(兜底:懒渲染场景下挂载即拉取) */
   active?: boolean
 }>()
+
+const userStore = useUserStore()
+
+/** 是否已登录(创建课程需登录,未登录先引导) */
+const isLoggedIn = computed(() => userStore.isLoggedIn)
 
 const PAGE_SIZE = 20
 /** 检索输入防抖时长:避免逐字符触发请求 */
@@ -145,11 +153,20 @@ onUnmounted(() => {
 function goCourse(courseId: string) {
   uni.navigateTo({ url: `/pages/course-detail/course-detail?id=${courseId}` })
 }
+
+/** 跳发布视频课程页(任意登录用户均可发布,未登录先引导登录) */
+function handleCreateCourse() {
+  if (!isLoggedIn.value) {
+    toLoginWithRedirect('navigateTo')
+    return
+  }
+  uni.navigateTo({ url: '/pages/create-course/create-course' })
+}
 </script>
 
 <template>
   <view class="flex flex-col">
-    <!-- 工具条:检索框 + 统计 -->
+    <!-- 工具条:检索框 + 统计 + 创建入口 -->
     <view class="bg-white px-4 pb-3 pt-1">
       <wd-search
         v-model="keywordInput"
@@ -159,9 +176,20 @@ function goCourse(courseId: string) {
         @search="handleKeywordSearch"
         @clear="handleResetKeyword"
       />
-      <text class="mt-2 block text-xs text-[#999]">
-        {{ hintText }}
-      </text>
+      <view class="mt-2 flex items-center gap-3">
+        <text class="min-w-0 flex-1 truncate text-xs text-[#999]">
+          {{ hintText }}
+        </text>
+        <view
+          class="shrink-0 flex items-center gap-1 rounded-full bg-[#e8f5f1] px-3 py-1.5 active:opacity-80"
+          @click="handleCreateCourse"
+        >
+          <text class="i-carbon-add text-sm text-[#018d71]" />
+          <text class="text-xs text-[#018d71] font-medium">
+            创建课程
+          </text>
+        </view>
+      </view>
     </view>
 
     <!-- 加载中(首屏) -->

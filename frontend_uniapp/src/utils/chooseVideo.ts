@@ -1,7 +1,8 @@
 /**
  * 跨平台视频选择公共方法(打卡媒体选择:一次仅 1 个视频)。
  *
- * - 小程序 / App:`uni.chooseMedia`(mediaType: ['video']),取 `tempFilePath`
+ * - 小程序 / App:`uni.chooseMedia`(mediaType: ['video']),取 `tempFilePath`;
+ *   拍摄时长按平台上限夹取(见 `clampMpMaxDuration`),相册选择不受时长限制
  * - H5:`uni.chooseVideo`(`uni.chooseMedia` 在 H5 不支持),
  *   返回 blob URL,可直接作为 `uploadFileToCos` 的 `file` 入参
  *
@@ -24,6 +25,22 @@ export interface ChooseVideoOptions {
   prefix?: string
   /** 最长可拍摄时长(秒),默认 60 */
   maxDuration?: number
+}
+
+/**
+ * 小程序端「拍摄」时长上限(秒)。
+ *
+ * 微信 `wx.chooseMedia` 的 `maxDuration` 限 3-60s,超出范围时 iOS 端会直接失败
+ * (安卓不受限),故统一夹取到 60。该参数只约束「拍摄」,从相册选择视频不受限制,
+ * 因此课时视频这类长视频仍可从相册选入。
+ */
+const MP_CAMERA_MAX_DURATION = 60
+
+/** 把 maxDuration 夹到小程序端允许范围(仅用于 chooseMedia 的拍摄参数) */
+export function clampMpMaxDuration(seconds: number): number {
+  if (!Number.isFinite(seconds) || seconds <= 0)
+    return MP_CAMERA_MAX_DURATION
+  return Math.min(Math.max(Math.round(seconds), 3), MP_CAMERA_MAX_DURATION)
 }
 
 /** 从临时路径推断扩展名(无扩展名时回退 mp4) */
@@ -50,7 +67,8 @@ export async function chooseVideo(
       count: 1,
       mediaType: ['video'],
       sourceType: ['album', 'camera'],
-      maxDuration,
+      // 拍摄时长需夹到平台允许范围(相册选择不受该参数限制)
+      maxDuration: clampMpMaxDuration(maxDuration),
       camera: 'back',
     })
     const tempFile = (mediaRes as unknown as {

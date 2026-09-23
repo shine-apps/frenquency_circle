@@ -5,18 +5,25 @@
  * - 调 GET /api/activities 拉取全部 active 活动,按起始时间倒序分页;
  * - 首次激活时拉取,后续由父级(广场页)在 onShow / 下拉 / 触底时
  *   通过 defineExpose 的 refresh / loadMore 委托调用;
- * - 点击卡片跳活动详情。
+ * - 点击卡片跳活动详情;
+ * - 工具条右侧「发布活动」入口:未登录先引导登录,登录后跳发布活动页。
  */
-import { ref } from 'vue'
-import { onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { getActivities } from '@/api/activities'
 import ActivityCard from '@/components/ActivityCard/ActivityCard.vue'
+import { useUserStore } from '@/store/user'
+import { toLoginWithRedirect } from '@/utils/toLoginPage'
 import type { ActivityDTO } from '@/types'
 
 const props = defineProps<{
   /** 是否为当前激活 tab(兜底:懒渲染场景下挂载即拉取) */
   active?: boolean
 }>()
+
+const userStore = useUserStore()
+
+/** 是否已登录(发布活动需登录,未登录先引导) */
+const isLoggedIn = computed(() => userStore.isLoggedIn)
 
 const PAGE_SIZE = 20
 
@@ -76,15 +83,35 @@ onMounted(() => {
 function goActivity(activity: ActivityDTO) {
   uni.navigateTo({ url: `/pages/activity/activity?activityId=${activity.id}` })
 }
+
+/** 跳发布活动页(任意登录用户均可发布,未登录先引导登录) */
+function handleCreateActivity() {
+  if (!isLoggedIn.value) {
+    toLoginWithRedirect('navigateTo')
+    return
+  }
+  uni.navigateTo({ url: '/pages/create-activity/create-activity' })
+}
 </script>
 
 <template>
   <view class="flex flex-col">
-    <!-- 工具条:统计 -->
+    <!-- 工具条:统计 + 发布入口 -->
     <view class="bg-white px-4 pb-3 pt-1">
-      <text class="text-xs text-[#999]">
-        {{ total > 0 ? `共 ${total} 个活动,按起始时间排序` : '发现身边的精彩活动' }}
-      </text>
+      <view class="flex items-center gap-3">
+        <text class="min-w-0 flex-1 truncate text-xs text-[#999]">
+          {{ total > 0 ? `共 ${total} 个活动,按起始时间排序` : '发现身边的精彩活动' }}
+        </text>
+        <view
+          class="shrink-0 flex items-center gap-1 rounded-full bg-[#e8f5f1] px-3 py-1.5 active:opacity-80"
+          @click="handleCreateActivity"
+        >
+          <text class="i-carbon-add text-sm text-[#018d71]" />
+          <text class="text-xs text-[#018d71] font-medium">
+            发布活动
+          </text>
+        </view>
+      </view>
     </view>
 
     <!-- 加载中 -->

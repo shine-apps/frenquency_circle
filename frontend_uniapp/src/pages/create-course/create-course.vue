@@ -5,6 +5,9 @@
  * - 课程:标题 / 简介 / 封面图(0-9 张)/ 兴趣标签(0-5 个);
  * - 课时:可增删与上下移,每个课时含标题、简介与 1 个视频(0-30 个,允许先建课后补课时);
  * - 视频与封面在客户端直传 COS(scope=uploads/<userId>/*),提交接口只传 URL;
+ * - 平台:H5(`cos-js-sdk-v5`)与微信小程序(`cos-wx-sdk-v5`)均可发布,
+ *   媒体选择 / 上传按平台条件编译切换;其它平台暂无 COS 直传 SDK;
+ * - 小程序端提交前走微信内容安全审核(开关由后端系统设置控制);
  * - 限额与后端 `lib/form-limits.ts` 保持一致,前端先校验避免无效请求。
  */
 import { computed, ref } from 'vue'
@@ -195,6 +198,8 @@ async function handlePickVideo(index: number) {
   if (!lesson || lesson.uploading)
     return
   try {
+    // 最长 30 分钟:H5 端 chooseVideo 支持;小程序端该值只作用于「拍摄」(平台限 60s,
+    // 由 chooseVideo 内部夹取),从相册选长视频不受限制
     const picked = await chooseVideo({ prefix: `course-lesson-${index + 1}`, maxDuration: 60 * 30 })
     if (!picked)
       return

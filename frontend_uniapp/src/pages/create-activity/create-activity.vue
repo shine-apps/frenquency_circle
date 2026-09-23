@@ -121,12 +121,7 @@ onLoad(async (options) => {
     return
   }
   activityId.value = (options as any)?.activityId || null
-  // 新建模式:仅 TEACHER / ADMIN 可创建活动,其余角色先完成教师认证
-  if (!activityId.value && !['TEACHER', 'ADMIN'].includes(userStore.userInfo?.role ?? '')) {
-    uni.showToast({ title: '请先完成教师认证', icon: 'none' })
-    uni.redirectTo({ url: '/pages/teacher-certification/teacher-certification' })
-    return
-  }
+  // 新建模式:任意登录用户均可发布活动(不再要求教师认证)
   if (activityId.value) {
     void loadDetail()
   }

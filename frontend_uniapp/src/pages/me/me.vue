@@ -6,7 +6,6 @@ import { useSettingsStore } from '@/store/settings'
 import { getMyProfile, updateMyTags, updateProfile } from '@/api/auth'
 import { getUnreadNotificationCount } from '@/api/notifications'
 import { getRecentCourses } from '@/api/courses'
-import { canCreateCircle } from '@/utils/role'
 import { LOGIN_PAGE } from '@/router/config'
 import { toLoginWithRedirect } from '@/utils/toLoginPage'
 import TagSelectorPopup from '@/components/TagSelectorPopup/TagSelectorPopup.vue'
@@ -231,36 +230,22 @@ function handleContactRequests() {
   uni.navigateTo({ url: '/pages/contact-requests/contact-requests' })
 }
 
-/** 跳我发布的圈子页(TEACHER / ADMIN 专属) */
+/** 跳我发布的圈子页(任意登录用户均可访问) */
 function handleMyPublished() {
-  if (!canCreateCircle(user.value?.role)) {
-    uni.showToast({ title: '仅教师身份可访问', icon: 'none' })
+  if (!isLoggedIn.value) {
+    toLoginWithRedirect('navigateTo')
     return
   }
   uni.navigateTo({ url: '/pages/my-published/my-published' })
 }
 
-/** 跳我的活动页:TEACHER / ADMIN 直达,其他角色弹框引导教师认证 */
+/** 跳我的活动页(任意登录用户均可发布与管理活动) */
 function handleMyActivities() {
   if (!isLoggedIn.value) {
     toLoginWithRedirect('navigateTo')
     return
   }
-  if (canCreateCircle(user.value?.role)) {
-    uni.navigateTo({ url: '/pages/my-activities/my-activities' })
-    return
-  }
-  uni.showModal({
-    title: '提示',
-    content: '仅认证教师可发布与管理活动,是否前往教师认证?',
-    confirmText: '去认证',
-    cancelText: '暂不',
-    success(res) {
-      if (res.confirm) {
-        uni.navigateTo({ url: '/pages/teacher-certification/teacher-certification' })
-      }
-    },
-  })
+  uni.navigateTo({ url: '/pages/my-activities/my-activities' })
 }
 
 /** 跳活动广场(原底部 Tab 入口,改为「我的」页入口) */
@@ -301,9 +286,13 @@ function handleMyCheckins() {
   uni.navigateTo({ url: '/pages/my-checkins/my-checkins' })
 }
 
-/** 跳教师认证页(非 TEACHER / ADMIN 角色) */
-function handleTeacherCert() {
-  uni.navigateTo({ url: '/pages/teacher-certification/teacher-certification' })
+/** 跳发布视频课程页(任意登录用户均可发布) */
+function handleCreateCourse() {
+  if (!isLoggedIn.value) {
+    toLoginWithRedirect('navigateTo')
+    return
+  }
+  uni.navigateTo({ url: '/pages/create-course/create-course' })
 }
 
 /** 跳隐私设置页 */
@@ -521,7 +510,7 @@ const roleChipClass = computed(() => {
       </view>
 
       <view
-        v-if="canCreateCircle(user?.role)"
+        v-if="isLoggedIn"
         class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4"
         @click="handleMyPublished"
       >
@@ -530,7 +519,7 @@ const roleChipClass = computed(() => {
             我发布的圈子
           </text>
           <text class="mt-0.5 text-xs text-[#999]">
-            教师专属
+            查看与管理我创建的圈子
           </text>
         </view>
         <text class="text-sm text-[#ccc]">
@@ -548,6 +537,23 @@ const roleChipClass = computed(() => {
           </text>
           <text class="mt-0.5 text-xs text-[#999]">
             发布与维护活动
+          </text>
+        </view>
+        <text class="text-sm text-[#ccc]">
+          ›
+        </text>
+      </view>
+
+      <view
+        class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4"
+        @click="handleCreateCourse"
+      >
+        <view class="flex flex-col">
+          <text class="text-sm text-[#333] font-medium">
+            发布视频课程
+          </text>
+          <text class="mt-0.5 text-xs text-[#999]">
+            创建课程并上传课时视频
           </text>
         </view>
         <text class="text-sm text-[#ccc]">
@@ -595,24 +601,6 @@ const roleChipClass = computed(() => {
             ›
           </text>
         </view>
-      </view>
-
-      <view
-        v-if="!canCreateCircle(user?.role)"
-        class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4"
-        @click="handleTeacherCert"
-      >
-        <view class="flex flex-col">
-          <text class="text-sm text-[#333] font-medium">
-            教师认证
-          </text>
-          <text class="mt-0.5 text-xs text-[#999]">
-            申请成为认证教师,发布圈子
-          </text>
-        </view>
-        <text class="text-sm text-[#ccc]">
-          ›
-        </text>
       </view>
 
       <view class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4" @click="handlePrivacy">

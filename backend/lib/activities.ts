@@ -130,7 +130,7 @@ export type UpdateActivityInput = z.infer<typeof updateActivitySchema>
 /**
  * 创建活动(落库)。
  *
- * 角色门槛由调用方守卫(C 端 `/api/activities` 用 `requireSession` + PUBLISH_ROLES,
+ * 登录门槛由调用方守卫(C 端 `/api/activities` 用 `requireSession`,任意登录用户可发布;
  * 教师后台 `/api/teacher/activities` 用 `requireTeacher`)后调用,
  * 两条链路共用同一份落库实现,避免字段遗漏。
  */

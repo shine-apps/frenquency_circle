@@ -32,7 +32,7 @@ export interface UserCirclesParams {
   pageSize?: number
 }
 
-/** 创建圈子(需 TEACHER 角色)。24 小时内最多 5 个,超限返回 429 */
+/** 创建圈子(任意登录用户均可)。24 小时内最多 5 个,超限返回 429;创建后待管理员审核 */
 export function createCircle(input: CreateCircleInput) {
   return http.post<CreateCircleResult>('/api/circles', input as unknown as Record<string, unknown>)
 }

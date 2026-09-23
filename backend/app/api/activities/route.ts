@@ -11,30 +11,24 @@ import {
   toActivityDTO,
   type CreateActivityInput,
 } from "@/lib/activities"
-import type { ActivityDTO, ActivityListDTO, Paginated, UserRole } from "@/types/api"
-
-/** 可发布活动的角色 */
-const PUBLISH_ROLES: UserRole[] = ["TEACHER", "ADMIN"]
+import type { ActivityDTO, ActivityListDTO, Paginated } from "@/types/api"
 
 /**
  * POST /api/activities
  *
- * 发布活动(TEACHER / ADMIN 直接发布,无需圈子)。
- * - 401 未登录 / 403 非 TEACHER/ADMIN / 400 校验失败 / 201 成功
+ * 发布活动(任意登录用户可发布,无需圈子,不区分角色)。
+ * - 401 未登录 / 400 校验失败 / 201 成功
+ * - 活动创建即 status=active 直接上线(与圈子 / 课程的待审核不同,沿用既有口径)
  */
 export async function OPTIONS(req: Request) {
   return corsOptions(req)
 }
 
 export async function POST(req: Request) {
-  // 1. 鉴权
+  // 1. 鉴权(仅要求登录,角色不参与准入判定)
   const guard = await requireSession(req)
   if ("response" in guard) return guard.response
   const { id: userId, role } = guard.user
-
-  if (!PUBLISH_ROLES.includes(role as UserRole)) {
-    return withCors(fail(403, "只有教师或管理员可以发布活动"), req)
-  }
 
   // 2. 解析并校验请求体
   const body = await req.json().catch(() => null)

@@ -227,12 +227,7 @@ onLoad(async (options) => {
     return
   }
   editId.value = (options as any)?.id || ''
-  // 新建模式:仅 TEACHER / ADMIN 可创建圈子,其余角色先完成教师认证
-  if (!isEdit.value && !['TEACHER', 'ADMIN'].includes(userStore.userInfo?.role ?? '')) {
-    uni.showToast({ title: '请先完成教师认证', icon: 'none' })
-    uni.redirectTo({ url: '/pages/teacher-certification/teacher-certification' })
-    return
-  }
+  // 新建模式:任意登录用户均可创建圈子(不再要求教师认证)
   if (isEdit.value) {
     void fetchForEdit(editId.value)
   }

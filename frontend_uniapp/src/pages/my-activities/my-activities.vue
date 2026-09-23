@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 /**
- * 我的活动管理页(TEACHER / ADMIN 专属,与圈子解耦)。
+ * 我的活动管理页(任意登录用户可用,与圈子解耦)。
  *
  * 调 GET /api/activities?mine=1 拉取自己发布的活动(含已取消)。
  * 支持:发布新活动、编辑、取消(软取消)、查看详情。
@@ -9,7 +9,7 @@ import { ref } from 'vue'
 import { useUserStore } from '@/store/user'
 import { cancelActivity, getActivities } from '@/api/activities'
 import { formatDateTime } from '@/utils/format'
-import { canCreateCircle } from '@/utils/role'
+import { toLoginWithRedirect } from '@/utils/toLoginPage'
 import type { ActivityDTO } from '@/types'
 
 definePage({
@@ -46,12 +46,10 @@ async function fetchList() {
   }
 }
 
-// 进入时权限校验 + 拉取
+// 进入时登录校验 + 拉取(任意登录用户均可发布与管理自己发起的活动)
 onShow(() => {
-  const role = userStore.userInfo?.role
-  if (!canCreateCircle(role)) {
-    uni.showToast({ title: '仅教师身份可访问', icon: 'none' })
-    setTimeout(() => uni.navigateBack(), 800)
+  if (!userStore.isLoggedIn) {
+    toLoginWithRedirect('navigateTo')
     return
   }
   void fetchList()

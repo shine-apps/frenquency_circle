@@ -345,16 +345,32 @@ describe("POST /api/circles", () => {
     expect(mockDb.insert).not.toHaveBeenCalled()
   })
 
-  it("returns 403 when USER role (non-TEACHER)", async () => {
+  it("creates circle successfully for USER role (创建不要求教师认证)", async () => {
     readUserFromTokenMock.mockResolvedValue(REGULAR_USER)
+    // select 1: 24h 配额校验(0 个近期圈子)
+    // select 2: 标签名称存在性校验(2 个 approved 标签)
+    setSelectResultsQueue([[], [makeTagRow(), makeTagRow({ name: TAG_NAME_2 })]])
+    insertReturningMock.mockResolvedValue([{ id: "user-circle-uuid" }])
+
     const res = await POST(
       makeJsonRequest(VALID_CIRCLE_BODY, "/api/circles")
     )
-    expect(res.status).toBe(403)
-    const body = (await res.json()) as IResponse<null>
-    expect(body.code).toBe(403)
-    expect(body.message).toContain("教师认证")
-    expect(mockDb.insert).not.toHaveBeenCalled()
+    expect(res.status).toBe(201)
+    const body = (await res.json()) as IResponse<{
+      circleId: string
+      status: string
+    }>
+    expect(body.code).toBe(201)
+    expect(body.data.circleId).toBe("user-circle-uuid")
+    // 任意角色创建后同样待审核
+    expect(body.data.status).toBe("pending")
+    // 圈子按调用者身份落库(creatorId 为用户本人,不因角色变化)
+    const valuesCalls = chainInsert.values.mock.calls
+    const circleInsert = valuesCalls.find((call) => {
+      const v = call[0] as Record<string, unknown> | undefined
+      return !!v && v.title === VALID_CIRCLE_BODY.title
+    })
+    expect(circleInsert?.[0]).toMatchObject({ creatorId: REGULAR_USER.id })
   })
 
   it("creates circle successfully and returns 201 with circleId", async () => {

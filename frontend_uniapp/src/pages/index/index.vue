@@ -14,7 +14,6 @@ import { reverseGeocode } from '@/utils/geo'
 import { saveGuestLocation, saveGuestTags } from '@/utils/guest-profile'
 import { closeHomeMbtiEntry, isHomeMbtiEntryClosed } from '@/utils/home-mbti-entry'
 import { activityLevelText, formatDateTime, formatDistance } from '@/utils/format'
-import { canCreateCircle } from '@/utils/role'
 import { useShare } from '@/composables/useShare'
 import MatchFilterBar from '@/components/MatchFilterBar/MatchFilterBar.vue'
 import ProfileSetupPopup from '@/components/ProfileSetupPopup/ProfileSetupPopup.vue'
@@ -380,12 +379,12 @@ function handleClearTags(): void {
   }
 }
 
-/** 跳创建圈子页(仅 TEACHER / ADMIN) */
+/** 跳创建圈子页(任意登录用户均可创建,未登录由页面内登录守卫拦截) */
 function handleCreateCircle(): void {
   uni.navigateTo({ url: '/pages/create-circle/create-circle' })
 }
 
-/** 跳创建活动页(TEACHER / ADMIN 可发布,页面内校验) */
+/** 跳创建活动页(任意登录用户均可发布,未登录由页面内登录守卫拦截) */
 function handleCreateActivity(): void {
   uni.navigateTo({ url: '/pages/create-activity/create-activity' })
 }

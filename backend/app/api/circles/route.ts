@@ -11,8 +11,8 @@ import type { CircleDTO, Paginated } from "@/types/api"
 /**
  * POST /api/circles
  *
- * 创建圈子(仅 TEACHER 角色可调)。
- * - 需先通过教师认证成为 TEACHER 才能创建圈子
+ * 创建圈子(任意登录用户可调,不区分角色)。
+ * - 仅要求登录(401),不再要求教师认证
  * - 圈子创建后 status=pending,管理员审核通过后上线
  * - 24 小时内最多创建 5 个,超限返回 429。
  *
@@ -24,21 +24,12 @@ export async function OPTIONS(req: Request) {
 }
 
 export async function POST(req: Request) {
-  // 1. 鉴权
+  // 1. 鉴权(仅要求登录,角色不参与准入判定)
   const guard = await requireSession(req)
   if ("response" in guard) return guard.response
   const userId = guard.user.id
-  const role = guard.user.role
 
-  // 2. 角色门槛(仅 TEACHER 可创建圈子,需先通过教师认证)
-  if (role !== "TEACHER") {
-    return withCors(
-      fail(403, role === "USER" ? "请先完成教师认证再创建圈子" : "仅认证教师可创建圈子"),
-      req
-    )
-  }
-
-  // 3. 解析请求体
+  // 2. 解析请求体
   const body = await req.json().catch(() => null)
   const parsed = createCircleSchema.safeParse(body)
   if (!parsed.success) {
@@ -48,7 +39,7 @@ export async function POST(req: Request) {
     )
   }
 
-  // 4. 创建圈子(共享业务规则)
+  // 3. 创建圈子(共享业务规则)
   const result = await createCircle({ creatorId: userId, input: parsed.data })
   if (!result.ok) {
     return withCors(fail(result.status, result.message, result.details), req)

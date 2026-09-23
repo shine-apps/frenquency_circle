@@ -16,7 +16,7 @@ export interface ActivityListParams {
   creatorId?: string
 }
 
-/** 发布活动(TEACHER / ADMIN 可直接发布,无需圈子)。返回新建活动 */
+/** 发布活动(任意登录用户均可发布,无需圈子)。返回新建活动 */
 export function createActivity(input: CreateActivityInput) {
   return http.post<ActivityDTO>(
     '/api/activities',

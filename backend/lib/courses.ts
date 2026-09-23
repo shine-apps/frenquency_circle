@@ -30,11 +30,12 @@ import type {
 } from "@/types/api"
 
 /**
- * 视频课程共享层(教师后台 / 管理后台共用)。
+ * 视频课程共享层(C 端 / 教师后台 / 管理后台共用)。
  *
  * 与 lib/activities.ts / lib/circles.ts 同构:校验 schema、DTO 投影、
  * 事务化落库与状态机集中在这里,路由只做鉴权与薄壳转发,
- * 保证两条链路的字段口径一致。
+ * 保证各链路的字段口径一致(C 端 `POST /api/courses`、
+ * 教师后台 `POST /api/teacher/courses`、管理后台审核均复用本层)。
  */
 
 /** 课程简介危险片段守卫(与 lib/activities.ts 同款正则,防绕过前端直调 API) */

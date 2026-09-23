@@ -45,6 +45,54 @@ export function getCourse(courseId: string) {
   )
 }
 
+// ---- 发布视频课程(C 端,任意登录用户) ----
+
+/** 课时提交入参(视频需先经 uploadFileToCos 直传拿到公网 URL) */
+export interface CourseLessonInput {
+  /** 课时标题(1-100 字符) */
+  title: string
+  /** 课时简介(0-500 字符,可空) */
+  description?: string
+  /** 课时视频 COS 公网 URL */
+  videoUrl: string
+  /** 视频时长(秒,未知传 null) */
+  durationSeconds?: number | null
+}
+
+/** 课程提交入参(status 由服务端固定为 pending,不接受客户端指定) */
+export interface CreateCourseInput {
+  /** 课程标题(2-100 字符) */
+  title: string
+  /** 课程简介(10-5000 字符) */
+  description: string
+  /** 封面 / 轮播图 URL 数组(0-9 张) */
+  coverImages?: string[]
+  /** 兴趣标签名称数组(0-5 个) */
+  tags?: string[]
+  /** 课时列表(0-30 个,允许先建课后补课时;提交顺序即展示顺序) */
+  lessons: CourseLessonInput[]
+}
+
+/** 课程创建结果(后端 CourseDTO 的 C 端消费字段) */
+export interface CreateCourseResult {
+  id: string
+  /** 恒为 pending,需管理员审核通过后上线 */
+  status: string
+}
+
+/**
+ * 发布视频课程(任意登录用户,创建后 status=pending 待管理员审核)。
+ *
+ * 视频 / 封面需先在客户端直传 COS,本接口只提交 URL 与文案,
+ * 业务校验(标题 / 简介长度、危险 HTML、课时上限)由后端复用教师后台同一份 schema。
+ */
+export function createCourse(input: CreateCourseInput) {
+  return http.post<CreateCourseResult>(
+    '/api/courses',
+    input as unknown as Record<string, unknown>,
+  )
+}
+
 // ---- 课时播放进度(course_lesson_progress) ----
 
 /**

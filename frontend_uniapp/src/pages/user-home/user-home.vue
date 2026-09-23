@@ -16,7 +16,7 @@ import {
 } from '@/api/users'
 import { toLoginPage } from '@/utils/toLoginPage'
 import { activityLevelShortText, formatDate, formatDateTime, practiceYearsText } from '@/utils/format'
-import { canCreateCircle } from '@/utils/role'
+import { canPublish } from '@/utils/role'
 import { useUserStore } from '@/store/user'
 import { useSettingsStore } from '@/store/settings'
 import { useShare } from '@/composables/useShare'
@@ -174,8 +174,8 @@ const activeFollowedTotal = computed(() => (
 /** 当前关注 tab 的数量量词(趣友用「位」,圈子用「个」) */
 const activeFollowedUnit = computed(() => (activeFollowTab.value === 'users' ? '位' : '个'))
 
-/** 是否展示「TA 的发布」:仅老师 / 管理员 */
-const showPublished = computed(() => canCreateCircle(profile.value?.role))
+/** 是否展示「TA 的发布」:任意用户均可发布(维护期隐藏,与创建入口口径一致) */
+const showPublished = computed(() => canPublish(profile.value?.role))
 
 /** 发布内容 tab:圈子 / 活动 / 视频课程 */
 type PublishTab = 'circles' | 'activities' | 'courses'
@@ -411,7 +411,7 @@ function handlePublishTabChange(tab: PublishTab) {
     return
   activePublishTab.value = tab
   const profileId = profile.value?.id
-  if (!profileId || !canCreateCircle(profile.value?.role))
+  if (!profileId || !canPublish(profile.value?.role))
     return
   void ensureActivePublishedLoaded(profileId)
 }
@@ -443,7 +443,7 @@ function fetchProfileContent(p: PublicUserProfileDTO) {
     // 只加载当前 tab 对应的关注内容,另一个 tab 首次点开时再拉
     ensureActiveFollowedLoaded(p.id),
   ]
-  if (canCreateCircle(p.role)) {
+  if (canPublish(p.role)) {
     // 只加载当前 tab 对应的发布内容,其余 tab 首次点开时再拉
     tasks.push(ensureActivePublishedLoaded(p.id))
   }
@@ -918,7 +918,7 @@ function renderTags(tags: string[]): { visible: string[], rest: number } {
         </template>
       </view>
 
-      <!-- ====== {{ ownerLabel }}的发布:圈子 / 活动 / 视频课程(仅老师 / 管理员) ====== -->
+      <!-- ====== {{ ownerLabel }}的发布:圈子 / 活动 / 视频课程(任意用户的已上线内容) ====== -->
       <view v-if="showPublished" class="mx-4 mt-4 rounded-2xl bg-white p-5 shadow-sm">
         <view class="flex items-center justify-between">
           <text class="text-sm text-[#333] font-medium">

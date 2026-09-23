@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { useUserStore } from '@/store/user'
 import { deleteCircle, getMyCircles } from '@/api/circles'
 import { formatDate } from '@/utils/format'
-import { canCreateCircle } from '@/utils/role'
+import { toLoginWithRedirect } from '@/utils/toLoginPage'
 import type { CircleDTO } from '@/types'
 
 definePage({
@@ -44,12 +44,10 @@ async function fetchList() {
   }
 }
 
-// 进入时权限校验 + 拉取
+// 进入时登录校验 + 拉取(任意登录用户均可查看与管理自己发布的圈子)
 onShow(() => {
-  const role = userStore.userInfo?.role
-  if (!canCreateCircle(role)) {
-    uni.showToast({ title: '仅教师可访问', icon: 'none' })
-    setTimeout(() => uni.navigateBack(), 800)
+  if (!userStore.isLoggedIn) {
+    toLoginWithRedirect('navigateTo')
     return
   }
   void fetchList()

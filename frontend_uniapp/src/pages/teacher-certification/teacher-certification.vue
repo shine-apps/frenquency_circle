@@ -5,7 +5,7 @@ import { shouldBlockForAppDeploying } from '@/composables/useAppDeployingGuard'
 import { uploadFileToCos } from '@/api/upload'
 import { chooseImages } from '@/utils/chooseImage'
 import { getMyApplication, submitTeacherApplication } from '@/api/teacher-applications'
-import { canCreateCircle } from '@/utils/role'
+import { isTeacherRole } from '@/utils/role'
 import { toLoginWithRedirect } from '@/utils/toLoginPage'
 import type { CertificationFile, TeacherApplicationDTO } from '@/api/teacher-applications'
 
@@ -40,8 +40,8 @@ const idCardBack = ref<CertificationFile | null>(null)
 const uploading = ref(false)
 const submitting = ref(false)
 
-/** 当前角色是否为 TEACHER 或 ADMIN(无需认证即可发布圈子) */
-const isCertified = computed(() => canCreateCircle(userStore.userInfo?.role))
+/** 当前角色是否为 TEACHER 或 ADMIN(仅表示教师身份,与创建圈子 / 活动 / 课程权限无关) */
+const isCertified = computed(() => isTeacherRole(userStore.userInfo?.role))
 
 /** 提交按钮是否可用 */
 const canSubmit = computed(() =>
@@ -56,7 +56,7 @@ async function loadApplication() {
   loading.value = true
   try {
     application.value = await getMyApplication()
-    // 已通过后刷新用户信息,使 role 同步为 TEACHER(创建圈子入口依赖该字段)
+    // 已通过后刷新用户信息,使 role 同步为 TEACHER(教师身份 / 教师后台入口依赖该字段)
     if (application.value?.status === 'approved') {
       await userStore.fetchUserInfo().catch(() => {})
     }
@@ -210,17 +210,8 @@ function handleRetry() {
   idCardBack.value = null
 }
 
-/** 跳转创建圈子页(先刷新角色,避免创建页守卫误判) */
-async function handleGoCreateCircle() {
-  const role = userStore.userInfo?.role
-  if (role !== 'TEACHER' && role !== 'ADMIN') {
-    try {
-      await userStore.fetchUserInfo()
-    }
-    catch {
-      // 静默:刷新失败时仍前往,创建页守卫会兜底
-    }
-  }
+/** 跳转创建圈子页(创建不再要求教师认证,任何登录用户都可直接前往) */
+function handleGoCreateCircle() {
   uni.navigateTo({ url: '/pages/create-circle/create-circle' })
 }
 </script>
@@ -233,7 +224,7 @@ async function handleGoCreateCircle() {
         教师认证
       </text>
       <text class="mt-1 block text-xs text-white/80 leading-5">
-        上传身份证与资质证书,通过审核后即可成为认证教师,创建自己的圈子
+        上传身份证与资质证书,通过审核后即可成为认证教师
       </text>
     </view>
 
@@ -253,7 +244,7 @@ async function handleGoCreateCircle() {
         </text>
       </view>
       <text class="mt-2 block text-sm text-[#666] leading-6">
-        您已是认证教师,可以创建和管理圈子
+        您已是认证教师
       </text>
       <wd-button
         block

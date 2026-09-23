@@ -10,9 +10,64 @@ import {
   parsePagination,
   withCors,
 } from "@/lib/api"
+import { requireSession } from "@/lib/auth-utils"
 import { readUserFromToken } from "@/lib/auth/session-token"
-import { buildCourseKeywordCondition, toPublicCourseDTO } from "@/lib/courses"
+import {
+  buildCourseKeywordCondition,
+  createCourse,
+  createCourseSchema,
+  toCourseDTO,
+  toCourseLessonDTO,
+  toPublicCourseDTO,
+  type CreateCourseInput,
+} from "@/lib/courses"
+import { logger, LOG_PREFIX } from "@/lib/logger"
 import type { Paginated, PublicCourseDTO } from "@/types/api"
+
+/**
+ * POST /api/courses
+ *
+ * 用户端(uni-app)发布视频课程(任意登录用户可调,不区分角色)。
+ * - 401 未登录 / 400 校验失败 / 201 成功
+ * - 课程创建后 status 恒为 pending,管理员审核通过后上线
+ * - 与教师后台 `POST /api/teacher/courses` 共用 `lib/courses` 的
+ *   `createCourseSchema` + `createCourse`(课程与课时同一事务落库),
+ *   仅鉴权口径不同:C 端走 Bearer token 的 `requireSession`。
+ */
+export async function POST(req: Request) {
+  // 1. 鉴权(仅要求登录,角色不参与准入判定)
+  const guard = await requireSession(req)
+  if ("response" in guard) return guard.response
+
+  // 2. 解析并校验请求体
+  const body = await req.json().catch(() => null)
+  const parsed = createCourseSchema.safeParse(body)
+  if (!parsed.success) {
+    return withCors(
+      fail(400, "Invalid request body", parsed.error.flatten()),
+      req
+    )
+  }
+  const input = parsed.data as CreateCourseInput
+
+  // 3. 事务落库(status=pending,等待管理员审核)
+  const created = await createCourse({ creatorId: guard.user.id, input })
+
+  logger.info(LOG_PREFIX.COURSE, "Course created", {
+    courseId: created.course.id,
+    lessonCount: created.lessons.length,
+    creatorId: guard.user.id,
+    role: guard.user.role,
+  })
+
+  return withCors(
+    ok(
+      toCourseDTO(created.course, created.lessons.map(toCourseLessonDTO)),
+      { status: 201 }
+    ),
+    req
+  )
+}
 
 /**
  * GET /api/courses

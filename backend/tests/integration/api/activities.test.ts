@@ -274,19 +274,17 @@ describe("POST /api/activities", () => {
     expect(mockDb.insert).not.toHaveBeenCalled()
   })
 
-  it("returns 403 when user is not teacher/admin", async () => {
+  it("creates activity successfully for USER role (发布不要求教师/管理员)", async () => {
     readUserFromTokenMock.mockResolvedValue(OTHER_USER)
+    insertReturningMock.mockResolvedValue([makeActivityRow({ creatorId: OTHER_USER.id })])
     const res = await POST(makeJsonRequest(VALID_BODY, `/api/activities`))
-    expect(res.status).toBe(403)
-    const body = (await res.json()) as IResponse<null>
-    expect(body.message).toBe("只有教师或管理员可以发布活动")
-    expect(mockDb.insert).not.toHaveBeenCalled()
-  })
-
-  it("returns 403 when role is USER even with valid body", async () => {
-    readUserFromTokenMock.mockResolvedValue(OTHER_USER)
-    const res = await POST(makeJsonRequest(VALID_BODY, `/api/activities`))
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(201)
+    const body = (await res.json()) as IResponse<ActivityDTO>
+    expect(body.data.creatorId).toBe(OTHER_USER.id)
+    expect(body.data.title).toBe(VALID_BODY.title)
+    // 活动与角色无关:创建后仍直接 active(沿用既有口径)
+    expect(body.data.status).toBe("active")
+    expect(mockDb.insert).toHaveBeenCalledTimes(1)
   })
 
   it("returns 400 when registration deadline is not before start time", async () => {

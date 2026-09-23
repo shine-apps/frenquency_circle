@@ -26,6 +26,8 @@ A full-stack Next.js 16 application providing:
 | Lint | `pnpm lint` |
 | Unit + integration tests | `pnpm test` |
 | E2E tests | `pnpm test:e2e` |
+| 生成 OpenAPI 文档 | `pnpm openapi:generate` |
+| 校验 OpenAPI 产物同步 | `pnpm openapi:check` |
 | Start Postgres (Docker) | `pnpm db:up` |
 | Generate migration | `pnpm db:generate` |
 | Apply migration | `pnpm db:migrate` |
@@ -232,6 +234,15 @@ All commands run from the project root with no `cd` needed.
 - **Content moderation endpoint** (`POST /api/content/check`): 登录用户可调(走 `requireSession`),文本 UGC「先审后发」门禁,契约见 `frontend_uniapp/src/api/content-moderation.ts`。body `{ type: 'text', content(1-5000 字符), scene?('circle'|'checkin'|'activity'|'comment'|'profile') }`。流程:服务端权威读取 `contentModerationEnabled` 开关(**未开启直接放行**,不产生微信调用)→ 从 accounts 绑定解析 openid(`msg_sec_check` v2 必填,**未绑定微信 → 503 拦截**,合规优先)→ 超长文本按 UTF-8 字节安全分段(`splitTextByUtf8Bytes`,单段 ≤ 2400 字节,拼接后与原文一致不漏审)→ 逐段送审取最严重结果合并。微信侧任何异常(WECHAT_MP_* 配置缺失 / 上游错误 / 响应缺 suggest)统一 **503 fail-closed**,前端提示「内容审核服务暂时不可用」并拦截发布。响应 `IResponse<ContentCheckDTO>`(`{ result: 'pass'|'risky'|'block'|'review', label?, labelName?, traceId? }`);微信 `detail` 中的命中关键词属合规敏感信息,**不入响应**,仅 label/labelName/traceId 供后端排障。领域逻辑在 `lib/content-moderation.ts`,微信客户端新增 `msgSecCheck`(`lib/wechat/miniprogram.ts`,stage=`sec-check`)。举报接口 `/api/content/report` 前端已定义、后端尚未实现。
 - **文件上传**:无 `POST /api/upload` 本地上传端点(已删除)。所有文件(头像 / 封面 / 认证材料 / 打卡媒体 / 课程视频)一律由客户端直传 COS。
 - **COS STS 凭证端点** (`GET /api/upload/cos-credentials`):登录用户可调,返回 `IResponse<CosCredentials>`(含临时 SecretId/Key/Token + bucket/region/prefix/publicBaseUrl)。客户端拿到后用 `cos-js-sdk-v5` 直传 COS,文件字节不经后端。失败 401(未登录)/ 500(STS 失败)。scope 按 userId 隔离,scope prefix = `<COS_KEY_PREFIX>/<userId>/*`。
+
+### OpenAPI 文档(管理后台 `/admin/api-docs`)
+
+- **产物**:`lib/openapi/paths.generated.ts` —— 由 `pnpm openapi:generate` 扫描 `app/api` 下所有 `route.ts` 生成,自动提取「导出的 HTTP 方法 + 方法上方 JSDoc 注释」「`searchParams.get("x")` 查询参数」「`requireAdmin` / `requireTeacher` / `requireSession` 守卫」。**产物必须提交到仓库**:运行时(`/api/openapi` 与后台页面)直接读取它,而 standalone 产物里没有路由源码可供扫描。
+- **手工补充**(代码里读不出来的信息):
+  - `lib/openapi/manual.ts` —— 文档元信息、分组、securitySchemes、`components.schemas`,以及核心端点的 `requestBody` / 响应;
+  - `lib/openapi/summaries.ts` —— 源码未写 JSDoc 的端点名称(优先给路由补注释,再删掉此处条目)。
+- **查看**:管理后台 `/admin/api-docs`(Swagger UI,走 `/admin/*` 守卫,需 ADMIN);JSON 见 `GET /api/openapi`(公开只读,可直接导入 Postman / Apifox / IDE 插件)。
+- **规则**:新增 / 修改路由后执行一次 `pnpm openapi:generate`;`tests/unit/openapi/spec.test.ts` 会校验产物与路由同步、每个接口都有分组 / 名称 / 响应(缺名称时给路由补 JSDoc,而不是手改生成产物)。
 
 ### Phase 2-3: 标签子系统与匹配引擎 API
 

@@ -5,6 +5,13 @@
 allowBuilds:
   "@alicloud/openapi-core": true
   "@parcel/watcher": true
+  # swagger-ui-react 依赖链带入的遥测 / 广告 / native 编译脚本,浏览器端渲染用不到,
+  # 统一设为 false 跳过;显式登记同时消除 ERR_PNPM_IGNORED_BUILDS 报错
+  '@scarf/scarf': false
+  '@tree-sitter-grammars/tree-sitter-yaml': false
+  core-js-pure: false
+  tree-sitter: false
+  tree-sitter-json: false
   # postinstall 仅为 patch-check(patch-package 的补丁检查),1.10.1 包内无 patches 目录,
   # 实为空操作;按最小权限不放行第三方安装脚本,同时消除 ERR_PNPM_IGNORED_BUILDS 报错
   cos-js-sdk-v5: false

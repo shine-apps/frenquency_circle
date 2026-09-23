@@ -13,6 +13,7 @@ import {
   BrainIcon,
   GraduationCapIcon,
   SettingsIcon,
+  BracesIcon,
 } from "lucide-react"
 
 import {
@@ -39,6 +40,7 @@ const navItems = [
   { href: "/admin/teacher-applications", label: "教师认证", icon: FileCheckIcon },
   { href: "/admin/mbti", label: "MBTI 测试", icon: BrainIcon },
   { href: "/admin/settings", label: "系统设置", icon: SettingsIcon },
+  { href: "/admin/api-docs", label: "API 文档", icon: BracesIcon },
 ]
 
 export function AppSidebar() {

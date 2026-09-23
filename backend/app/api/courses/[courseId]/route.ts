@@ -6,6 +6,7 @@ import { corsOptions, fail, isUuid, ok, withCors } from "@/lib/api"
 import { readUserFromToken } from "@/lib/auth/session-token"
 import {
   getCourseWithLessons,
+  getFollowedCourseIds,
   toCourseLessonDTO,
   toPublicCourseDetailDTO,
 } from "@/lib/courses"
@@ -34,8 +35,8 @@ export async function OPTIONS(req: Request) {
 }
 
 export async function GET(req: Request, context: RouteContext) {
-  // 1. 可选鉴权:仅读取 token(未登录时为 null,不影响公开数据返回)
-  await readUserFromToken(req)
+  // 1. 可选鉴权:读取 token(未登录时为 null,不影响公开数据返回)
+  const viewer = await readUserFromToken(req)
 
   // 2. 路径参数必须是 uuid,否则 Postgres 抛 22P02 → 500
   const { courseId } = await context.params
@@ -62,6 +63,11 @@ export async function GET(req: Request, context: RouteContext) {
 
   const lessons = loaded.lessons.map(toCourseLessonDTO)
 
+  // 5. 登录用户下发 isFollowed(单条查询,未登录恒为 false)
+  const followedCourseIds = await getFollowedCourseIds(viewer?.id, [
+    loaded.course.id,
+  ])
+
   return withCors(
     ok(
       toPublicCourseDetailDTO(
@@ -73,7 +79,8 @@ export async function GET(req: Request, context: RouteContext) {
               avatarUrl: teacherRow.avatarUrl,
             }
           : null,
-        lessons
+        lessons,
+        followedCourseIds.has(loaded.course.id)
       )
     ),
     req

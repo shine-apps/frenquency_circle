@@ -405,11 +405,12 @@ describe("GET /api/courses/:courseId", () => {
 
   it("returns the course detail with ordered lessons, teacher info and a C-side whitelist", async () => {
     readUserFromTokenMock.mockResolvedValue(USER)
-    // 3 次 select:课程行 → 课时行 → 创建者(users)
+    // 4 次 select:课程行 → 课时行 → 创建者(users) → 关注关系(当前用户已关注)
     setSelectResultsQueue([
       [makeCourseRow()],
       makeLessonRows(),
       [{ id: "11111111-1111-1111-1111-111111111111", name: "王老师", avatarUrl: "https://cos.example.com/a.png" }],
+      [{ courseId: COURSE_ID }],
     ])
 
     const res = await getCourse(
@@ -438,6 +439,9 @@ describe("GET /api/courses/:courseId", () => {
       avatarUrl: "https://cos.example.com/a.png",
     })
 
+    // 登录用户下发关注态(命中关注关系)
+    expect(data.isFollowed).toBe(true)
+
     // 公开字段白名单:审核信息不下发;创建者仅暴露 teacher 轻量字段
     expect(Object.keys(data).sort()).toEqual(
       [
@@ -445,6 +449,7 @@ describe("GET /api/courses/:courseId", () => {
         "createdAt",
         "description",
         "id",
+        "isFollowed",
         "lessonCount",
         "lessons",
         "tags",

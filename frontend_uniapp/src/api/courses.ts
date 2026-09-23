@@ -1,6 +1,8 @@
 import { http } from '@/http/http'
 import type {
   CourseProgressListDTO,
+  FollowedCourseDTO,
+  Paginated,
   PublicCourseDetailDTO,
   PublicCourseListDTO,
   RecentCourseListDTO,
@@ -43,6 +45,51 @@ export function getCourse(courseId: string) {
   return http.get<PublicCourseDetailDTO>(
     `/api/courses/${encodeURIComponent(courseId)}`,
   )
+}
+
+// ---- 关注视频课程(course_follows) ----
+
+/**
+ * 关注视频课程(幂等)。
+ *
+ * - 仅已上线(active)课程可关注,课程不存在 / 已下线返回 404;
+ * - 重复关注不报错、不产生重复数据(后端唯一索引兜底);
+ * - 首次关注会给课程创建者发站内通知;
+ * - 需登录,未登录由 http 拦截统一跳登录页(页面侧建议先做引导)。
+ */
+export function followCourse(courseId: string) {
+  return http.post<{ followed: true }>(
+    `/api/courses/${encodeURIComponent(courseId)}/follow`,
+  )
+}
+
+/** 取消关注视频课程(幂等;未关注时调用同样返回成功) */
+export function unfollowCourse(courseId: string) {
+  return http.delete<{ followed: false }>(
+    `/api/courses/${encodeURIComponent(courseId)}/follow`,
+  )
+}
+
+/** 我关注的课程列表查询参数 */
+export interface FollowedCourseListParams {
+  page?: number
+  pageSize?: number
+  /** 查看指定用户关注的课程(公开主页复用);缺省为当前登录用户 */
+  userId?: string
+}
+
+/**
+ * 我关注的视频课程列表(分页,按关注时间倒序,仅已上线课程)。
+ *
+ * 每项附带 `teacher`(课程作者)与 `lessonCount / totalDurationSeconds`,
+ * 关注列表卡片可直接渲染,无需再请求课程详情。
+ */
+export function getFollowedCourses(params?: FollowedCourseListParams) {
+  return http.get<Paginated<FollowedCourseDTO>>('/api/courses/followed', {
+    ...(params?.page !== undefined ? { page: params.page } : {}),
+    ...(params?.pageSize !== undefined ? { pageSize: params.pageSize } : {}),
+    ...(params?.userId ? { userId: params.userId } : {}),
+  })
 }
 
 // ---- 发布视频课程(C 端,任意登录用户) ----

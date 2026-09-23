@@ -16,6 +16,7 @@ import {
   buildCourseKeywordCondition,
   createCourse,
   createCourseSchema,
+  getFollowedCourseIds,
   toCourseDTO,
   toCourseLessonDTO,
   toPublicCourseDTO,
@@ -85,6 +86,8 @@ export async function POST(req: Request) {
  *   可与 `creatorId` 叠加;空 / 全空白关键词视为不检索(不返回 400);
  * - 列表不返回课时明细(lessons 恒为 []),`lessonCount` 由 `course_lessons`
  *   左连接聚合得出 —— 与分页主查询合并为单条 SQL,避免逐课程查课时造成 N+1;
+ * - 登录用户额外下发 `isFollowed`(当前页课程一次性批量查关注关系,
+ *   未登录恒为 false),供列表卡片渲染关注按钮两态;
  * - 审核信息 / 创建者信息不下发(见 `lib/courses.toPublicCourseDTO`)。
  */
 export async function OPTIONS(req: Request) {
@@ -92,8 +95,8 @@ export async function OPTIONS(req: Request) {
 }
 
 export async function GET(req: Request) {
-  // 1. 可选鉴权:仅读取 token(未登录时为 null,不影响公开数据返回)
-  await readUserFromToken(req)
+  // 1. 可选鉴权:读取 token(未登录时为 null,不影响公开数据返回)
+  const viewer = await readUserFromToken(req)
 
   // 2. 解析分页与过滤条件(非法参数返回 400,避免 invalid input 触发 500)
   const url = new URL(req.url)
@@ -138,13 +141,20 @@ export async function GET(req: Request) {
     .from(courses)
     .where(where)
 
+  // 4. 登录用户:一次性查出当前页已关注的课程 id 集合(未登录 / 空页不查询)
+  const followedCourseIds = await getFollowedCourseIds(
+    viewer?.id,
+    rows.map((row) => row.course.id)
+  )
+
   const result: Paginated<PublicCourseDTO> = {
     list: rows.map(row =>
       toPublicCourseDTO(
         row.course,
         [],
         Number(row.lessonCount ?? 0),
-        Number(row.totalDuration ?? 0)
+        Number(row.totalDuration ?? 0),
+        followedCourseIds.has(row.course.id)
       )
     ),
     total: Number(totalRow?.value ?? 0),

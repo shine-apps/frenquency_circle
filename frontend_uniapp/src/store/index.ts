@@ -15,6 +15,7 @@ setActivePinia(store)
 
 export default store
 
+export * from './follow'
 export * from './location'
 export * from './match'
 // 模块统一导出

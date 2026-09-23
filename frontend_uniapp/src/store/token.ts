@@ -11,6 +11,7 @@ import {
 } from '@/api/login'
 import { toUserInfo } from '@/api/auth'
 import { restoreGuestProfile } from '@/utils/guest-profile'
+import { useFollowStore } from './follow'
 import { useUserStore } from './user'
 import type { UserInfo } from './user'
 
@@ -82,6 +83,8 @@ export const useTokenStore = defineStore(
         uni.removeStorageSync('accessTokenExpireTime')
         tokenInfo.value = { token: '', expiresIn: 0 }
         useUserStore().clearUserInfo()
+        // 关注态随登录态一起清空,避免切换账号后残留上一个账号的已关注状态
+        useFollowStore().clear()
       }
     }
 

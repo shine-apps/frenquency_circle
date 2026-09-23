@@ -11,7 +11,9 @@
 import { computed, ref } from 'vue'
 import { onLoad, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { getCourse, getCourseProgress, reportLessonProgress } from '@/api/courses'
+import { useCourseFollow } from '@/composables/useCourseFollow'
 import { useShare } from '@/composables/useShare'
+import { useFollowStore } from '@/store/follow'
 import { useUserStore } from '@/store/user'
 import { toLoginWithRedirect } from '@/utils/toLoginPage'
 import { formatDate, formatDuration, formatTotalDuration } from '@/utils/format'
@@ -31,6 +33,14 @@ const userStore = useUserStore()
 /** 是否已登录(未登录时点播放需先登录) */
 const isLoggedIn = computed(() => userStore.isLoggedIn)
 
+/**
+ * 关注态以跨页 store 为单一数据源:详情/列表/关注页共享同一份状态,
+ * 在任意页面关注 / 取关后本页按钮立即同步。
+ */
+const followStore = useFollowStore()
+/** 关注 / 取关交互(未登录引导、请求中 loading、成功后写 store) */
+const { loadingId: followLoadingId, toggle: toggleFollow } = useCourseFollow()
+
 const courseId = ref('')
 /** 入口携带的 lessonId(用于「继续观看」二级入口自动定位并播放) */
 const targetLessonId = ref('')
@@ -47,6 +57,17 @@ const progressMap = ref<Map<string, CourseLessonProgressDTO>>(new Map())
 
 const lessons = computed(() => course.value?.lessons ?? [])
 const currentLesson = computed(() => lessons.value[activeIndex.value] ?? null)
+/** 当前用户是否已关注本课程(未登录 / 未知恒为 false) */
+const followed = computed(() => followStore.isCourseFollowed(courseId.value))
+/**
+ * 是否为本课程作者:公开详情 DTO 不含 creatorId,故用 `teacher.id` 与当前用户比对。
+ * 作者关注自己的课程无意义,按钮不渲染(与圈子详情页 `isCreator` 口径一致)。
+ */
+const isOwner = computed(() => {
+  if (!isLoggedIn.value || !course.value?.teacher)
+    return false
+  return course.value.teacher.id === userStore.userInfo.id
+})
 /** 当前课时的初始播放位置(从 progressMap 取,无进度则为 0) */
 const initialPosition = computed(() => {
   if (!currentLesson.value) return 0
@@ -130,6 +151,8 @@ function handlePlayerClose() {
  */
 async function fetchDetail(id: string) {
   loading.value = true
+  /** 请求发起时刻:用于避免过期响应覆盖用户在本页刚完成的关注操作 */
+  const requestedAt = Date.now()
   try {
     const progressTask = isLoggedIn.value
       ? getCourseProgress(id)
@@ -148,6 +171,8 @@ async function fetchDetail(id: string) {
     course.value = res
     activeIndex.value = 0
     notFound.value = false
+    // 服务端下发的关注态回填跨页 store(带请求时刻,防止覆盖刚完成的操作)
+    followStore.syncCourse(res.id, res.isFollowed, { requestedAt })
     // 「继续观看」入口:根据 URL 中的 lessonId 定位到指定课时并自动弹层播放
     if (targetLessonId.value) {
       const idx = res.lessons.findIndex(l => l.id === targetLessonId.value)
@@ -199,6 +224,16 @@ function goTeacherHome() {
   if (!teacher)
     return
   uni.navigateTo({ url: `/pages/user-home/user-home?id=${encodeURIComponent(teacher.id)}` })
+}
+
+/**
+ * 关注 / 取消关注课程(未登录由 `useCourseFollow` 统一引导登录)。
+ * 成功后关注态写入跨页 store,课程列表与「我关注的视频」列表同步更新。
+ */
+function handleFollow() {
+  if (!course.value)
+    return
+  void toggleFollow(course.value.id)
 }
 
 /** 视频加载/播放失败:轻提示,不阻塞课时列表浏览 */
@@ -293,6 +328,22 @@ function handleBack() {
             </view>
           </view>
           <text class="i-carbon-chevron-right text-sm text-[#ccc]" />
+        </view>
+
+        <!-- 关注入口:作者本人不展示(关注自己的课程无意义) -->
+        <view v-if="!isOwner" class="mt-3 flex items-center justify-between gap-3 border-t border-[#f5f5f5] pt-3">
+          <text class="min-w-0 flex-1 text-xs text-[#999]">
+            关注课程后,可在「我的关注 - 我关注的视频」中快速回看
+          </text>
+          <wd-button
+            size="small"
+            :plain="followed"
+            :loading="followLoadingId === course.id"
+            custom-class="shrink-0"
+            @click="handleFollow"
+          >
+            {{ followed ? '已关注' : '关注' }}
+          </wd-button>
         </view>
       </view>
 

@@ -456,6 +456,8 @@ describe("GET /api/users/me/courses/recent", () => {
     selectResults.push([
       makeCourseRow({ id: COURSE_ID, title: "太极拳入门" }),
     ])
+    // 关注关系查询:当前用户已关注 COURSE_ID
+    selectResults.push([{ courseId: COURSE_ID }])
 
     const res = await getRecentCourses(
       makeRequest("/api/users/me/courses/recent?limit=10")
@@ -471,6 +473,8 @@ describe("GET /api/users/me/courses/recent", () => {
     expect(first.lastLessonSortOrder).toBe(0)
     expect(first.lastPositionSeconds).toBe(60)
     expect(first.lastPlayedAt).toBe("2026-09-17T10:00:00.000Z")
+    // 关注态补齐:与列表 / 详情接口同口径(避免该字段恒为 false)
+    expect(first.course.isFollowed).toBe(true)
     // C 端白名单:不带 status / creatorId / reviewNote / reviewedAt
     expect(first.course).not.toHaveProperty("status")
     expect(first.course).not.toHaveProperty("creatorId")

@@ -487,7 +487,7 @@ const roleChipClass = computed(() => {
             我的关注
           </text>
           <text class="mt-0.5 text-xs text-[#999]">
-            关注的人与圈子,一键回看
+            关注的人、圈子与视频,一键回看
           </text>
         </view>
         <text class="text-sm text-[#ccc]">

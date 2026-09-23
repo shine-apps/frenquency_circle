@@ -1,12 +1,14 @@
 import { z } from "zod"
-import { and, asc, desc, eq, gte, ilike, inArray, or, sql } from "drizzle-orm"
+import { and, asc, count, desc, eq, gte, ilike, inArray, or, sql } from "drizzle-orm"
 import type { SQL } from "drizzle-orm"
 
 import { db } from "@/lib/db"
 import {
+  courseFollows,
   courseLessonProgress,
   courseLessons,
   courses,
+  users,
   type CourseStatus,
 } from "@/db/schema"
 import {
@@ -24,6 +26,8 @@ import type {
   CourseLessonDTO,
   CourseLessonProgressDTO,
   CourseTeacherDTO,
+  FollowedCourseDTO,
+  Paginated,
   PublicCourseDTO,
   PublicCourseDetailDTO,
   RecentCourseDTO,
@@ -219,13 +223,16 @@ export function toCourseDTO(
  * - `lessons` 由调用方传入(详情场景),列表场景传空数组只给 `lessonCount`;
  * - `lessonCount` 默认取 lessons 数量,列表场景(无课时明细)显式传入聚合值;
  * - `totalDurationSeconds` 默认从 lessons 累计(仅非 null 的 durationSeconds),
- *   列表场景(无课时明细)显式传入 SQL 聚合值 `SUM(duration_seconds)`。
+ *   列表场景(无课时明细)显式传入 SQL 聚合值 `SUM(duration_seconds)`;
+ * - `isFollowed` 由调用方按当前登录态传入(未登录 / 未关注均为 false),
+ *   路由层用 {@link getFollowedCourseIds} 批量查出后逐条投影。
  */
 export function toPublicCourseDTO(
   row: typeof courses.$inferSelect,
   lessons: CourseLessonDTO[] = [],
   lessonCount?: number,
-  totalDurationSeconds?: number
+  totalDurationSeconds?: number,
+  isFollowed = false
 ): PublicCourseDTO {
   return {
     id: row.id,
@@ -238,6 +245,7 @@ export function toPublicCourseDTO(
     totalDurationSeconds:
       totalDurationSeconds
       ?? lessons.reduce((sum, l) => sum + (l.durationSeconds ?? 0), 0),
+    isFollowed,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }
@@ -252,11 +260,159 @@ export function toPublicCourseDTO(
 export function toPublicCourseDetailDTO(
   row: typeof courses.$inferSelect,
   teacher: CourseTeacherDTO | null,
-  lessons: CourseLessonDTO[] = []
+  lessons: CourseLessonDTO[] = [],
+  isFollowed = false
 ): PublicCourseDetailDTO {
   return {
-    ...toPublicCourseDTO(row, lessons),
+    ...toPublicCourseDTO(row, lessons, undefined, undefined, isFollowed),
     teacher,
+  }
+}
+
+/**
+ * 批量查询"当前用户已关注的课程 id 集合"。
+ *
+ * 供课程列表 / 详情下发 `isFollowed` 使用:一次 `inArray` 查询覆盖整页课程,
+ * 避免逐条查关注关系造成 N+1。`userId` 为空(未登录)或 `courseIds` 为空时
+ * 直接返回空集合,不发起查询。
+ *
+ * @param userId    当前登录用户 id;未登录传 null
+ * @param courseIds 待判定的课程 id 列表(列表场景为当前页全部课程)
+ * @returns 已关注的课程 id 集合(用于 `Set.has` O(1) 判定)
+ */
+export async function getFollowedCourseIds(
+  userId: string | null | undefined,
+  courseIds: string[]
+): Promise<Set<string>> {
+  if (!userId || courseIds.length === 0) return new Set()
+  const rows = await db
+    .select({ courseId: courseFollows.courseId })
+    .from(courseFollows)
+    .where(
+      and(
+        eq(courseFollows.userId, userId),
+        inArray(courseFollows.courseId, courseIds)
+      )
+    )
+  return new Set(rows.map((r) => r.courseId))
+}
+
+/**
+ * 课程行 + 创建者 + 关注时间 → 我关注的课程列表项 DTO。
+ *
+ * `teacher` 为 null 表示创建者已被软删除,前端按"无作者"渲染。
+ */
+export function toFollowedCourseDTO(
+  row: typeof courses.$inferSelect,
+  teacher: CourseTeacherDTO | null,
+  followedAt: Date,
+  lessonCount?: number,
+  totalDurationSeconds?: number
+): FollowedCourseDTO {
+  return {
+    ...toPublicCourseDTO(
+      row,
+      [],
+      lessonCount,
+      totalDurationSeconds,
+      true
+    ),
+    followedAt: followedAt.toISOString(),
+    teacher,
+  }
+}
+
+/**
+ * 我关注的课程列表(分页,按关注时间倒序)。
+ *
+ * 1. 关注记录 `innerJoin` 课程并**在 SQL 层过滤非 active**(下线 / 待审核 / 已删除不再展示,
+ *    避免关注页出现点不开的条目),排序 / 分页同样下推(`limit/offset`)——
+ *    不再"全量取关注记录后内存分页",成本为 O(pageSize) 而非 O(关注总数);
+ * 2. 列表与总数共用同一 `where`,保证 `total` 与 `list` 口径一致;
+ * 3. 再批量补当前页的**作者信息**与**课时数 / 总时长**聚合(N+1 规避)。
+ */
+export async function getFollowedCourses(
+  userId: string,
+  pagination: { page: number; pageSize: number }
+): Promise<Paginated<FollowedCourseDTO>> {
+  // 1. 关注记录 join 课程(仅 active),过滤 / 排序 / 分页全部下推到 SQL
+  const where = and(
+    eq(courseFollows.userId, userId),
+    eq(courses.status, "active")
+  )
+
+  const pageRows = await db
+    .select({ course: courses, followedAt: courseFollows.createdAt })
+    .from(courseFollows)
+    .innerJoin(courses, eq(courses.id, courseFollows.courseId))
+    .where(where)
+    .orderBy(desc(courseFollows.createdAt))
+    .limit(pagination.pageSize)
+    .offset((pagination.page - 1) * pagination.pageSize)
+
+  // 2. 总数与列表共用同一 where(total 与 list 同口径)
+  const [totalRow] = await db
+    .select({ value: count() })
+    .from(courseFollows)
+    .innerJoin(courses, eq(courses.id, courseFollows.courseId))
+    .where(where)
+
+  const total = Number(totalRow?.value ?? 0)
+
+  if (pageRows.length === 0) {
+    return {
+      list: [],
+      total,
+      page: pagination.page,
+      pageSize: pagination.pageSize,
+    }
+  }
+
+  const pageCourseIds = pageRows.map((r) => r.course.id)
+
+  // 4. 当前页作者信息(批量;创建者已被软删除时 Map 未命中 → teacher 为 null)
+  const creatorIds = [...new Set(pageRows.map((r) => r.course.creatorId))]
+  const teacherMap = new Map<string, CourseTeacherDTO>()
+  const teacherRows = await db
+    .select({ id: users.id, name: users.name, avatarUrl: users.avatarUrl })
+    .from(users)
+    .where(inArray(users.id, creatorIds))
+  teacherRows.forEach((t) => teacherMap.set(t.id, t))
+
+  // 5. 当前页课时数 / 总时长(批量聚合,与列表接口同口径)
+  const aggMap = new Map<string, { lessonCount: number; totalDuration: number }>()
+  const aggRows = await db
+    .select({
+      courseId: courseLessons.courseId,
+      lessonCount: count(courseLessons.id),
+      totalDuration: sql<number | null>`sum(${courseLessons.durationSeconds})`,
+    })
+    .from(courseLessons)
+    .where(inArray(courseLessons.courseId, pageCourseIds))
+    .groupBy(courseLessons.courseId)
+  aggRows.forEach((a) =>
+    aggMap.set(a.courseId, {
+      lessonCount: Number(a.lessonCount ?? 0),
+      totalDuration: Number(a.totalDuration ?? 0),
+    })
+  )
+
+  const list = pageRows.map((r) => {
+    const agg = aggMap.get(r.course.id)
+    return toFollowedCourseDTO(
+      r.course,
+      teacherMap.get(r.course.creatorId) ?? null,
+      r.followedAt,
+      agg?.lessonCount ?? 0,
+      agg?.totalDuration ?? 0
+    )
+  })
+
+  return {
+    list,
+    total,
+    page: pagination.page,
+    pageSize: pagination.pageSize,
   }
 }
 
@@ -594,13 +750,23 @@ export async function getRecentCourseProgress(
 
   const activeCourses = new Map(courseRows.map((c) => [c.id, c]))
 
-  // 4. 组装 DTO;按 lastPlayedAt 倒序(已按 progress.updated_at desc 入 map,顺序保留)
+  // 4. 补齐当前用户的关注态:与列表 / 详情接口口径一致,
+  //    避免 isFollowed 在「继续学习」场景恒为 false 的契约陷阱(一次批量查,无 N+1)
+  const followedIds = await getFollowedCourseIds(userId, [...activeCourses.keys()])
+
+  // 5. 组装 DTO;按 lastPlayedAt 倒序(已按 progress.updated_at desc 入 map,顺序保留)
   const result: RecentCourseDTO[] = []
   for (const row of latestByCourse.values()) {
     const courseRow = activeCourses.get(row.courseId)
     if (!courseRow) continue
     result.push({
-      course: toPublicCourseDTO(courseRow),
+      course: toPublicCourseDTO(
+        courseRow,
+        [],
+        undefined,
+        undefined,
+        followedIds.has(courseRow.id)
+      ),
       lastLessonId: row.lessonId,
       lastLessonTitle: row.lessonTitle,
       lastLessonSortOrder: row.lessonSortOrder,

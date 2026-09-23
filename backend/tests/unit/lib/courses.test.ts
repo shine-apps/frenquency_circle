@@ -11,7 +11,9 @@ import {
   deriveSortOrder,
   toCourseDTO,
   toCourseLessonDTO,
+  toFollowedCourseDTO,
   toPublicCourseDTO,
+  toPublicCourseDetailDTO,
   updateCourseSchema,
 } from "@/lib/courses"
 import { courseLessons, type CourseLesson, type Course } from "@/db/schema"
@@ -312,6 +314,7 @@ describe("toPublicCourseDTO", () => {
         "createdAt",
         "description",
         "id",
+        "isFollowed",
         "lessonCount",
         "lessons",
         "tags",
@@ -324,6 +327,8 @@ describe("toPublicCourseDTO", () => {
     expect(dto).not.toHaveProperty("status")
     expect(dto).not.toHaveProperty("reviewNote")
     expect(dto).not.toHaveProperty("reviewedAt")
+    // 未登录 / 未关注场景默认 false
+    expect(dto.isFollowed).toBe(false)
     expect(dto.lessonCount).toBe(1)
     // 详情场景:totalDurationSeconds 由 lessons 累计(durationSeconds=600)
     expect(dto.totalDurationSeconds).toBe(600)
@@ -361,6 +366,57 @@ describe("toPublicCourseDTO", () => {
     ])
     // 仅累计非 null 的 durationSeconds(600 + 120)
     expect(dto.totalDurationSeconds).toBe(720)
+  })
+})
+
+describe("toPublicCourseDetailDTO", () => {
+  it("passes through isFollowed (登录用户已关注场景)", () => {
+    const dto = toPublicCourseDetailDTO(
+      makeCourseRow({ status: "active" }),
+      { id: "user-1", name: "太极老师", avatarUrl: null },
+      [],
+      true
+    )
+    expect(dto.isFollowed).toBe(true)
+    expect(dto.teacher?.name).toBe("太极老师")
+  })
+
+  it("defaults isFollowed to false and teacher to null", () => {
+    const dto = toPublicCourseDetailDTO(makeCourseRow({ status: "active" }), null)
+    expect(dto.isFollowed).toBe(false)
+    expect(dto.teacher).toBeNull()
+  })
+})
+
+describe("toFollowedCourseDTO", () => {
+  it("projects course + teacher + followedAt and marks isFollowed", () => {
+    const dto = toFollowedCourseDTO(
+      makeCourseRow({ status: "active" }),
+      { id: "user-1", name: "太极老师", avatarUrl: null },
+      new Date("2026-09-21T00:00:00.000Z"),
+      12,
+      3600
+    )
+    // 关注列表项自身恒为「已关注」,前端可直接渲染两态按钮
+    expect(dto.isFollowed).toBe(true)
+    expect(dto.followedAt).toBe("2026-09-21T00:00:00.000Z")
+    expect(dto.teacher).toEqual({ id: "user-1", name: "太极老师", avatarUrl: null })
+    expect(dto.lessonCount).toBe(12)
+    expect(dto.totalDurationSeconds).toBe(3600)
+    // 列表场景不返回课时明细
+    expect(dto.lessons).toEqual([])
+  })
+
+  it("keeps teacher null when the creator has been removed", () => {
+    const dto = toFollowedCourseDTO(
+      makeCourseRow({ status: "active" }),
+      null,
+      new Date("2026-09-21T00:00:00.000Z")
+    )
+    expect(dto.teacher).toBeNull()
+    // 未传聚合值时按无课时兜底(0)
+    expect(dto.lessonCount).toBe(0)
+    expect(dto.totalDurationSeconds).toBe(0)
   })
 })
 

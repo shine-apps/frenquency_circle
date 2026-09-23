@@ -28,6 +28,7 @@ const TYPE_META: Record<NotificationDTO['type'], { icon: string, label: string, 
   circle_review: { icon: '📋', label: '圈子待审核', cls: 'bg-[#fdf3e7] text-[#e68a00]' },
   circle_review_result: { icon: '📋', label: '审核结果', cls: 'bg-[#fdf3e7] text-[#e68a00]' },
   circle_followed: { icon: '👥', label: '圈子被关注', cls: 'bg-[#fdf3e7] text-[#e68a00]' },
+  course_followed: { icon: '🎬', label: '课程被关注', cls: 'bg-[#fdf3e7] text-[#e68a00]' },
 }
 
 const list = ref<NotificationDTO[]>([])

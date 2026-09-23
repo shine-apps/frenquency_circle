@@ -23,6 +23,7 @@ const TYPE_LABEL: Record<NotificationDTO["type"], string> = {
   contact_request: "新的联系请求",
   contact_accepted: "联系已建立",
   user_followed: "新增关注",
+  course_followed: "课程被关注",
 }
 
 export function NotificationBell() {

@@ -9,6 +9,7 @@ import {
   interestEvents,
   courses,
   courseLessons,
+  courseFollows,
   CHECKIN_STATUSES,
   COURSE_STATUSES,
   INTEREST_EVENT_TYPES,
@@ -143,6 +144,11 @@ describe("db/schema", () => {
     expect(t3).toBe("circle_followed")
   })
 
+  it("NotificationType includes course_followed (视频课程被关注)", () => {
+    const t: NotificationType = "course_followed"
+    expect(t).toBe("course_followed")
+  })
+
   it("NotificationLinkTarget defaults to miniprogram", () => {
     const lt: NotificationLinkTarget = "miniprogram"
     expect(lt).toBe("miniprogram")
@@ -150,9 +156,20 @@ describe("db/schema", () => {
     expect(lt2).toBe("admin")
   })
 
-  it("NotificationEntityType is 'circle' for now", () => {
+  it("NotificationEntityType covers circle / user / course", () => {
     const et: NotificationEntityType = "circle"
     expect(et).toBe("circle")
+    const et2: NotificationEntityType = "user"
+    expect(et2).toBe("user")
+    const et3: NotificationEntityType = "course"
+    expect(et3).toBe("course")
+  })
+
+  it("exports courseFollows table (用户 × 课程 关注关系)", () => {
+    const cols = Object.keys(courseFollows)
+    expect(cols).toEqual(
+      expect.arrayContaining(["id", "courseId", "userId", "createdAt"])
+    )
   })
 
   it("exports interestEvents table", () => {

@@ -664,6 +664,7 @@ export type NewContactLog = typeof contactLogs.$inferInsert
  * - `contact_request`      收到打招呼请求(→接收方)
  * - `contact_accepted`     打招呼被接受(→发起方)
  * - `user_followed`        有人关注了你(→被关注者)
+ * - `course_followed`      有人关注课程(→课程创建者)
  * 预留:teacher_application / teacher_application_result 等。
  */
 export const NOTIFICATION_TYPES = [
@@ -673,6 +674,7 @@ export const NOTIFICATION_TYPES = [
   "contact_request",
   "contact_accepted",
   "user_followed",
+  "course_followed",
 ] as const
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number]
 
@@ -689,9 +691,10 @@ export type NotificationLinkTarget =
  * 通知关联业务对象类型字面量联合:
  * - `circle` 圈子相关(审核、被关注)
  * - `user`   用户相关(打招呼请求、被关注)
+ * - `course` 视频课程相关(被关注)
  * 与项目既有惯例一致:用 `text` 列 + TS 联合类型,不用 pgEnum。
  */
-export const NOTIFICATION_ENTITY_TYPES = ["circle", "user"] as const
+export const NOTIFICATION_ENTITY_TYPES = ["circle", "user", "course"] as const
 export type NotificationEntityType =
   (typeof NOTIFICATION_ENTITY_TYPES)[number]
 
@@ -703,7 +706,7 @@ export type NotificationEntityType =
  *
  * 字段语义:
  * - `actorId`  触发者(可空)。关注者 / 审核管理员 / 建圈者;系统通知为 null。`onDelete: 'set null'`。
- * - `entityType`/`entityId` 关联业务对象(本期 `'circle'`),为未来聚合 / 撤回 / 失效预留,本期仅写入不消费。
+ * - `entityType`/`entityId` 关联业务对象(`'circle'` / `'user'` / `'course'`),为未来聚合 / 撤回 / 失效预留,本期仅写入不消费。
  * - `title`/`content` 中的人名与圈子名在创建时快照进字符串;改名不影响历史通知。
  * - `linkTarget` 必须双向过滤:用户侧只渲染 `miniprogram`,后台铃铛只渲染 `admin`。
  */
@@ -1388,3 +1391,38 @@ export const courseLessonProgress = pgTable(
 
 export type CourseLessonProgress = typeof courseLessonProgress.$inferSelect
 export type NewCourseLessonProgress = typeof courseLessonProgress.$inferInsert
+
+/**
+ * 课程关注表(视频课程的"关注"关系沉淀)。
+ * 用户关注感兴趣的课程,关注后可在"我关注的视频"列表快速回看。
+ * 一个用户对同一课程最多一条关注记录(UNIQUE(course_id, user_id))。
+ *
+ * 与 circle_follows / user_follows 相互独立:关注课程不等同于关注圈子或人,不共用表。
+ */
+export const courseFollows = pgTable(
+  "course_follows",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    courseId: uuid("course_id")
+      .notNull()
+      .references(() => courses.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // 同一用户关注同一课程只有一条(幂等关注依赖此索引)
+    uniqueIndex("course_follows_course_user_idx").on(
+      table.courseId,
+      table.userId
+    ),
+    // 按用户反查关注列表
+    index("course_follows_user_idx").on(table.userId),
+  ]
+)
+
+export type CourseFollow = typeof courseFollows.$inferSelect
+export type NewCourseFollow = typeof courseFollows.$inferInsert

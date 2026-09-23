@@ -12,6 +12,8 @@ import { ref } from 'vue'
 import { onLoad, onPullDownRefresh, onReachBottom, onShow } from '@dcloudio/uni-app'
 import { getCourses } from '@/api/courses'
 import { shouldBlockForAppDeploying } from '@/composables/useAppDeployingGuard'
+import { useCourseFollow } from '@/composables/useCourseFollow'
+import { useFollowStore } from '@/store/follow'
 import { formatDate, formatTotalDuration } from '@/utils/format'
 import type { PublicCourseDTO } from '@/types'
 
@@ -27,6 +29,10 @@ definePage({
 const PAGE_SIZE = 10
 /** 缓存窗:距上次成功拉取小于该值时,onShow 不再重拉(避免详情页返回时闪烁+浪费流量) */
 const SHOW_CACHE_WINDOW_MS = 60_000
+
+/** 跨页关注态(卡片按钮状态从 store 读取,详情页关注后返回列表即同步) */
+const followStore = useFollowStore()
+const { loadingId: followLoadingId, toggle: toggleFollow } = useCourseFollow()
 
 const list = ref<PublicCourseDTO[]>([])
 const total = ref(0)
@@ -47,10 +53,14 @@ async function fetchList(reset = false) {
     finished.value = false
   }
   loading.value = true
+  /** 请求发起时刻:防止过期响应覆盖用户刚在本页完成的关注操作 */
+  const requestedAt = Date.now()
   try {
     const res = await getCourses({ page: page.value, pageSize: PAGE_SIZE })
     list.value = reset ? res.list : [...list.value, ...res.list]
     total.value = res.total
+    // 服务端下发的关注态回填跨页 store(所有卡片按钮同步刷新)
+    followStore.syncCourses(res.list, { requestedAt })
     loadFailed.value = false
     lastFetchAt = Date.now()
     // total 与 list 口径一致,同时以「不足一页」兜底判定到底
@@ -108,6 +118,11 @@ onReachBottom(() => {
 /** 跳课程详情播放页 */
 function goCourse(courseId: string) {
   uni.navigateTo({ url: `/pages/course-detail/course-detail?id=${courseId}` })
+}
+
+/** 关注 / 取消关注(未登录由组合式统一引导登录) */
+function handleFollow(courseId: string) {
+  void toggleFollow(courseId)
 }
 </script>
 
@@ -207,6 +222,19 @@ function goCourse(courseId: string) {
             <text class="text-xs text-[#999]">
               {{ course.lessonCount }} 课时 · {{ formatTotalDuration(course.totalDurationSeconds) }} · {{ formatDate(course.updatedAt) }} 更新
             </text>
+          </view>
+
+          <!-- 关注入口:阻止冒泡,避免误触发整卡跳详情 -->
+          <view class="mt-3 flex items-center justify-end border-t border-[#f2f2f2] pt-3" @click.stop>
+            <wd-button
+              size="small"
+              :plain="followStore.isCourseFollowed(course.id)"
+              :loading="followLoadingId === course.id"
+              custom-class="shrink-0"
+              @click.stop="handleFollow(course.id)"
+            >
+              {{ followStore.isCourseFollowed(course.id) ? '已关注' : '关注' }}
+            </wd-button>
           </view>
         </view>
       </view>

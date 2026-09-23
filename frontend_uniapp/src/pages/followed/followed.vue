@@ -3,9 +3,12 @@ import type { Ref } from 'vue'
 import { computed, ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { getFollowedCircles } from '@/api/circles'
+import { getFollowedCourses } from '@/api/courses'
 import { getFollowedUsers } from '@/api/users'
+import { useCourseFollow } from '@/composables/useCourseFollow'
+import { useFollowStore } from '@/store/follow'
 import { activityLevelText, formatDate } from '@/utils/format'
-import type { FollowedCircleDTO, FollowedUserDTO, Paginated } from '@/types'
+import type { FollowedCircleDTO, FollowedCourseDTO, FollowedUserDTO, Paginated } from '@/types'
 
 definePage({
   layout: 'default',
@@ -21,12 +24,13 @@ const PAGE_SIZE = 20
 /** 标签展示最大数量 */
 const MAX_TAG_VISIBLE = 3
 
-/** Tab:users 我关注的人 / circles 我关注的圈子 */
-type TabKey = 'users' | 'circles'
+/** Tab:users 我关注的人 / circles 我关注的圈子 / courses 我关注的视频 */
+type TabKey = 'users' | 'circles' | 'courses'
 
 const TABS: { key: TabKey, label: string }[] = [
-  { key: 'users', label: '我关注的人' },
-  { key: 'circles', label: '我关注的圈子' },
+  { key: 'users', label: '关注的人' },
+  { key: 'circles', label: '关注的圈子' },
+  { key: 'courses', label: '关注的视频' },
 ]
 
 const activeTab = ref<TabKey>('users')
@@ -78,8 +82,19 @@ function createPagedList<T>(
   return { list, loading, finished, fetchList }
 }
 
+/** 跨页关注态(取消关注后同步课程列表 / 详情页按钮)+ 取关交互 */
+const followStore = useFollowStore()
+const { loadingId: unfollowingId, unfollow } = useCourseFollow()
+
 const followedUsers = createPagedList<FollowedUserDTO>(params => getFollowedUsers(params))
 const followedCircles = createPagedList<FollowedCircleDTO>(params => getFollowedCircles(params))
+// 关注课程列表额外把服务端关注态回填跨页 store(带请求时刻,避免覆盖刚完成的操作)
+const followedCourses = createPagedList<FollowedCourseDTO>(async (params) => {
+  const requestedAt = Date.now()
+  const res = await getFollowedCourses(params)
+  followStore.syncCourses(res.list, { requestedAt })
+  return res
+})
 
 // 模板内直接使用(顶层 ref 自动解包)
 const users = followedUsers.list
@@ -88,9 +103,16 @@ const usersFinished = followedUsers.finished
 const circles = followedCircles.list
 const circlesLoading = followedCircles.loading
 const circlesFinished = followedCircles.finished
+const courses = followedCourses.list
+const coursesLoading = followedCourses.loading
+const coursesFinished = followedCourses.finished
 
 /** 当前 Tab 是否已加载到底 */
-const activeFinished = computed(() => (activeTab.value === 'users' ? usersFinished.value : circlesFinished.value))
+const activeFinished = computed(() => {
+  if (activeTab.value === 'users')
+    return usersFinished.value
+  return activeTab.value === 'circles' ? circlesFinished.value : coursesFinished.value
+})
 
 /**
  * 拉取指定 Tab 的列表。
@@ -98,7 +120,9 @@ const activeFinished = computed(() => (activeTab.value === 'users' ? usersFinish
  * @param reset 是否回到第一页
  */
 function fetchTab(tab: TabKey, reset = false) {
-  return tab === 'users' ? followedUsers.fetchList(reset) : followedCircles.fetchList(reset)
+  if (tab === 'users')
+    return followedUsers.fetchList(reset)
+  return tab === 'circles' ? followedCircles.fetchList(reset) : followedCourses.fetchList(reset)
 }
 
 // 进入时拉取当前 Tab(从对方主页/圈子详情返回也会触发 onShow 刷新)
@@ -109,7 +133,7 @@ onShow(() => {
 // query 参数 tab 决定初始 Tab(非法值忽略,默认「我关注的人」)
 onLoad((options) => {
   const tab = (options as { tab?: string } | undefined)?.tab
-  if (tab === 'users' || tab === 'circles')
+  if (tab === 'users' || tab === 'circles' || tab === 'courses')
     activeTab.value = tab
 })
 
@@ -122,8 +146,12 @@ function handleTabChange(tab: TabKey) {
     if (users.value.length === 0 && !usersFinished.value)
       void followedUsers.fetchList(true)
   }
-  else if (circles.value.length === 0 && !circlesFinished.value) {
-    void followedCircles.fetchList(true)
+  else if (tab === 'circles') {
+    if (circles.value.length === 0 && !circlesFinished.value)
+      void followedCircles.fetchList(true)
+  }
+  else if (courses.value.length === 0 && !coursesFinished.value) {
+    void followedCourses.fetchList(true)
   }
 }
 
@@ -151,6 +179,34 @@ function handleCircleClick(circleId: string) {
   uni.navigateTo({ url: `/pages/circle/circle?id=${circleId}` })
 }
 
+/** 跳课程详情播放页 */
+function handleCourseClick(courseId: string) {
+  uni.navigateTo({ url: `/pages/course-detail/course-detail?id=${courseId}` })
+}
+
+/** 跳课程作者公开主页(作者已被删除时为 null,不跳转) */
+function handleTeacherClick(teacher: FollowedCourseDTO['teacher']) {
+  if (!teacher)
+    return
+  uni.navigateTo({ url: `/pages/user-home/user-home?id=${teacher.id}` })
+}
+
+/**
+ * 关注列表中取消关注:先本地移出保证点击反馈即时,再重置分页游标重拉第一页。
+ *
+ * - 必须显式调用 `unfollow`(而非 `toggle`):该项已作为"已关注"呈现,
+ *   方向应固定为取关,不能依赖本地 store 反推(状态失真时会反向关注并给作者发通知);
+ * - 必须重置分页:`loadMore` 按服务端 offset 取数,本地删除一条会让后续翻页
+ *   跳过一项并提前判定「没有更多了」,重拉第一页使游标与服务端口径重新对齐。
+ */
+async function handleUnfollow(courseId: string) {
+  const ok = await unfollow(courseId)
+  if (!ok)
+    return
+  courses.value = courses.value.filter(c => c.id !== courseId)
+  await followedCourses.fetchList(true)
+}
+
 /** 返回上一页 */
 function handleBack() {
   uni.navigateBack({
@@ -163,7 +219,7 @@ function handleBack() {
 
 <template>
   <view class="flex flex-col">
-    <!-- ====== 顶部双 Tab(青绿下划线) ====== -->
+    <!-- ====== 顶部三 Tab(青绿下划线):我关注的人 / 圈子 / 视频 ====== -->
     <view class="flex bg-white shadow-sm">
       <view
         v-for="t in TABS"
@@ -237,13 +293,13 @@ function handleBack() {
     </view>
 
     <!-- ====== 我关注的圈子 ====== -->
-    <view v-else-if="circlesLoading && circles.length === 0" class="flex flex-col items-center pt-20">
+    <view v-else-if="activeTab === 'circles' && circlesLoading && circles.length === 0" class="flex flex-col items-center pt-20">
       <text class="text-sm text-[#999]">
         加载中...
       </text>
     </view>
 
-    <view v-else-if="circles.length === 0" class="flex flex-col items-center pt-20">
+    <view v-else-if="activeTab === 'circles' && circles.length === 0" class="flex flex-col items-center pt-20">
       <text class="text-sm text-[#999]">
         还没有关注任何圈子,去首页发现吧
       </text>
@@ -252,7 +308,7 @@ function handleBack() {
       </wd-button>
     </view>
 
-    <view v-else class="mx-4 mt-3 flex flex-col gap-3">
+    <view v-else-if="activeTab === 'circles'" class="mx-4 mt-3 flex flex-col gap-3">
       <view
         v-for="c in circles"
         :key="c.id"
@@ -276,6 +332,89 @@ function handleBack() {
         </view>
       </view>
       <text v-if="circlesFinished && circles.length > 0" class="py-3 text-center text-xs text-[#999]">
+        没有更多了
+      </text>
+    </view>
+
+    <!-- ====== 我关注的视频 ====== -->
+    <view v-else-if="coursesLoading && courses.length === 0" class="flex flex-col items-center pt-20">
+      <text class="text-sm text-[#999]">
+        加载中...
+      </text>
+    </view>
+
+    <view v-else-if="courses.length === 0" class="flex flex-col items-center pt-20">
+      <text class="text-sm text-[#999]">
+        还没有关注任何视频,去视频课程里发现吧
+      </text>
+      <wd-button class="mt-4" round size="small" @click="handleBack">
+        返回
+      </wd-button>
+    </view>
+
+    <view v-else class="mx-4 mt-3 flex flex-col gap-3">
+      <view
+        v-for="co in courses"
+        :key="co.id"
+        class="overflow-hidden rounded-2xl bg-white"
+        @click="handleCourseClick(co.id)"
+      >
+        <!-- 封面:16:9 视觉区,无封面时浅绿占位 -->
+        <view class="relative h-[160px] w-full overflow-hidden bg-[#e8f5f1]">
+          <image
+            v-if="co.coverImages.length > 0"
+            :src="co.coverImages[0]"
+            class="h-full w-full"
+            mode="aspectFill"
+          />
+          <view v-else class="h-full w-full flex items-center justify-center">
+            <text class="i-carbon-video text-4xl text-[#018d71]/30" />
+          </view>
+          <view class="absolute right-2 top-2 rounded-full bg-black/45 px-2.5 py-1">
+            <text class="text-xs text-white">
+              {{ co.lessonCount }} 课时
+            </text>
+          </view>
+        </view>
+
+        <view class="p-4">
+          <text class="line-clamp-1 text-base text-[#333] font-medium">
+            {{ co.title }}
+          </text>
+
+          <!-- 作者 + 关注时间(点作者跳公开主页,阻止冒泡避免进课程详情) -->
+          <view class="mt-2 flex items-center justify-between gap-2">
+            <view class="min-w-0 flex flex-1 items-center gap-2" @click.stop="handleTeacherClick(co.teacher)">
+              <view class="h-6 w-6 flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#e8f5f1]">
+                <image v-if="co.teacher && co.teacher.avatarUrl" :src="co.teacher.avatarUrl" class="h-full w-full" mode="aspectFill" />
+                <text v-else class="text-xs text-[#018d71]">
+                  {{ co.teacher ? co.teacher.name[0] : '?' }}
+                </text>
+              </view>
+              <text class="truncate text-xs text-[#666]">
+                {{ co.teacher ? co.teacher.name : '作者已注销' }}
+              </text>
+            </view>
+            <text class="shrink-0 text-xs text-[#999]">
+              关注于 {{ formatDate(co.followedAt) }}
+            </text>
+          </view>
+
+          <!-- 取消关注:成功后该项立即移出列表 -->
+          <view class="mt-3 flex items-center justify-end border-t border-[#f2f2f2] pt-3" @click.stop>
+            <wd-button
+              size="small"
+              plain
+              :loading="unfollowingId === co.id"
+              custom-class="shrink-0"
+              @click.stop="handleUnfollow(co.id)"
+            >
+              取消关注
+            </wd-button>
+          </view>
+        </view>
+      </view>
+      <text v-if="coursesFinished && courses.length > 0" class="py-3 text-center text-xs text-[#999]">
         没有更多了
       </text>
     </view>

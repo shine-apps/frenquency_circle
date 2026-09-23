@@ -92,6 +92,13 @@
       "when": 1789649535611,
       "tag": "0012_add_course_lesson_progress",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1790139971059,
+      "tag": "0013_add_course_follows",
+      "breakpoints": true
     }
   ]
 }

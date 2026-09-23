@@ -491,6 +491,11 @@ export type PublicCourseDTO = {
    * 部分或全部课时未探测时可能小于真实值;0 表示"无课时或时长未知"。
    */
   totalDurationSeconds: number
+  /**
+   * 当前登录用户是否已关注该课程(未登录场景恒为 false)。
+   * 列表与详情接口均下发,供前端渲染关注按钮两态。
+   */
+  isFollowed: boolean
   createdAt: string
   updatedAt: string
 }
@@ -515,6 +520,19 @@ export type CourseTeacherDTO = {
  * 详情页需要"老师入口 → 公开主页"跳转,故详情接口单独下发。
  */
 export type PublicCourseDetailDTO = PublicCourseDTO & {
+  teacher: CourseTeacherDTO | null
+}
+
+/**
+ * 我关注的视频课程列表项 DTO(用于 GET /api/courses/followed 响应)。
+ *
+ * - 在课程概要基础上附加 `followedAt`(关注时间,列表由关注时间倒序);
+ * - `teacher` 为该课程创建者轻量信息,关注列表需展示"作者",故随列表下发
+ *   (批量查询填充,非逐行查询);创建者被软删除时为 null。
+ */
+export type FollowedCourseDTO = PublicCourseDTO & {
+  /** 关注时间 */
+  followedAt: string
   teacher: CourseTeacherDTO | null
 }
 
@@ -588,14 +606,15 @@ export type NotificationDTO = {
   id: string
   /** 触发者 id(可空);系统通知为 null */
   actorId: string | null
-  /** 关联业务对象类型(可空):'circle' 圈子 / 'user' 用户 */
-  entityType: "circle" | "user" | null
-  /** 关联业务对象 id(可空),如 circleId / userId */
+  /** 关联业务对象类型(可空):'circle' 圈子 / 'user' 用户 / 'course' 视频课程 */
+  entityType: "circle" | "user" | "course" | null
+  /** 关联业务对象 id(可空),如 circleId / userId / courseId */
   entityId: string | null
   /**
    * 通知类型:
    * - circle_review / circle_review_result / circle_followed 圈子相关
    * - contact_request 收到打招呼 / contact_accepted 打招呼被接受 / user_followed 被关注
+   * - course_followed 视频课程被关注
    */
   type:
     | "circle_review"
@@ -604,6 +623,7 @@ export type NotificationDTO = {
     | "contact_request"
     | "contact_accepted"
     | "user_followed"
+    | "course_followed"
   title: string
   content: string
   /** 引导打开的页面链接(小程序页面路径或后台路由) */

@@ -389,7 +389,7 @@ const roleChipClass = computed(() => {
     </view>
 
     <!-- ====== 设置入口列表 ====== -->
-    <view v-if="!isAppDeploying" class="mx-4 rounded-2xl bg-white">
+    <view class="mx-4 rounded-2xl bg-white">
       <view class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4" @click="handleNotifications">
         <text class="text-sm text-[#333] font-medium">
           消息
@@ -545,6 +545,7 @@ const roleChipClass = computed(() => {
       </view>
 
       <view
+        v-if="!isAppDeploying"
         class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4"
         @click="handleCreateCourse"
       >
@@ -579,6 +580,7 @@ const roleChipClass = computed(() => {
       </view>
 
       <view
+        v-if="!isAppDeploying"
         class="flex items-center justify-between border-[#f5f5f5] border-b-inset px-4 py-4"
         @click="handleMyCourses"
       >

@@ -1,12 +1,13 @@
 <script lang="ts" setup>
 import type { Ref } from 'vue'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { getFollowedCircles } from '@/api/circles'
 import { getFollowedCourses } from '@/api/courses'
 import { getFollowedUsers } from '@/api/users'
 import { useCourseFollow } from '@/composables/useCourseFollow'
 import { useFollowStore } from '@/store/follow'
+import { useSettingsStore } from '@/store/settings'
 import { activityLevelText, formatDate } from '@/utils/format'
 import type { FollowedCircleDTO, FollowedCourseDTO, FollowedUserDTO, Paginated } from '@/types'
 
@@ -27,11 +28,20 @@ const MAX_TAG_VISIBLE = 3
 /** Tab:users 我关注的人 / circles 我关注的圈子 / courses 我关注的视频 */
 type TabKey = 'users' | 'circles' | 'courses'
 
-const TABS: { key: TabKey, label: string }[] = [
-  { key: 'users', label: '关注的人' },
-  { key: 'circles', label: '关注的圈子' },
-  { key: 'courses', label: '关注的视频' },
-]
+const settingsStore = useSettingsStore()
+/** 应用发布维护中(isAppDeploying 为 true):隐藏「关注的视频」tab(课程入口统一口径) */
+const isAppDeploying = computed(() => settingsStore.isAppDeploying)
+
+/** Tab 定义(维护期过滤「关注的视频」,避免展示 / 停留在课程内容) */
+const TABS = computed<{ key: TabKey, label: string }[]>(() => {
+  const tabs: { key: TabKey, label: string }[] = [
+    { key: 'users', label: '关注的人' },
+    { key: 'circles', label: '关注的圈子' },
+  ]
+  if (!isAppDeploying.value)
+    tabs.push({ key: 'courses', label: '关注的视频' })
+  return tabs
+})
 
 const activeTab = ref<TabKey>('users')
 
@@ -120,6 +130,9 @@ const activeFinished = computed(() => {
  * @param reset 是否回到第一页
  */
 function fetchTab(tab: TabKey, reset = false) {
+  // 维护期不拉取「关注的视频」(tab 已隐藏,兜底直达 / 停留场景)
+  if (tab === 'courses' && isAppDeploying.value)
+    return Promise.resolve()
   if (tab === 'users')
     return followedUsers.fetchList(reset)
   return tab === 'circles' ? followedCircles.fetchList(reset) : followedCourses.fetchList(reset)
@@ -130,11 +143,31 @@ onShow(() => {
   void fetchTab(activeTab.value, true)
 })
 
-// query 参数 tab 决定初始 Tab(非法值忽略,默认「我关注的人」)
-onLoad((options) => {
+// query 参数 tab 决定初始 Tab(非法值忽略,默认「我关注的人」);
+// 「关注的视频」在维护期不可访问:等设置拉取完成后再判定,避免误拦正常运营期的直达
+onLoad(async (options) => {
   const tab = (options as { tab?: string } | undefined)?.tab
-  if (tab === 'users' || tab === 'circles' || tab === 'courses')
+  if (tab !== 'users' && tab !== 'circles' && tab !== 'courses')
+    return
+  if (tab === 'courses') {
+    await settingsStore.getSettings().catch(() => { /* 拉取失败沿用旧值(保守视为维护中) */ })
+    if (isAppDeploying.value)
+      return
     activeTab.value = tab
+    if (courses.value.length === 0 && !coursesFinished.value)
+      void followedCourses.fetchList(true)
+    return
+  }
+  activeTab.value = tab
+})
+
+// 维护期开启时,若当前停留在「关注的视频」tab,切回「关注的人」,避免停留在已隐藏 tab
+watch(isAppDeploying, (deploying) => {
+  if (!deploying || activeTab.value !== 'courses')
+    return
+  activeTab.value = 'users'
+  if (users.value.length === 0 && !usersFinished.value)
+    void followedUsers.fetchList(true)
 })
 
 /** 切换 Tab:该 Tab 首次进入才拉取,已加载过则复用缓存 */

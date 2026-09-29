@@ -54,7 +54,9 @@ const { mockDb, chainSelect, chainUpdate, chainInsert, chainDelete } = vi.hoiste
 
   const chainUpdate = {
     set: vi.fn(() => chainUpdate),
-    where: vi.fn(async () => ({ rowsChanged: 1 })),
+    where: vi.fn(() => chainUpdate),
+    // update(...).returning() 默认命中 1 行(回填成功);并发未命中用例可覆写为 []
+    returning: vi.fn(async () => [{ id: "u1" }]),
   }
 
   const chainInsert = {
@@ -86,6 +88,7 @@ vi.mock("@/lib/logger", () => ({
 }))
 
 import {
+  backfillUserPhoneIfEmpty,
   findUserByAccount,
   linkAccount,
   findOrCreateUserAndLinkAccount,
@@ -113,6 +116,7 @@ function resetMock() {
   chainSelect.limit.mockClear()
   chainUpdate.set.mockClear()
   chainUpdate.where.mockClear()
+  chainUpdate.returning.mockClear()
   chainInsert.values.mockClear()
   chainInsert.onConflictDoUpdate.mockClear()
   chainInsert.onConflictDoNothing.mockClear()
@@ -312,6 +316,83 @@ describe("lib/auth/account-service", () => {
         provider: "wechat-miniprogram",
       })
       expect(removed).toBe(0)
+    })
+  })
+
+  describe("backfillUserPhoneIfEmpty", () => {
+    it("writes phone when user has none and the phone is unoccupied", async () => {
+      mockDb._selectResult = [] // 占用预检为空
+      const written = await backfillUserPhoneIfEmpty({
+        userId: "u1",
+        phone: "13800138000",
+        currentPhone: null,
+      })
+      expect(written).toBe(true)
+      expect(chainUpdate.set).toHaveBeenCalledWith(
+        expect.objectContaining({ phone: "13800138000" })
+      )
+      expect(chainUpdate.where).toHaveBeenCalledTimes(1)
+    })
+
+    it("skips without any DB access when the user already has another phone", async () => {
+      const written = await backfillUserPhoneIfEmpty({
+        userId: "u1",
+        phone: "13800138000",
+        currentPhone: "13900139000",
+      })
+      expect(written).toBe(false)
+      expect(mockDb.select).not.toHaveBeenCalled()
+      expect(mockDb.update).not.toHaveBeenCalled()
+    })
+
+    it("reports false when the conditional update matches no row (concurrent write)", async () => {
+      mockDb._selectResult = [] // 占用预检为空
+      chainUpdate.returning.mockResolvedValueOnce([]) // update 未命中(并发窗口)
+      const written = await backfillUserPhoneIfEmpty({
+        userId: "u1",
+        phone: "13800138000",
+        currentPhone: null,
+      })
+      expect(written).toBe(false)
+      expect(chainUpdate.set).toHaveBeenCalledWith(
+        expect.objectContaining({ phone: "13800138000" })
+      )
+    })
+
+    it("is a silent no-op when the current phone equals the login phone", async () => {
+      const written = await backfillUserPhoneIfEmpty({
+        userId: "u1",
+        phone: "13800138000",
+        currentPhone: "13800138000",
+      })
+      expect(written).toBe(false)
+      expect(mockDb.select).not.toHaveBeenCalled()
+      expect(mockDb.update).not.toHaveBeenCalled()
+    })
+
+    it("skips when the phone is already held by another user", async () => {
+      mockDb._selectResult = [{ id: "u-other" }]
+      const written = await backfillUserPhoneIfEmpty({
+        userId: "u1",
+        phone: "13800138000",
+        currentPhone: null,
+      })
+      expect(written).toBe(false)
+      expect(mockDb.update).not.toHaveBeenCalled()
+    })
+
+    it("swallows DB errors so login never breaks", async () => {
+      mockDb._selectResult = []
+      chainUpdate.set.mockImplementationOnce(() => {
+        throw new Error("db down")
+      })
+      await expect(
+        backfillUserPhoneIfEmpty({
+          userId: "u1",
+          phone: "13800138000",
+          currentPhone: null,
+        })
+      ).resolves.toBe(false)
     })
   })
 

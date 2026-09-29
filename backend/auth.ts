@@ -7,6 +7,7 @@ import { isValidPhone, normalizePhone, phoneToEmail } from "@/lib/sms/phone"
 import { verifyCode } from "@/lib/sms/phone-code-service"
 import { rateLimiter } from "@/lib/sms/rate-limit"
 import {
+  backfillUserPhoneIfEmpty,
   findOrCreateUserByProvider,
   findUserByAccount,
   findUserByAccountOrEmail,
@@ -182,6 +183,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           providerAccountId: phone,
         })
 
+        // 回填 users.phone:短信验证码登录同样证明了手机号归属,
+        // 仅在用户尚未绑定手机号时写入,不覆盖既有绑定;失败/被占用均不阻断登录。
+        // 回填后主页联系方式链路(contacts.ts)不再因 phone 缺失判为 not_provided。
+        await backfillUserPhoneIfEmpty({
+          userId: user.id,
+          phone,
+          currentPhone: user.phone ?? null,
+        })
+
         logger.info(LOG_PREFIX.AUTH, "Phone login success", {
           userId: user.id,
           phone,
@@ -202,7 +212,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     //   未绑定则抛 [WECHAT] 错误，不自动建号。
     // - 有 phoneCode：手机号授权登录（保留）。<button open-type="getPhoneNumber"> 拿 phone_code →
     //   getPhoneNumber 换真实手机号 → find-or-create 用户（手机身份记 provider="phone"）→
-    //   自动把 openid 绑定到该账号（仅此流程自动绑定）。
+    //   自动把 openid 绑定到该账号（仅此流程自动绑定），
+    //   并把手机号回填 users.phone（仅当用户尚未绑定手机号时）。
     Credentials({
       id: PROVIDER_WECHAT_MP,
       name: "微信小程序",
@@ -332,6 +343,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           role: "USER",
           provider: PROVIDER_PHONE,
           providerAccountId: phone,
+        })
+
+        // 回填 users.phone:微信侧实名的手机号仅在用户尚未绑定手机号时写入,
+        // 不覆盖既有绑定;被占用/失败均跳过,不阻断登录(见 backfillUserPhoneIfEmpty)。
+        // 回填后主页联系方式链路(contacts.ts)不再因 phone 缺失判为 not_provided。
+        await backfillUserPhoneIfEmpty({
+          userId: user.id,
+          phone,
+          currentPhone: user.phone ?? null,
         })
 
         // 仅「微信手机号授权登录」流程自动绑定微信。

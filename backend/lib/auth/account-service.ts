@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 import bcrypt from "bcryptjs"
-import { and, eq, exists, ne } from "drizzle-orm"
+import { and, eq, exists, isNull, ne } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { accounts, users } from "@/db/schema"
 import { logger, LOG_PREFIX } from "@/lib/logger"
@@ -192,6 +192,84 @@ export async function findOrCreateUserByProvider(params: {
     return resolved.user
   }
   return findOrCreateUserAndLinkAccount(params)
+}
+
+/**
+ * 将「登录链路实名的手机号」回填到 users.phone(仅当用户尚未绑定手机号时)。
+ *
+ * 背景:短信验证码登录/微信手机号授权登录拿到的手机号此前只作登录身份
+ * (派生邮箱 + accounts 绑定),不写 users.phone,导致用户主页 contact.reason
+ * 恒为 not_provided(对方无任何联系方式)。
+ *
+ * 规则:
+ * - 不覆盖既有绑定:用户已通过短信验证绑定的手机号(users.phone)优先;
+ * - 唯一性:users.phone 建有部分唯一索引(users_phone_uniq_key),
+ *   占用预检 + update 追加 isNull(users.phone) 条件收窄并发窗口,
+ *   已被其他用户占用时跳过回填(记 warn,不阻断登录);
+ * - best-effort:任何 DB 异常(含唯一冲突 23505)只记日志并吞掉,绝不影响登录主流程。
+ *
+ * @returns 是否实际写入了 phone
+ */
+export async function backfillUserPhoneIfEmpty(params: {
+  userId: string
+  phone: string
+  /** 用户当前 users.phone(调用方已持有该行,避免重复查询) */
+  currentPhone: string | null
+}): Promise<boolean> {
+  const { userId, phone, currentPhone } = params
+
+  // 已绑定手机号:不覆盖(与登录手机号相同也无需任何写入)
+  if (currentPhone) {
+    if (currentPhone !== phone) {
+      logger.info(LOG_PREFIX.ACCOUNT, "Phone backfill skipped: user already bound", {
+        userId,
+        phone,
+      })
+    }
+    return false
+  }
+
+  try {
+    const occupant = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.phone, phone), ne(users.id, userId)))
+      .limit(1)
+    if (occupant.length > 0) {
+      logger.warn(LOG_PREFIX.ACCOUNT, "Phone backfill skipped: phone occupied", {
+        userId,
+        phone,
+      })
+      return false
+    }
+
+    const updatedRows = await db
+      .update(users)
+      .set({ phone, updatedAt: new Date() })
+      .where(and(eq(users.id, userId), isNull(users.phone)))
+      .returning({ id: users.id })
+
+    if (updatedRows.length === 0) {
+      // 并发窗口下 where 未命中(phone 恰被并行写入),按未写入处理,不视为失败
+      logger.info(LOG_PREFIX.ACCOUNT, "Phone backfill no-op: concurrent write detected", {
+        userId,
+        phone,
+      })
+      return false
+    }
+
+    logger.info(LOG_PREFIX.ACCOUNT, "Phone backfilled from login", {
+      userId,
+      phone,
+    })
+    return true
+  } catch (err) {
+    logger.warn(LOG_PREFIX.ACCOUNT, "Phone backfill failed", {
+      userId,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return false
+  }
 }
 
 /**

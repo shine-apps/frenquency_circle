@@ -99,6 +99,13 @@
       "when": 1790139971059,
       "tag": "0013_add_course_follows",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1790654467177,
+      "tag": "0014_users_phone_uniq",
+      "breakpoints": true
     }
   ]
 }

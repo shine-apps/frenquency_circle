@@ -85,14 +85,13 @@ export const users = pgTable("users", {
   role: text("role").notNull().default("USER"),
   /** 用户头像 URL(可空,前端 chooseMedia 上传到本地后由 PATCH /api/auth/me 写入) */
   avatarUrl: text("avatar_url"),
-  /** 用户手机号(可空,phone/wechat-miniprogram provider 登录后写入) */
+  /** 用户手机号(可空,短信验证码绑定接口写入;短信验证码登录/微信手机号授权登录时若未绑手机号则回填) */
   phone: text("phone"),
   /**
    * 用户微信号(可空,最长 50 字符,空串归一为 null)。
-   * 人-人联系链路中唯一可对外展示的联系方式:
-   * - 对方 `privacySettings.publicContact` 为 true 时对所有登录用户可见;
-   * - 或双方存在 accepted 的 contact_requests 时互相可见。
-   * 手机号(phone)是登录实名凭证,任何情况下都不写入对外响应。
+   * 人-人联系链路的对外展示规则以 lib/contacts.ts 的 resolveVisibility 为准:
+   * - 仅「本人查看自己」或「双方 accepted 打招呼」后可见,publicContact 不影响该规则;
+   * - 微信号缺失时手机号(phone)作为兜底联系方式展示。
    */
   wechat: text("wechat"),
   /** 性别(`male` | `female` | `other`,可空:资料补全前为 null) */
@@ -125,6 +124,9 @@ export const users = pgTable("users", {
   // 匹配引擎包围盒粗筛:经纬度组合 B-tree 索引(与 circles_location_idx 惯例一致;
   // 真实 GiST 索引留待 PostGIS 完整集成)
   index("users_location_idx").on(table.latitude, table.longitude),
+  // 手机号应用层唯一性兜底:占用预检存在 TOCTOU,用部分唯一索引根治(NULL 不参与唯一)。
+  // 冲突(23505)由 backfillUserPhoneIfEmpty / phone verify 的调用方兜底处理
+  uniqueIndex("users_phone_uniq_key").on(table.phone).where(sql`phone IS NOT NULL`),
 ])
 
 export type User = typeof users.$inferSelect

@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "users_phone_uniq_key" ON "users" USING btree ("phone") WHERE phone IS NOT NULL;

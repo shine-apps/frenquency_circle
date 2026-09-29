@@ -330,6 +330,30 @@ function handleCustomNameChange(e: any) {
   customName.value = String(e.detail.value || '').slice(0, CUSTOM_NAME_MAX)
 }
 
+/**
+ * 将新建标签并入分类树的对应二级中类(必要时注入占位节点)与搜索联想列表,
+ * 使新标签立即可见可选;底部表单与"自定义子标签"弹框共用。
+ */
+function mergeCreatedTag(tag: TagDTO) {
+  let target = categories.value.find(c => c.category === tag.category)
+  if (!target) {
+    target = { category: tag.category, categoryId: tag.categoryId || '', subCategories: [] }
+    categories.value = [...categories.value, target]
+  }
+  const subName = tag.subCategory || tag.name
+  let sub = target.subCategories.find(s => s.name === subName)
+  if (!sub) {
+    sub = { name: subName, categoryId: tag.categoryId || '', slug: tag.categoryId || `${tag.category}/${subName}`, tags: [] }
+    target.subCategories = [...target.subCategories, sub]
+  }
+  if (!sub.tags.some(t => t.name === tag.name)) {
+    sub.tags = [...sub.tags, { id: tag.id, name: tag.name, pinyin: tag.pinyin, pinyinInitials: tag.pinyinInitials }]
+  }
+  // 若处于搜索态,也并入联想列表
+  if (query.value.trim() && !suggestions.value.some(s => s.id === tag.id))
+    suggestions.value = [...suggestions.value, tag]
+}
+
 async function handleSubmitCustom() {
   const name = customName.value.trim()
   if (!customCategorySlug.value) {
@@ -348,25 +372,7 @@ async function handleSubmitCustom() {
   try {
     const tag = await createCustomTag(name, customCategorySlug.value)
     selectedTags.value = [...selectedTags.value, tag.name]
-    // 列表刷新:将新标签并入分类树的对应二级中类,立即可见
-    // 若所选分类不在骨架中,按需注入占位节点(用后端返回的 category/subCategory)
-    let target = categories.value.find(c => c.category === tag.category)
-    if (!target) {
-      target = { category: tag.category, categoryId: tag.categoryId || '', subCategories: [] }
-      categories.value = [...categories.value, target]
-    }
-    const subName = tag.subCategory || tag.name
-    let sub = target.subCategories.find(s => s.name === subName)
-    if (!sub) {
-      sub = { name: subName, categoryId: tag.categoryId || '', slug: tag.categoryId || `${tag.category}/${subName}`, tags: [] }
-      target.subCategories = [...target.subCategories, sub]
-    }
-    if (!sub.tags.some(t => t.name === tag.name)) {
-      sub.tags = [...sub.tags, { id: tag.id, name: tag.name, pinyin: tag.pinyin, pinyinInitials: tag.pinyinInitials }]
-    }
-    // 若处于搜索态,也并入联想列表
-    if (query.value.trim() && !suggestions.value.some(s => s.id === tag.id))
-      suggestions.value = [...suggestions.value, tag]
+    mergeCreatedTag(tag)
     customName.value = ''
     customCategorySlug.value = ''
     customCategoryLabel.value = ''
@@ -379,6 +385,27 @@ async function handleSubmitCustom() {
   finally {
     customSubmitting.value = false
   }
+}
+
+// ====== 三级标签区"+ 自定义子标签"按钮:复用底部自定义添加表单 ======
+/**
+ * 点击三级标签区的"+ 自定义子标签"按钮:
+ * 展开底部自定义添加表单,并把当前展开的一级大类/选中的二级中类预填进分类选择。
+ */
+function openCustomForm() {
+  requireLoginThen(() => {
+    if (expandedCategory.value) {
+      const cat = categories.value.find(c => c.category === expandedCategory.value)
+      // 优先预填当前选中的二级中类,未选具体二级则取该大类第一个二级中类
+      const sub = cat?.subCategories.find(s => s.name === selectedSub.value) || cat?.subCategories[0]
+      const opt = customCategoryOptions.value.find(o => o.value === sub?.slug)
+      if (opt) {
+        customCategorySlug.value = opt.value
+        customCategoryLabel.value = opt.label
+      }
+    }
+    customOpen.value = true
+  })
 }
 </script>
 
@@ -580,8 +607,12 @@ async function handleSubmitCustom() {
                   >
                     {{ selectedTags.includes(t.name) ? `✓ ${t.name}` : t.name }}
                   </text>
-                  <text v-if="visibleTags.length === 0" class="text-sm text-[#999]">
-                    该类暂无标签
+                  <!--添加自定义子标签:点击展开底部自定义添加表单(预填当前一级/二级分类)-->
+                  <text
+                    class="border border-dashed border-[#018d71]/50 rounded-full px-4 py-2 text-sm text-[#018d71] active:scale-95"
+                    @click="openCustomForm"
+                  >
+                    + 自定义子标签
                   </text>
                 </view>
               </view>

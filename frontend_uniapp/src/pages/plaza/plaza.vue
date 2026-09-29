@@ -81,11 +81,6 @@ watch(activeTab, (name) => {
   })
 })
 
-// 维护期开启时,若当前停留在「课程」tab,切回「打卡」,避免停留在已隐藏的 tab
-watch(isAppDeploying, (deploying) => {
-  if (deploying && activeTab.value === 'course')
-    activeTab.value = 'checkin'
-})
 
 // 页面生命周期:仅首次进入由 onReady 拉取(此时子组件已挂载);
 // 从发布页等返回触发的 onShow 刷新当前 tab

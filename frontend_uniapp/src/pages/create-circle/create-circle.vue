@@ -2,7 +2,6 @@
 import { computed, ref } from 'vue'
 import { useUserStore } from '@/store/user'
 import { useLocationStore } from '@/store/location'
-import { shouldBlockForAppDeploying } from '@/composables/useAppDeployingGuard'
 import { getMyProfile } from '@/api/auth'
 import { createCircle, getCircle, updateCircle } from '@/api/circles'
 import { uploadFileToCos } from '@/api/upload'
@@ -220,10 +219,6 @@ onLoad(async (options) => {
   if (!userStore.isLoggedIn) {
     // 未登录:reLaunch 清空页面栈并携带 redirect,登录后回到本页
     toLoginWithRedirect()
-    return
-  }
-  // 应用发布维护中(isAppDeploying 为 true)不允许进入,跳转首页
-  if (await shouldBlockForAppDeploying()) {
     return
   }
   editId.value = (options as any)?.id || ''

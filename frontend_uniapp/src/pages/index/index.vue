@@ -683,7 +683,6 @@ function handleCircleClick(circleId: string): void {
 
     <!-- ====== 右下角浮动创建入口 ====== -->
     <wd-fab
-      v-if="!isAppDeploying"
       v-model:active="fabActive"
       position="right-bottom"
       direction="top"

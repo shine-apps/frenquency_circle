@@ -22,7 +22,6 @@ import { toLoginWithRedirect } from '@/utils/toLoginPage'
 import { useDialog } from '@wot-ui/ui/components/wd-dialog'
 import { useUserStore } from '@/store/user'
 import { ensureTextSafe, showModerationFailureToast } from '@/utils/content-moderation'
-import { shouldBlockForAppDeploying } from '@/composables/useAppDeployingGuard'
 import type { ActivityDTO } from '@/types'
 
 /** 轮播图片最大数量 */
@@ -110,14 +109,10 @@ async function loadDetail() {
   }
 }
 
-onLoad(async (options) => {
+onLoad((options) => {
   if (!userStore.isLoggedIn) {
     // 未登录:reLaunch 清空页面栈并携带 redirect,登录后回到本页
     toLoginWithRedirect()
-    return
-  }
-  // 应用发布维护中(isAppDeploying 为 true)不允许进入,跳转首页
-  if (await shouldBlockForAppDeploying()) {
     return
   }
   activityId.value = (options as any)?.activityId || null

@@ -131,6 +131,7 @@ export async function matchPeople(
         id: users.id,
         name: users.name,
         avatarUrl: users.avatarUrl,
+        role: users.role,
         activityLevel: users.activityLevel,
         practiceYears: users.practiceYears,
         privacySettings: users.privacySettings,
@@ -164,6 +165,7 @@ export async function matchPeople(
       tags: row.tags ?? [],
       activityLevel: row.activityLevel as MatchPersonDTO["activityLevel"],
       practiceYears: row.practiceYears,
+      role: row.role as MatchPersonDTO["role"],
     }
   })
 

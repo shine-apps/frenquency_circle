@@ -101,6 +101,7 @@ const SAMPLE_PEOPLE_RESULT: Paginated<MatchPersonDTO> = {
       tags: [],
       activityLevel: "medium",
       practiceYears: 3,
+      role: "USER",
     },
   ],
   total: 1,

@@ -191,7 +191,7 @@ async function doUpload(file: string | File, filename: string) {
   }
   catch (e) {
     avatarUrl.value = prevUrl
-    console.error("上传头像失败", e)
+    console.error('上传头像失败', e)
     toast.show({ msg: '头像上传失败', iconName: 'error' })
   }
   finally {
@@ -270,7 +270,7 @@ const avatarFallback = computed(() => (user.value?.name ? user.value.name[0] : '
 const roleInfo = computed<{ text: string, type: 'warning' | 'primary' | 'danger' }>(() => {
   const role = user.value?.role
   if (role === 'TEACHER')
-    return { text: '教师', type: 'warning' }
+    return { text: '老师', type: 'warning' }
   if (role === 'ADMIN')
     return { text: '管理员', type: 'danger' }
   return { text: '爱好者', type: 'primary' }
@@ -617,7 +617,7 @@ async function handleBindPhone() {
         <!-- 微信小程序:原生 button + open-type="chooseAvatar"(返回已裁剪的临时路径) -->
         <!-- #ifdef MP-WEIXIN -->
         <button
-          class="profile-avatar-btn relative m-0 h-24 w-24 flex items-center justify-center overflow-hidden rounded-full border-4 border-white bg-[#e8f5f1] p-0 leading-none shadow-[0_8px_24px_rgba(0,0,0,0.12)] transition-transform duration-200 active:scale-[0.96]"
+          class="profile-avatar-btn relative m-0 h-24 w-24 flex items-center justify-center overflow-hidden border-4 border-white rounded-full bg-[#e8f5f1] p-0 leading-none shadow-[0_8px_24px_rgba(0,0,0,0.12)] transition-transform duration-200 active:scale-[0.96]"
           :disabled="uploading"
           open-type="chooseAvatar"
           @chooseavatar="handleChooseAvatar"
@@ -638,7 +638,7 @@ async function handleBindPhone() {
         <!-- 其他端:点击选图后 1:1 裁剪 -->
         <!-- #ifndef MP-WEIXIN -->
         <view
-          class="relative h-24 w-24 flex items-center justify-center overflow-hidden rounded-full border-4 border-white bg-[#e8f5f1] shadow-[0_8px_24px_rgba(0,0,0,0.12)] transition-transform duration-200 active:scale-[0.96]"
+          class="relative h-24 w-24 flex items-center justify-center overflow-hidden border-4 border-white rounded-full bg-[#e8f5f1] shadow-[0_8px_24px_rgba(0,0,0,0.12)] transition-transform duration-200 active:scale-[0.96]"
           @click="handlePickAvatar"
         >
           <image v-if="avatarUrl" :src="avatarUrl" class="h-full w-full" mode="aspectFill" />
@@ -1009,7 +1009,7 @@ async function handleBindPhone() {
           <view
             v-for="opt in GENDER_OPTIONS"
             :key="opt.value"
-            class="h-10 flex flex-1 items-center justify-center rounded-lg border text-sm"
+            class="h-10 flex flex-1 items-center justify-center border rounded-lg text-sm"
             :class="editGender === opt.value ? 'border-[#018d71] bg-[#e8f5f1] text-[#018d71]' : 'border-[#e8e8e8] bg-[#fafafa] text-[#666]'"
             @click="handleGenderSelect(opt.value)"
           >

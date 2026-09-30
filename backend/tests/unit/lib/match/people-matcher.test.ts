@@ -20,6 +20,7 @@ type CandidateRow = {
   id: string
   name: string
   avatarUrl: string | null
+  role: string
   activityLevel: string
   practiceYears: number | null
   privacySettings: unknown
@@ -92,6 +93,7 @@ function makeRow(overrides: Partial<CandidateRow>): CandidateRow {
     id: overrides.id ?? "user-1",
     name: overrides.name ?? "User",
     avatarUrl: overrides.avatarUrl ?? null,
+    role: overrides.role ?? "USER",
     activityLevel: overrides.activityLevel ?? "medium",
     practiceYears: overrides.practiceYears ?? null,
     privacySettings:
@@ -271,6 +273,7 @@ describe("lib/match/people-matcher - matchPeople", () => {
       id: "user-dto",
       name: "DTO User",
       avatarUrl: "http://example.com/avatar.jpg",
+      role: "TEACHER",
       practiceYears: 10,
       activityLevel: "high",
       tags: ["太极拳"],
@@ -295,6 +298,7 @@ describe("lib/match/people-matcher - matchPeople", () => {
     expect(dto.avatarUrl).toBe("http://example.com/avatar.jpg")
     expect(dto.activityLevel).toBe("high")
     expect(dto.practiceYears).toBe(10)
+    expect(dto.role).toBe("TEACHER")
     expect(dto.tags).toEqual(["太极拳"])
     expect(dto.distanceKm).toBe(2)
   })

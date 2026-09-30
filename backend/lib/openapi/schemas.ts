@@ -361,7 +361,7 @@ export const openApiSchemas: Record<string, OpenApiSchema> = {
 
   MatchPersonDTO: {
     type: "object",
-    required: ["userId", "name", "distanceKm", "tags", "activityLevel"],
+    required: ["userId", "name", "distanceKm", "tags", "activityLevel", "role"],
     properties: {
       userId: UUID,
       name: { type: "string" },
@@ -370,6 +370,11 @@ export const openApiSchemas: Record<string, OpenApiSchema> = {
       tags: { ...STRING_ARRAY, description: "与查询标签重合的兴趣" },
       activityLevel: { type: "string", enum: ["low", "medium", "high"] },
       practiceYears: { type: "integer", nullable: true },
+      role: {
+        type: "string",
+        enum: ["ADMIN", "USER", "TEACHER"],
+        description: "用户角色(前端仅对 TEACHER 展示「老师」徽标)",
+      },
     },
   },
 

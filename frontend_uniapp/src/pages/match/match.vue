@@ -267,9 +267,14 @@ function handleGoHome() {
             </view>
             <view class="min-w-0 flex-1">
               <view class="flex items-center justify-between">
-                <text class="truncate text-base text-[#333] font-medium">
-                  {{ p.name }}
-                </text>
+                <view class="min-w-0 flex items-center gap-1.5">
+                  <text class="truncate text-base text-[#333] font-medium">
+                    {{ p.name }}
+                  </text>
+                  <text v-if="p.role === 'TEACHER'" class="shrink-0 rounded-full bg-[#fff3e0] px-1.5 py-0.5 text-[10px] text-[#e68a00]">
+                    老师
+                  </text>
+                </view>
                 <view class="shrink-0 rounded-full bg-[#e8f5f1] px-2 py-0.5">
                   <text class="text-xs text-[#018d71]">
                     {{ formatDistance(p.distanceKm) }}

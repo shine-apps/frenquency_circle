@@ -478,7 +478,7 @@ function openCustomForm() {
         <!-- 搜索框 -->
         <view class="flex items-center gap-2 px-4 pb-1">
           <view class="h-11 flex flex-1 items-center b-[#e5e5e5] rounded-full b-solid bg-[#f5f6f7] px-4">
-            <input v-model="query" class="flex-1 text-base" placeholder="搜索兴趣/标签" placeholder-class="text-[#bbb]">
+            <input v-model="query" class="flex-1 text-base" placeholder="搜索兴趣/标签，支持用拼音输入" placeholder-class="text-[#bbb]">
           </view>
           <text v-if="loading" class="shrink-0 text-xs text-[#999]">
             搜索中...

@@ -187,6 +187,8 @@ export type MatchPersonDTO = {
   tags: string[]
   activityLevel: ActivityLevel
   practiceYears: number | null
+  /** 用户角色(前端仅对 TEACHER 展示「老师」徽标) */
+  role: UserRole
 }
 
 /**

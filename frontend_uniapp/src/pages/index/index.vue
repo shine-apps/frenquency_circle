@@ -14,7 +14,7 @@ import { getCurrentLocation } from '@/utils/location'
 import { reverseGeocode } from '@/utils/geo'
 import { saveGuestLocation, saveGuestTags } from '@/utils/guest-profile'
 import { closeHomeMbtiEntry, isHomeMbtiEntryClosed } from '@/utils/home-mbti-entry'
-import { activityLevelText, formatDateTime, formatDistance } from '@/utils/format'
+import { activityLevelText, formatDistance } from '@/utils/format'
 import { useShare } from '@/composables/useShare'
 import MatchFilterBar from '@/components/MatchFilterBar/MatchFilterBar.vue'
 import ProfileSetupPopup from '@/components/ProfileSetupPopup/ProfileSetupPopup.vue'
@@ -49,7 +49,7 @@ const dialog = useDialog()
 const { shareAppMessage, shareTimeline } = useShare({
   title: '趣邻圈',
   path: '/pages/index/index',
-  desc: ' 选择兴趣,遇见附近同趣的人与圈子'
+  desc: ' 选择兴趣,遇见附近同趣的人与圈子',
 })
 
 // 分享钩子必须在页面顶层直接注册, 编译器才能生成微信小程序 Page 配置
@@ -594,26 +594,25 @@ function handleCircleClick(circleId: string): void {
     <!-- ====== 顶部品牌区(青绿渐变) ====== -->
     <view class="sticky top-0 z-10 from-[#018d71] to-[#0aa07f] bg-gradient-to-b p-6 px-5">
       <view class="flex items-center justify-between">
-        <view class="flex flex-col  justify-betweeen">
+        <view class="justify-betweeen flex flex-col">
           <view class="flex items-center gap-1">
             <image src="/static/images/logo.png" class="h-[40px] w-[40px]" />
             <text class="text-xl text-white font-semibold">
               趣邻圈
             </text>
           </view>
-          <text class="mt-1 text-md text-white/80">
+          <text class="text-md mt-1 text-white/80">
             选择兴趣,遇见附近同趣的人与圈子
           </text>
         </view>
-        <view class="flex gap-2 items-end">
+        <view class="flex items-end gap-2">
           <wd-badge
             v-if="userStore.isLoggedIn"
             :model-value="unreadCount"
             :max="99"
             :hidden="unreadCount <= 0"
           >
-            <wd-button type="info" variant="text" size="large" icon="notification" @click="handleGoNotification">
-            </wd-button>
+            <wd-button type="info" variant="text" size="large" icon="notification" @click="handleGoNotification" />
           </wd-badge>
         </view>
       </view>
@@ -668,7 +667,7 @@ function handleCircleClick(circleId: string): void {
     <view v-if="ready" class="flex-1 pb-32">
       <wd-tabs v-model="activeTab">
         <!-- Tab:同趣的人 -->
-S       <wd-tab title="同趣的人" name="person">
+        <wd-tab title="同趣的人" name="person">
           <view class="mx-4 mt-3">
             <view v-if="peopleLoading && peopleItems.length === 0" class="flex flex-col items-center pt-20">
               <text class="text-sm text-[#999]">
@@ -696,9 +695,14 @@ S       <wd-tab title="同趣的人" name="person">
                   </view>
                   <view class="min-w-0 flex-1">
                     <view class="flex items-center justify-between">
-                      <text class="truncate text-base text-[#333] font-medium">
-                        {{ p.name }}
-                      </text>
+                      <view class="min-w-0 flex items-center gap-1.5">
+                        <text class="truncate text-base text-[#333] font-medium">
+                          {{ p.name }}
+                        </text>
+                        <text v-if="p.role === 'TEACHER'" class="shrink-0 rounded-full bg-[#fff3e0] px-1.5 py-0.5 text-[10px] text-[#e68a00]">
+                          老师
+                        </text>
+                      </view>
                       <text class="shrink-0 text-xs text-[#999]">
                         {{ formatDistance(p.distanceKm) }}
                       </text>
@@ -821,11 +825,11 @@ S       <wd-tab title="同趣的人" name="person">
       :gap="fabGap"
     >
       <view class="fab-item" @click="handleFabAction(handleCreateActivity)">
-        <text class="i-carbon-calendar fab-item__icon" />
+        <text class="fab-item__icon i-carbon-calendar" />
         <text class="fab-item__label">创建活动</text>
       </view>
       <view class="fab-item" @click="handleFabAction(handleCreateCircle)">
-        <text class="i-carbon-group fab-item__icon" />
+        <text class="fab-item__icon i-carbon-group" />
         <text class="fab-item__label">创建圈子</text>
       </view>
     </wd-fab>

@@ -47,9 +47,9 @@ export interface UseShareOptions {
 export interface UseShareResult {
   /** H5 分享按钮点击(引导右上角分享); 小程序端为空操作 */
   share: () => void
-  /** 好友/群分享数据, 传给 onShareAppMessage(必须在页面顶层注册) */
+  /** 好友/群分享数据, 传给 onShareAppMessage(必须在页面顶层注册; 小程序卡片不支持 desc) */
   shareAppMessage: () => { title: string, path: string, imageUrl?: string }
-  /** 朋友圈分享数据, 传给 onShareTimeline(必须在页面顶层注册) */
+  /** 朋友圈分享数据, 传给 onShareTimeline(必须在页面顶层注册; 小程序卡片不支持 desc) */
   shareTimeline: () => { title: string, query?: string, imageUrl?: string }
 }
 

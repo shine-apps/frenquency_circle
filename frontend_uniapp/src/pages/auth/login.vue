@@ -36,6 +36,11 @@ const password = ref('')
 const agreed = ref(false)
 const submitting = ref(false)
 
+const otherLoginWay = ref(false)
+// #ifdef H5
+otherLoginWay.value = true
+// #endif
+
 // 勾选协议即记录授权(设备维度):未同意前,进入登录页不会自动静默登录
 watch(agreed, (accepted) => {
   if (accepted)
@@ -141,6 +146,14 @@ function goAfterLogin() {
   uni.reLaunch({ url: target })
 }
 
+function handleCheckAgree() {
+  if (!agreed.value) {
+    tip('请先阅读并同意协议')
+    return false
+  }
+  return true
+}
+
 /** 手机号 + 验证码登录 */
 async function handlePhoneLogin() {
   if (!agreed.value) {
@@ -239,22 +252,21 @@ async function handleGetPhoneNumber(e: any) {
         custom-class="bg-[#07c160]! border-transparent! text-white"
         open-type="getPhoneNumber"
         :loading="submitting"
+        @click="handleCheckAgree"
         @getphonenumber="handleGetPhoneNumber"
       >
         手机号一键登录
       </wd-button>
       <view class="my-6 flex items-center gap-3">
         <view class="h-px flex-1 bg-[#e5e5e5]" />
-        <text class="text-xs text-[#999]">
-          其他登录方式
-        </text>
+        <wd-button type="success" size="small" variant="text" @click="otherLoginWay=!otherLoginWay">使用其他登录方式</wd-button>
         <view class="h-px flex-1 bg-[#e5e5e5]" />
       </view>
     </view>
     <!-- #endif -->
 
     <!-- 3. Tabs: 手机验证码 / 账号密码 -->
-    <view class="mx-6 rounded-2xl bg-white p-6 shadow-sm">
+    <view v-if="otherLoginWay" class="mx-6 rounded-2xl bg-white p-6 shadow-sm">
       <view class="flex rounded-xl bg-[#f5f6f7] p-1">
         <view
           class="flex-1 rounded-lg py-2 text-center text-sm font-medium transition-colors"
@@ -341,28 +353,28 @@ async function handleGetPhoneNumber(e: any) {
           登录
         </wd-button>
       </view>
-
-      <!-- 4. 协议勾选 -->
-      <view class="mt-6 flex items-center justify-center gap-1">
-        <view
-          class="h-4 w-4 flex items-center justify-center rounded-sm border-inset"
-          :class="agreed ? 'border-[#018d71] bg-[#018d71]' : 'border-[#eee] bg-white'"
-          @click="agreed = !agreed"
-        >
-          <text v-if="agreed" class="text-xs text-white">
-            ✓
-          </text>
-        </view>
-        <text class="text-xs text-[#999]">
-          已阅读并同意
-        </text>
-        <text class="text-xs text-[#018d71]" @click.stop="goAgreement(USER_AGREEMENT_PAGE)">
-          《用户协议》
-        </text>
-        <text class="text-xs text-[#018d71]" @click.stop="goAgreement(PRIVACY_POLICY_PAGE)">
-          《隐私政策》
+    </view>
+  
+    <!-- 4. 协议勾选 -->
+    <view class="mt-6 mb-10 flex items-center justify-center gap-1">
+      <view
+        class="h-4 w-4 flex items-center justify-center rounded-sm border-inset"
+        :class="agreed ? 'border-[#018d71] bg-[#018d71]' : 'border-[#eee] bg-white'"
+        @click="agreed = !agreed"
+      >
+        <text v-if="agreed" class="text-xs text-white">
+          ✓
         </text>
       </view>
+      <text class="text-xs text-[#999]">
+        已阅读并同意
+      </text>
+      <text class="text-xs text-[#018d71]" @click.stop="goAgreement(USER_AGREEMENT_PAGE)">
+        《用户协议》
+      </text>
+      <text class="text-xs text-[#018d71]" @click.stop="goAgreement(PRIVACY_POLICY_PAGE)">
+        《隐私政策》
+      </text>
     </view>
   </view>
 </template>

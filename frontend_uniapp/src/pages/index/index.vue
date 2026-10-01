@@ -47,7 +47,7 @@ const dialog = useDialog()
 
 // 首页分享(右上角菜单:好友/朋友圈)
 const { shareAppMessage, shareTimeline } = useShare({
-  title: '趣邻圈',
+  title: '趣邻圈--选择兴趣,遇见附近同趣的人与圈子',
   path: '/pages/index/index',
   desc: ' 选择兴趣,遇见附近同趣的人与圈子',
 })
